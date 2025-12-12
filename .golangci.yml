@@ -1,0 +1,41 @@
+run:
+  timeout: 5m
+  tests: true
+  skip-dirs:
+    - vendor
+    - node_modules
+    - .git
+  skip-files:
+    - ".*_test.go$"
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - gofmt
+    - goimports
+    - misspell
+    - revive
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  goimports:
+    local-prefixes: github.com/oak3/github-notifier
+
+  revive:
+    rules:
+      - name: indent-error-flow
+        severity: warning
+      - name: exported
+        severity: warning
+
+output:
+  format: colored-line-number
