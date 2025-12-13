@@ -9,9 +9,12 @@ import (
 
 // MenuManager handles systray menu operations
 type MenuManager struct {
-	prMenuItems   map[string]*systray.MenuItem
-	repoMenuItems map[string]*systray.MenuItem
-	onPRClick     func(url string)
+	requestedPRsTitleMenuItem *systray.MenuItem
+	userPRsTitleMenuItem      *systray.MenuItem
+	quitMenuItem              *systray.MenuItem
+	repoMenuItems             map[string]*systray.MenuItem
+	prMenuItems               map[string]*systray.MenuItem
+	onPRClick                 func(url string)
 }
 
 // NewMenuManager creates a new menu manager
@@ -28,18 +31,27 @@ func (m *MenuManager) BuildMenu(requestedReviewPRs []domain.PullRequest, usersPR
 	currentPRItems := make(map[string]*systray.MenuItem)
 	currentRepoItems := make(map[string]*systray.MenuItem)
 
+	if m.requestedPRsTitleMenuItem == nil {
+		m.requestedPRsTitleMenuItem = systray.AddMenuItem(fmt.Sprintf("PRs Requested Reviews: %d", len(requestedReviewPRs)), "")
+	} else {
+		m.requestedPRsTitleMenuItem.SetTitle(fmt.Sprintf("PRs Requested Reviews: %d", len(requestedReviewPRs)))
+	}
+
 	// Build requested reviews section
 	if len(requestedReviewPRs) > 0 {
-		systray.AddMenuItem(fmt.Sprintf("PRs Requested Reviews: %d", len(requestedReviewPRs)), "").Disable()
-		m.buildPRSection(requestedReviewPRs, "review:", currentPRItems, currentRepoItems)
+		m.buildPRSection(requestedReviewPRs, "review:", currentPRItems, currentRepoItems, m.requestedPRsTitleMenuItem)
+	}
+
+	if m.userPRsTitleMenuItem == nil {
 		systray.AddSeparator()
+		m.userPRsTitleMenuItem = systray.AddMenuItem(fmt.Sprintf("Your PRs: %d", len(usersPRs)), "")
+	} else {
+		m.userPRsTitleMenuItem.SetTitle(fmt.Sprintf("Your PRs: %d", len(usersPRs)))
 	}
 
 	// Build user's PRs section
 	if len(usersPRs) > 0 {
-		systray.AddMenuItem(fmt.Sprintf("Your PRs: %d", len(usersPRs)), "").Disable()
-		m.buildPRSection(usersPRs, "user:", currentPRItems, currentRepoItems)
-		systray.AddSeparator()
+		m.buildPRSection(usersPRs, "user:", currentPRItems, currentRepoItems, m.userPRsTitleMenuItem)
 	}
 
 	// Clean up old items
@@ -50,15 +62,18 @@ func (m *MenuManager) BuildMenu(requestedReviewPRs []domain.PullRequest, usersPR
 	systray.SetTooltip(fmt.Sprintf("GitHub Notifier: %d PRs", totalPRs))
 
 	// Add quit button
-	mQuit := systray.AddMenuItem("Quit", "Quit the app")
-	go func() {
-		for range mQuit.ClickedCh {
-			systray.Quit()
-		}
-	}()
+	if m.quitMenuItem == nil {
+		systray.AddSeparator()
+		m.quitMenuItem = systray.AddMenuItem("Quit", "Quit the app")
+		go func() {
+			for range m.quitMenuItem.ClickedCh {
+				systray.Quit()
+			}
+		}()
+	}
 }
 
-func (m *MenuManager) buildPRSection(prs []domain.PullRequest, prefix string, currentPRItems, currentRepoItems map[string]*systray.MenuItem) {
+func (m *MenuManager) buildPRSection(prs []domain.PullRequest, prefix string, currentPRItems, currentRepoItems map[string]*systray.MenuItem, parentMenuItem *systray.MenuItem) {
 	prsByRepo := groupPRsByRepository(prs)
 
 	for repoName, repoPRs := range prsByRepo {
@@ -68,7 +83,7 @@ func (m *MenuManager) buildPRSection(prs []domain.PullRequest, prefix string, cu
 		if item, ok := m.repoMenuItems[repoKey]; ok {
 			repoItem = item
 		} else {
-			repoItem = systray.AddMenuItem(repoName, "")
+			repoItem = parentMenuItem.AddSubMenuItem(repoName, "")
 		}
 
 		currentRepoItems[repoKey] = repoItem

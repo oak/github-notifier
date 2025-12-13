@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"time"
 
 	"github.com/getlantern/systray"
 	"github.com/oak3/github-notifier/app"
@@ -47,7 +46,7 @@ func onReady() {
 	systray.SetTooltip("GitHub PR Notifier")
 
 	// Start the application
-	application.Start(5 * time.Minute)
+	application.Start()
 }
 
 func onExit() {

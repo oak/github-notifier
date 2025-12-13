@@ -17,8 +17,8 @@ type App struct {
 	prService           application.PullRequestService
 	notificationService application.NotificationService
 	menuManager         *ui.MenuManager
-	seenPRsForReview    map[string]bool
-	seenPRsByUser       map[string]bool
+	seenPRsForReview    map[string]bool // Requested Review PR URLs and whether they've been seen
+	seenPRsByUser       map[string]bool // User Created PR URLs and whether they've been seen
 	checkTicker         *time.Ticker
 }
 
@@ -40,14 +40,15 @@ func NewApp(
 }
 
 // Start begins the PR checking loop
-func (a *App) Start(checkInterval time.Duration) {
+func (a *App) Start() {
 	// Initial check
 	a.checkPRs()
 
 	// Setup periodic checks
-	a.checkTicker = time.NewTicker(checkInterval)
+	a.checkTicker = time.NewTicker(time.Duration(a.config.CheckInterval) * time.Minute)
 	go func() {
 		for range a.checkTicker.C {
+			log.Println("Checking for PR updates...")
 			a.checkPRs()
 		}
 	}()
@@ -62,7 +63,7 @@ func (a *App) Stop() {
 
 // checkPRs fetches PRs and updates the menu
 func (a *App) checkPRs() {
-	requestedReview, err := a.prService.FetchPRsRequestedReviews(a.config.GitHubToken)
+	requestedReviewPRs, err := a.prService.FetchRequestedReviewPRs(a.config.GitHubToken)
 	if err != nil {
 		log.Printf("Error fetching Requested Review PRs: %v", err)
 		return
@@ -75,19 +76,19 @@ func (a *App) checkPRs() {
 	}
 
 	// Sort PRs before updating menu
-	ui.SortPRsByCreatedAt(requestedReview)
+	ui.SortPRsByCreatedAt(requestedReviewPRs)
 	ui.SortPRsByCreatedAt(usersPRs)
 
 	// Update menu
-	a.menuManager.BuildMenu(requestedReview, usersPRs)
+	a.menuManager.BuildMenu(requestedReviewPRs, usersPRs)
 
 	// Check for new PRs and send notifications
-	a.checkForNewPRs(requestedReview, usersPRs)
+	a.checkForNewPRs(requestedReviewPRs, usersPRs)
 }
 
 // checkForNewPRs identifies new PRs and sends notifications
-func (a *App) checkForNewPRs(requestedReview, usersPRs []domain.PullRequest) {
-	newPRsForReview := a.identifyNewPRs(requestedReview, a.seenPRsForReview)
+func (a *App) checkForNewPRs(requestedReviewPRs, usersPRs []domain.PullRequest) {
+	newPRsForReview := a.identifyNewPRs(requestedReviewPRs, a.seenPRsForReview)
 	if len(newPRsForReview) > 0 {
 		a.sendNotification("New PRs needing review", newPRsForReview)
 	}

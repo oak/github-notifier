@@ -55,7 +55,7 @@ func (s *GitHubPullRequestService) FetchUsersPRs(token string) ([]domain.PullReq
 	return allPRs, nil
 }
 
-func (s *GitHubPullRequestService) FetchPRsRequestedReviews(token string) ([]domain.PullRequest, error) {
+func (s *GitHubPullRequestService) FetchRequestedReviewPRs(token string) ([]domain.PullRequest, error) {
 	var allPRs []domain.PullRequest
 	var cursor *string = nil
 

@@ -6,6 +6,6 @@ import (
 
 // PullRequestService defines the port for pull request operations
 type PullRequestService interface {
-	FetchPRsRequestedReviews(token string) ([]domain.PullRequest, error)
+	FetchRequestedReviewPRs(token string) ([]domain.PullRequest, error)
 	FetchUsersPRs(token string) ([]domain.PullRequest, error)
 }

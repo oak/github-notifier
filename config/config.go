@@ -6,7 +6,7 @@ import (
 
 // Config holds application configuration
 type Config struct {
-	GitHubToken  string
+	GitHubToken   string
 	CheckInterval int // in minutes
 }
 
