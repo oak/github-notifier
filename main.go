@@ -25,11 +25,11 @@ func main() {
 
 	// Initialize services
 	prService := githubpr.NewGitHubPullRequestService()
-	notifService := beeep.NewBeeepNotificationService()
-	menuManager := ui.NewMenuManager(openURL)
+	notificationService := beeep.NewBeeepNotificationService()
+	menuManager := ui.NewMenuManager(cfg, openURL)
 
 	// Create application
-	application = app.NewApp(cfg, prService, notifService, menuManager)
+	application = app.NewApp(cfg, prService, notificationService, menuManager)
 
 	// Start systray
 	systray.Run(onReady, onExit)

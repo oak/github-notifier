@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/getlantern/systray"
+	"github.com/oak3/github-notifier/config"
 	"github.com/oak3/github-notifier/domain"
 )
 
@@ -11,51 +12,68 @@ import (
 type MenuManager struct {
 	requestedPRsTitleMenuItem *systray.MenuItem
 	userPRsTitleMenuItem      *systray.MenuItem
+	requestedPRsMenuItems     []MenuItemPair
+	userPRsMenuItems          []MenuItemPair
 	quitMenuItem              *systray.MenuItem
-	repoMenuItems             map[string]*systray.MenuItem
-	prMenuItems               map[string]*systray.MenuItem
 	onPRClick                 func(url string)
+	maxNumberOfRepos          int
+	maxNumberOfPRs            int
+}
+
+type MenuItemPair struct {
+	Parent   *systray.MenuItem
+	Children []*systray.MenuItem
 }
 
 // NewMenuManager creates a new menu manager
-func NewMenuManager(onPRClick func(url string)) *MenuManager {
+func NewMenuManager(cfg *config.Config, onPRClick func(url string)) *MenuManager {
+	requestedPRsMenuItems := make([]MenuItemPair, cfg.MaxNumberOfRepos)
+	for i := 0; i < cfg.MaxNumberOfRepos; i++ {
+		requestedPRsMenuItems[i].Children = make([]*systray.MenuItem, cfg.MaxNumberOfPRs)
+	}
+
+	userPRsMenuItems := make([]MenuItemPair, cfg.MaxNumberOfRepos)
+	for i := 0; i < cfg.MaxNumberOfRepos; i++ {
+		userPRsMenuItems[i].Children = make([]*systray.MenuItem, cfg.MaxNumberOfPRs)
+	}
+
 	return &MenuManager{
-		prMenuItems:   make(map[string]*systray.MenuItem),
-		repoMenuItems: make(map[string]*systray.MenuItem),
-		onPRClick:     onPRClick,
+		requestedPRsMenuItems: requestedPRsMenuItems,
+		userPRsMenuItems:      userPRsMenuItems,
+		onPRClick:             onPRClick,
+		maxNumberOfRepos:      cfg.MaxNumberOfRepos,
+		maxNumberOfPRs:        cfg.MaxNumberOfPRs,
 	}
 }
 
 // BuildMenu updates the systray menu with PR data
 func (m *MenuManager) BuildMenu(requestedReviewPRs []domain.PullRequest, usersPRs []domain.PullRequest) {
-	currentPRItems := make(map[string]*systray.MenuItem)
-	currentRepoItems := make(map[string]*systray.MenuItem)
+	m.requestedPRsTitleMenuItem = m.addOrUpdateParentMenuItem(m.requestedPRsTitleMenuItem, fmt.Sprintf("PRs Requested Reviews: %d", len(requestedReviewPRs)))
 
-	if m.requestedPRsTitleMenuItem == nil {
-		m.requestedPRsTitleMenuItem = systray.AddMenuItem(fmt.Sprintf("PRs Requested Reviews: %d", len(requestedReviewPRs)), "")
-	} else {
-		m.requestedPRsTitleMenuItem.SetTitle(fmt.Sprintf("PRs Requested Reviews: %d", len(requestedReviewPRs)))
-	}
+	m.clearMenuItems(m.requestedPRsTitleMenuItem, m.requestedPRsMenuItems)
 
 	// Build requested reviews section
 	if len(requestedReviewPRs) > 0 {
-		m.buildPRSection(requestedReviewPRs, "review:", currentPRItems, currentRepoItems, m.requestedPRsTitleMenuItem)
+		m.buildPRSection(requestedReviewPRs, m.requestedPRsMenuItems)
+	} else {
+		m.requestedPRsMenuItems[0].Parent.SetTitle("(empty)")
+		m.requestedPRsMenuItems[0].Parent.Show()
+		m.requestedPRsMenuItems[0].Parent.Disable()
 	}
 
-	if m.userPRsTitleMenuItem == nil {
-		systray.AddSeparator()
-		m.userPRsTitleMenuItem = systray.AddMenuItem(fmt.Sprintf("Your PRs: %d", len(usersPRs)), "")
-	} else {
-		m.userPRsTitleMenuItem.SetTitle(fmt.Sprintf("Your PRs: %d", len(usersPRs)))
-	}
+	m.userPRsTitleMenuItem = m.addOrUpdateParentMenuItem(m.userPRsTitleMenuItem, fmt.Sprintf("Your PRs: %d", len(usersPRs)))
+
+	// Reset user's PRs menu items
+	m.clearMenuItems(m.userPRsTitleMenuItem, m.userPRsMenuItems)
 
 	// Build user's PRs section
 	if len(usersPRs) > 0 {
-		m.buildPRSection(usersPRs, "user:", currentPRItems, currentRepoItems, m.userPRsTitleMenuItem)
+		m.buildPRSection(usersPRs, m.userPRsMenuItems)
+	} else {
+		m.userPRsMenuItems[0].Parent.SetTitle("(empty)")
+		m.userPRsMenuItems[0].Parent.Show()
+		m.userPRsMenuItems[0].Parent.Disable()
 	}
-
-	// Clean up old items
-	m.hideRemovedItems(currentPRItems, currentRepoItems)
 
 	// Update tooltip
 	totalPRs := len(requestedReviewPRs) + len(usersPRs)
@@ -73,57 +91,54 @@ func (m *MenuManager) BuildMenu(requestedReviewPRs []domain.PullRequest, usersPR
 	}
 }
 
-func (m *MenuManager) buildPRSection(prs []domain.PullRequest, prefix string, currentPRItems, currentRepoItems map[string]*systray.MenuItem, parentMenuItem *systray.MenuItem) {
-	prsByRepo := groupPRsByRepository(prs)
-
-	for repoName, repoPRs := range prsByRepo {
-		repoKey := prefix + repoName
-		var repoItem *systray.MenuItem
-
-		if item, ok := m.repoMenuItems[repoKey]; ok {
-			repoItem = item
-		} else {
-			repoItem = parentMenuItem.AddSubMenuItem(repoName, "")
+func (m *MenuManager) clearMenuItems(firstLevelTitleMenuItem *systray.MenuItem, firstLevelMenuItems []MenuItemPair) {
+	for i := 0; i < m.maxNumberOfRepos; i++ {
+		if firstLevelMenuItems[i].Parent == nil {
+			firstLevelMenuItems[i].Parent = firstLevelTitleMenuItem.AddSubMenuItem("", "")
 		}
-
-		currentRepoItems[repoKey] = repoItem
-
-		for _, pr := range repoPRs {
-			prKey := pr.URL
-			prTitle := formatPRTitle(pr)
-			var prItem *systray.MenuItem
-
-			if item, ok := m.prMenuItems[prKey]; ok {
-				prItem = item
-				prItem.SetTitle(prTitle)
-				prItem.Show()
-			} else {
-				prItem = repoItem.AddSubMenuItem(prTitle, "")
-				url := pr.URL
-				go func() {
-					for range prItem.ClickedCh {
-						m.onPRClick(url)
-					}
-				}()
+		firstLevelMenuItems[i].Parent.Enable()
+		firstLevelMenuItems[i].Parent.Hide()
+		for j := 0; j < m.maxNumberOfPRs; j++ {
+			if firstLevelMenuItems[i].Children[j] == nil {
+				firstLevelMenuItems[i].Children[j] = firstLevelMenuItems[i].Parent.AddSubMenuItem("", "")
 			}
-
-			currentPRItems[prKey] = prItem
+			firstLevelMenuItems[i].Children[j].Enable()
+			firstLevelMenuItems[i].Children[j].Hide()
 		}
 	}
 }
 
-func (m *MenuManager) hideRemovedItems(currentPRItems, currentRepoItems map[string]*systray.MenuItem) {
-	for url, item := range m.prMenuItems {
-		if _, ok := currentPRItems[url]; !ok {
-			item.Hide()
-		}
+func (m *MenuManager) addOrUpdateParentMenuItem(menuItem *systray.MenuItem, title string) *systray.MenuItem {
+	if menuItem == nil {
+		menuItem = systray.AddMenuItem("", "")
 	}
-	m.prMenuItems = currentPRItems
+	menuItem.SetTitle(title)
+	return menuItem
+}
 
-	for repoKey, item := range m.repoMenuItems {
-		if _, ok := currentRepoItems[repoKey]; !ok {
-			item.Hide()
+func (m *MenuManager) buildPRSection(prs []domain.PullRequest, parentMenuItem []MenuItemPair) {
+	prsByRepo := groupPRsByRepository(prs)
+
+	i := 0
+	for repoName, repoPRs := range prsByRepo {
+		parentMenuItem[i].Parent.SetTitle(repoName)
+
+		for j, pr := range repoPRs {
+			prTitle := formatPRTitle(pr)
+
+			parentMenuItem[i].Children[j].SetTitle(prTitle)
+			parentMenuItem[i].Children[j].Show()
+			child := parentMenuItem[i].Children[j]
+			prURL := pr.URL
+
+			go func(item *systray.MenuItem, url string) {
+				for range item.ClickedCh {
+					m.onPRClick(url)
+				}
+			}(child, prURL)
 		}
+
+		parentMenuItem[i].Parent.Show()
+		i++
 	}
-	m.repoMenuItems = currentRepoItems
 }

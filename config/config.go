@@ -6,15 +6,19 @@ import (
 
 // Config holds application configuration
 type Config struct {
-	GitHubToken   string
-	CheckInterval int // in minutes
+	GitHubToken      string
+	CheckInterval    int // in minutes
+	MaxNumberOfRepos int
+	MaxNumberOfPRs   int
 }
 
 // LoadConfig loads configuration from environment variables
 func LoadConfig() *Config {
 	return &Config{
-		GitHubToken:   getEnv("GITHUB_TOKEN", ""),
-		CheckInterval: 5,
+		GitHubToken:      getEnv("GITHUB_TOKEN", ""),
+		CheckInterval:    1,
+		MaxNumberOfRepos: 20,
+		MaxNumberOfPRs:   20,
 	}
 }
 
