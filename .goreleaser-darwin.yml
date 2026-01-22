@@ -1,0 +1,57 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+    - go test ./...
+
+builds:
+  # macOS builds - only on macOS runners
+  - id: github-notifier-darwin
+    binary: github-notifier
+    ldflags:
+      - -s -w -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser -X main.Version={{.Version}} -X main.Revision={{.ShortCommit}}
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.xz
+    wrap_in_directory: true
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}--checksums.txt"
+
+release:
+  draft: false
+  skip_upload: true  # Don't create a new release, just upload artifacts
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+brews:
+  - name: github-notifier
+    repository:
+      owner: oak3
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TOKEN }}"
+    commit_author:
+      name: oak3
+      email: oak3@users.noreply.github.com
+    homepage: https://github.com/oak3/github-notifier
+    description: "GitHub Notifier: A system tray application that monitors your GitHub pull requests"
+    test: system "#{bin}/github-notifier -v"
+    install: bin.install "github-notifier"

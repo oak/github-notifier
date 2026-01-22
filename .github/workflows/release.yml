@@ -1,0 +1,75 @@
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: GoReleaser Build (Linux)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set Up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.x"
+
+      - name: run GoReleaser (Linux)
+        uses: goreleaser/goreleaser-action@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: release --clean -f .goreleaser-linux.yml
+
+  build-windows:
+    name: GoReleaser Build (Windows)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set Up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.x"
+
+      - name: run GoReleaser (Windows)
+        uses: goreleaser/goreleaser-action@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: release --clean -f .goreleaser-windows.yml
+
+  build-macos:
+    name: GoReleaser Build (macOS)
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set Up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.x"
+
+      - name: run GoReleaser (macOS only)
+        uses: goreleaser/goreleaser-action@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: release --clean -f .goreleaser-darwin.yml
