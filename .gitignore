@@ -30,6 +30,7 @@ bin/
 
 # IDEs
 .idea/
+.claude/
 .vscode/*
 !.vscode/launch.json
 *.swp
@@ -40,5 +41,5 @@ bin/
 .DS_Store
 Thumbs.db
 
-github-notifier
+./github-notifier
 __debug_bin*
