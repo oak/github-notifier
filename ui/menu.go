@@ -2,6 +2,8 @@ package ui
 
 import (
 	"fmt"
+	"log"
+	"os"
 
 	"github.com/getlantern/systray"
 	"github.com/oak3/github-notifier/config"
@@ -18,6 +20,8 @@ type MenuManager struct {
 	onPRClick                 func(url string)
 	maxNumberOfRepos          int
 	maxNumberOfPRs            int
+	darkIcon                  []byte
+	lightIcon                 []byte
 }
 
 type MenuItemPair struct {
@@ -43,6 +47,41 @@ func NewMenuManager(cfg *config.Config, onPRClick func(url string)) *MenuManager
 		onPRClick:             onPRClick,
 		maxNumberOfRepos:      cfg.MaxNumberOfRepos,
 		maxNumberOfPRs:        cfg.MaxNumberOfPRs,
+	}
+}
+
+func (m *MenuManager) Setup() {
+	darkIcon, err := os.ReadFile("icon.png")
+	if err != nil {
+		log.Printf("Failed to load icon: %v", err)
+		darkIcon = []byte{} // fallback
+	}
+	lightIcon, err := os.ReadFile("icon_light.png")
+	if err != nil {
+		log.Printf("Failed to load icon_light: %v", err)
+		lightIcon = []byte{} // fallback
+	}
+	m.SetThemeIcons(darkIcon, lightIcon)
+}
+
+// SetThemeIcons sets the dark and light icons for theme-aware display
+func (m *MenuManager) SetThemeIcons(darkIcon, lightIcon []byte) {
+	m.darkIcon = darkIcon
+	m.lightIcon = lightIcon
+	m.applyThemeIcon()
+}
+
+// applyThemeIcon applies the appropriate icon based on system theme
+func (m *MenuManager) applyThemeIcon() {
+	if m.darkIcon == nil || m.lightIcon == nil {
+		return
+	}
+
+	theme := GetSystemTheme()
+	if theme == "dark" {
+		systray.SetIcon(m.darkIcon)
+	} else {
+		systray.SetIcon(m.lightIcon)
 	}
 }
 

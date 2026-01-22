@@ -41,6 +41,8 @@ func NewApp(
 
 // Start begins the PR checking loop
 func (a *App) Start() {
+	a.menuManager.Setup()
+
 	// Initial check
 	a.checkPRs()
 

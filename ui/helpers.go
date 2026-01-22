@@ -2,7 +2,10 @@ package ui
 
 import (
 	"fmt"
+	"os/exec"
+	"runtime"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/oak3/github-notifier/domain"
@@ -43,4 +46,68 @@ func formatTimeAgo(t time.Time) string {
 	} else {
 		return fmt.Sprintf("%d hours ago", int(hours))
 	}
+}
+
+// GetSystemTheme detects the system theme (dark or light) across platforms
+func GetSystemTheme() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return getmacOSTheme()
+	case "linux":
+		return getLinuxTheme()
+	case "windows":
+		return getWindowsTheme()
+	default:
+		return "light" // fallback
+	}
+}
+
+// getmacOSTheme detects macOS appearance settings
+func getmacOSTheme() string {
+	cmd := exec.Command("defaults", "read", "-g", "AppleInterfaceStyle")
+	output, err := cmd.Output()
+	if err != nil {
+		return "light" // defaults to light on error
+	}
+	if strings.Contains(string(output), "Dark") {
+		return "dark"
+	}
+	return "light"
+}
+
+// getLinuxTheme detects Linux theme via freedesktop.org portal
+func getLinuxTheme() string {
+	// Use freedesktop.org portal settings (supports most modern Linux desktops)
+	// Returns: 0 = no preference, 1 = dark, 2 = light
+	cmd := exec.Command("gdbus", "call", "--session",
+		"--dest", "org.freedesktop.portal.Desktop",
+		"--object-path", "/org/freedesktop/portal/desktop",
+		"--method", "org.freedesktop.portal.Settings.Read",
+		"org.freedesktop.appearance", "color-scheme")
+	output, err := cmd.Output()
+	if err == nil {
+		outputStr := strings.TrimSpace(string(output))
+		// Parse the output to find the color-scheme value
+		if strings.Contains(outputStr, "int32 1") {
+			return "dark"
+		} else if strings.Contains(outputStr, "int32 2") {
+			return "light"
+		}
+	}
+
+	return "light"
+}
+
+// getWindowsTheme detects Windows theme from registry
+func getWindowsTheme() string {
+	// Check Windows Registry for AppsUseLightTheme setting
+	cmd := exec.Command("powershell", "-NoProfile", "-Command",
+		"(Get-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize' -Name 'AppsUseLightTheme' -ErrorAction SilentlyContinue).AppsUseLightTheme")
+	output, err := cmd.Output()
+	if err == nil {
+		if strings.Contains(string(output), "0") {
+			return "dark"
+		}
+	}
+	return "light"
 }

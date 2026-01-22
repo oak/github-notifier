@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"os"
 	"os/exec"
 	"runtime"
 
@@ -36,12 +35,6 @@ func main() {
 }
 
 func onReady() {
-	icon, err := os.ReadFile("icon.png")
-	if err != nil {
-		log.Printf("Failed to load icon: %v", err)
-		icon = []byte{} // fallback
-	}
-	systray.SetIcon(icon)
 	systray.SetTitle("GitHub Notifier")
 	systray.SetTooltip("GitHub PR Notifier")
 
