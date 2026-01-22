@@ -30,7 +30,8 @@ bin/
 
 # IDEs
 .idea/
-.vscode/
+.vscode/*
+!.vscode/launch.json
 *.swp
 *.swo
 *~
