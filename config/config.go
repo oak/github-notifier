@@ -17,8 +17,8 @@ func LoadConfig() *Config {
 	return &Config{
 		GitHubToken:      getEnv("GITHUB_TOKEN", ""),
 		CheckInterval:    1,
-		MaxNumberOfRepos: 20,
-		MaxNumberOfPRs:   20,
+		MaxNumberOfRepos: 100,
+		MaxNumberOfPRs:   100,
 	}
 }
 
