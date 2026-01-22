@@ -95,7 +95,7 @@ func (m *MenuManager) BuildMenu(requestedReviewPRs []domain.PullRequest, usersPR
 	if len(requestedReviewPRs) > 0 {
 		m.buildPRSection(requestedReviewPRs, m.requestedPRsMenuItems)
 	} else {
-		m.requestedPRsMenuItems[0].Parent.SetTitle("(empty)")
+		m.requestedPRsMenuItems[0].Parent.SetTitle("(empty)   ")
 		m.requestedPRsMenuItems[0].Parent.Show()
 		m.requestedPRsMenuItems[0].Parent.Disable()
 	}
@@ -109,7 +109,7 @@ func (m *MenuManager) BuildMenu(requestedReviewPRs []domain.PullRequest, usersPR
 	if len(usersPRs) > 0 {
 		m.buildPRSection(usersPRs, m.userPRsMenuItems)
 	} else {
-		m.userPRsMenuItems[0].Parent.SetTitle("(empty)")
+		m.userPRsMenuItems[0].Parent.SetTitle("(empty)   ")
 		m.userPRsMenuItems[0].Parent.Show()
 		m.userPRsMenuItems[0].Parent.Disable()
 	}
