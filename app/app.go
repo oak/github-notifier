@@ -119,7 +119,16 @@ func (a *App) sendNotification(title string, prs []string) {
 	for _, pr := range prs {
 		message += "\n" + pr
 	}
-	err := a.notificationService.Notify("GitHub Notifier", message)
+
+	theme := ui.GetSystemTheme()
+	var icon string
+	if theme == "dark" {
+		icon = "git-pull-request.svg"
+	} else {
+		icon = "git-pull-request_light.svg"
+	}
+
+	err := a.notificationService.Notify("GitHub Notifier", message, icon)
 	if err != nil {
 		log.Printf("Error sending notification: %v", err)
 	}

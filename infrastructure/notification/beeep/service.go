@@ -10,11 +10,11 @@ type BeeepNotificationService struct{}
 
 // NewBeeepNotificationService creates a new beeep notification service
 func NewBeeepNotificationService() application.NotificationService {
-	beeep.AppName = "github-notifier"
+	beeep.AppName = "GitHub Notifier"
 	return &BeeepNotificationService{}
 }
 
 // Notify sends a notification using beeep
-func (s *BeeepNotificationService) Notify(title, message string) error {
-	return beeep.Notify(title, message, "")
+func (s *BeeepNotificationService) Notify(title, message, icon string) error {
+	return beeep.Notify(title, message, icon)
 }

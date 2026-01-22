@@ -20,8 +20,8 @@ type MenuManager struct {
 	onPRClick                 func(url string)
 	maxNumberOfRepos          int
 	maxNumberOfPRs            int
-	darkIcon                  []byte
-	lightIcon                 []byte
+	DarkIcon                  []byte
+	LightIcon                 []byte
 }
 
 type MenuItemPair struct {
@@ -66,22 +66,22 @@ func (m *MenuManager) Setup() {
 
 // SetThemeIcons sets the dark and light icons for theme-aware display
 func (m *MenuManager) SetThemeIcons(darkIcon, lightIcon []byte) {
-	m.darkIcon = darkIcon
-	m.lightIcon = lightIcon
+	m.DarkIcon = darkIcon
+	m.LightIcon = lightIcon
 	m.applyThemeIcon()
 }
 
 // applyThemeIcon applies the appropriate icon based on system theme
 func (m *MenuManager) applyThemeIcon() {
-	if m.darkIcon == nil || m.lightIcon == nil {
+	if m.DarkIcon == nil || m.LightIcon == nil {
 		return
 	}
 
 	theme := GetSystemTheme()
 	if theme == "dark" {
-		systray.SetIcon(m.darkIcon)
+		systray.SetIcon(m.DarkIcon)
 	} else {
-		systray.SetIcon(m.lightIcon)
+		systray.SetIcon(m.LightIcon)
 	}
 }
 
@@ -151,7 +151,7 @@ func (m *MenuManager) addOrUpdateParentMenuItem(menuItem *systray.MenuItem, titl
 	if menuItem == nil {
 		menuItem = systray.AddMenuItem("", "")
 	}
-	menuItem.SetTitle(title)
+	menuItem.SetTitle(title + "   ")
 	return menuItem
 }
 
@@ -160,7 +160,7 @@ func (m *MenuManager) buildPRSection(prs []domain.PullRequest, parentMenuItem []
 
 	i := 0
 	for repoName, repoPRs := range prsByRepo {
-		parentMenuItem[i].Parent.SetTitle(repoName)
+		parentMenuItem[i].Parent.SetTitle(repoName + "   ")
 
 		for j, pr := range repoPRs {
 			prTitle := formatPRTitle(pr)

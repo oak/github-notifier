@@ -29,7 +29,7 @@ func SortPRsByCreatedAt(prs []domain.PullRequest) {
 
 // formatPRTitle returns a formatted PR title with age information
 func formatPRTitle(pr domain.PullRequest) string {
-	return fmt.Sprintf("[%s] %s", formatTimeAgo(pr.CreatedAt), pr.Title)
+	return fmt.Sprintf("[%s] [#%d] %s", formatTimeAgo(pr.CreatedAt), pr.Number, pr.Title)
 }
 
 // formatTimeAgo returns a human-readable time difference
