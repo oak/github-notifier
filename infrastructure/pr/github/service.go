@@ -9,18 +9,39 @@ import (
 	"time"
 
 	"github.com/oak3/github-notifier/application"
+	"github.com/oak3/github-notifier/config"
 	"github.com/oak3/github-notifier/domain"
 	"github.com/oak3/github-notifier/infrastructure/pr/github/model"
 )
 
 const githubURL = "https://api.github.com/graphql"
 
+// Create a custom transport that adds the Authorization header
+type GitHubTransport struct {
+	token string
+	next  http.RoundTripper
+}
+
+func (t *GitHubTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("Authorization", "Bearer "+t.token)
+	req.Header.Set("Content-Type", "application/json")
+	return t.next.RoundTrip(req)
+}
+
 // GitHubPullRequestService implements application.PullRequestService
-type GitHubPullRequestService struct{}
+type GitHubPullRequestService struct {
+	client *http.Client
+}
 
 // NewGitHubPullRequestService creates a new GitHub pull request service
-func NewGitHubPullRequestService() application.PullRequestService {
-	return &GitHubPullRequestService{}
+func NewGitHubPullRequestService(cfg config.Config) application.PullRequestService {
+	transport := &GitHubTransport{
+		token: cfg.GitHubToken,
+		next:  http.DefaultTransport,
+	}
+	return &GitHubPullRequestService{
+		client: &http.Client{Transport: transport},
+	}
 }
 
 func (s *GitHubPullRequestService) FetchUsersPRs(token string) ([]domain.PullRequest, error) {
@@ -125,10 +146,8 @@ func (s *GitHubPullRequestService) fetchUserPRPage(token string, cursor *string)
 	})
 
 	req, _ := http.NewRequest("POST", githubURL, bytes.NewBuffer(body))
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.client.Do(req) // Uses the client with interceptor
 	if err != nil {
 		return nil, err
 	}
@@ -187,10 +206,8 @@ func (s *GitHubPullRequestService) fetchPRPage(token string, cursor *string) (*G
 	})
 
 	req, _ := http.NewRequest("POST", githubURL, bytes.NewBuffer(body))
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.client.Do(req)
 	if err != nil {
 		return nil, err
 	}

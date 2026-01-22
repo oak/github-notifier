@@ -24,7 +24,7 @@ func main() {
 	}
 
 	// Initialize services
-	prService := githubpr.NewGitHubPullRequestService()
+	prService := githubpr.NewGitHubPullRequestService(*cfg)
 	notificationService := beeep.NewBeeepNotificationService()
 	menuManager := ui.NewMenuManager(cfg, openURL)
 
