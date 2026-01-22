@@ -25,7 +25,7 @@ archives:
     format: tar.xz
     wrap_in_directory: true
     files:
-      - LICENSE
+      # - LICENSE
       - README.md
 
 checksum:
