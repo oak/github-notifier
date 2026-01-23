@@ -41,7 +41,5 @@ bin/
 .DS_Store
 Thumbs.db
 
-./github-notifier
+github-notifier
 __debug_bin*
-
-./github-notifier
