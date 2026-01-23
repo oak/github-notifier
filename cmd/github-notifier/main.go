@@ -5,11 +5,13 @@ import (
 	"time"
 
 	"github.com/getlantern/systray"
+	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/application/usecase"
 	"github.com/oak3/github-notifier/config"
 	"github.com/oak3/github-notifier/domain/tracking"
 	"github.com/oak3/github-notifier/infrastructure/github"
 	"github.com/oak3/github-notifier/infrastructure/notification"
+	"github.com/oak3/github-notifier/infrastructure/notification/slack"
 	"github.com/oak3/github-notifier/infrastructure/persistence/memory"
 	"github.com/oak3/github-notifier/infrastructure/ui"
 )
@@ -34,7 +36,25 @@ func main() {
 	seenRepo := memory.NewSeenPullRequestRepository()
 	trackingService := tracking.NewTrackingService(seenRepo)
 	themeProvider := notification.NewSystemThemeProvider()
-	notificationAdapter := notification.NewAdapter(themeProvider)
+
+	// Setup notification adapters (desktop + optional Slack)
+	var notificationAdapter port.NotificationPort
+	desktopAdapter := notification.NewAdapter(themeProvider)
+
+	if cfg.SlackOAuthToken != "" {
+		log.Println("Slack OAuth token detected, enabling Slack notifications...")
+		slackAdapter, err := slack.NewAdapter(cfg.SlackOAuthToken)
+		if err != nil {
+			log.Printf("Warning: Failed to initialize Slack adapter: %v. Continuing with desktop-only notifications.", err)
+			notificationAdapter = desktopAdapter
+		} else {
+			log.Println("Slack notifications enabled successfully")
+			notificationAdapter = notification.NewCompositeAdapter(desktopAdapter, slackAdapter)
+		}
+	} else {
+		notificationAdapter = desktopAdapter
+	}
+
 	menuAdapter := ui.NewMenuAdapter(cfg, themeProvider)
 
 	// Initialize use case

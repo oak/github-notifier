@@ -7,6 +7,7 @@ import (
 // Config holds application configuration
 type Config struct {
 	GitHubToken      string
+	SlackOAuthToken  string
 	CheckInterval    int // in minutes
 	MaxNumberOfRepos int
 	MaxNumberOfPRs   int
@@ -16,6 +17,7 @@ type Config struct {
 func LoadConfig() *Config {
 	return &Config{
 		GitHubToken:      getEnv("GITHUB_TOKEN", ""),
+		SlackOAuthToken:  getEnv("SLACK_OAUTH_TOKEN", ""),
 		CheckInterval:    1,
 		MaxNumberOfRepos: 100,
 		MaxNumberOfPRs:   100,
