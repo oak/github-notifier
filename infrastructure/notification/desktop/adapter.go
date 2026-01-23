@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/gen2brain/beeep"
+	"github.com/oak3/github-notifier/assets"
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
@@ -36,9 +37,9 @@ func (a *Adapter) NotifyNewPullRequests(title string, prs []*pullrequest.PullReq
 		message += fmt.Sprintf("\n%s #%d", pr.RepositoryName(), pr.Number())
 	}
 
-	iconPath := a.selectIcon()
+	iconData := a.selectIcon()
 
-	err := beeep.Notify("GitHub Notifier", message, iconPath)
+	err := beeep.Notify("GitHub Notifier", message, iconData)
 	if err != nil {
 		log.Printf("Error sending notification: %v", err)
 		return err
@@ -48,10 +49,10 @@ func (a *Adapter) NotifyNewPullRequests(title string, prs []*pullrequest.PullReq
 }
 
 // selectIcon selects the appropriate icon based on system theme
-func (a *Adapter) selectIcon() string {
+func (a *Adapter) selectIcon() []byte {
 	theme := a.themeProvider.GetSystemTheme()
 	if theme == "dark" {
-		return "git-pull-request.svg"
+		return assets.GitPullRequestIcon
 	}
-	return "git-pull-request_light.svg"
+	return assets.GitPullRequestLightIcon
 }

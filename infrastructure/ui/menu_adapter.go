@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"os/exec"
 	"runtime"
 	"time"
 
 	"github.com/getlantern/systray"
+	"github.com/oak3/github-notifier/assets"
 	"github.com/oak3/github-notifier/config"
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
@@ -68,17 +68,8 @@ func NewMenuAdapter(cfg *config.Config, themeProvider ThemeProvider) *MenuAdapte
 
 // Setup initializes the menu
 func (m *MenuAdapter) Setup() {
-	darkIcon, err := os.ReadFile("icon.png")
-	if err != nil {
-		log.Printf("Failed to load icon: %v", err)
-		darkIcon = []byte{}
-	}
-	lightIcon, err := os.ReadFile("icon_light.png")
-	if err != nil {
-		log.Printf("Failed to load icon_light: %v", err)
-		lightIcon = []byte{}
-	}
-	m.SetThemeIcons(darkIcon, lightIcon)
+	// Use embedded icons
+	m.SetThemeIcons(assets.DarkIcon, assets.LightIcon)
 }
 
 // SetThemeIcons sets the dark and light icons
