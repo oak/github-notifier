@@ -1,4 +1,4 @@
-package notification
+package desktop
 
 import (
 	"fmt"

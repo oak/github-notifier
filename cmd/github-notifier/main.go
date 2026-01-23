@@ -11,6 +11,7 @@ import (
 	"github.com/oak3/github-notifier/domain/tracking"
 	"github.com/oak3/github-notifier/infrastructure/github"
 	"github.com/oak3/github-notifier/infrastructure/notification"
+	"github.com/oak3/github-notifier/infrastructure/notification/desktop"
 	"github.com/oak3/github-notifier/infrastructure/notification/slack"
 	"github.com/oak3/github-notifier/infrastructure/persistence/memory"
 	"github.com/oak3/github-notifier/infrastructure/ui"
@@ -35,11 +36,11 @@ func main() {
 	githubAdapter := github.NewAdapter(cfg.GitHubToken)
 	seenRepo := memory.NewSeenPullRequestRepository()
 	trackingService := tracking.NewTrackingService(seenRepo)
-	themeProvider := notification.NewSystemThemeProvider()
+	themeProvider := ui.NewSystemThemeProvider()
 
 	// Setup notification adapters (desktop + optional Slack)
 	var notificationAdapter port.NotificationPort
-	desktopAdapter := notification.NewAdapter(themeProvider)
+	desktopAdapter := desktop.NewAdapter(themeProvider)
 
 	if cfg.SlackOAuthToken != "" {
 		log.Println("Slack OAuth token detected, enabling Slack notifications...")
