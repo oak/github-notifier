@@ -78,7 +78,6 @@ func main() {
 }
 
 func (app *Application) onReady() {
-	systray.SetTitle("GitHub Notifier")
 	systray.SetTooltip("GitHub PR Notifier")
 
 	// Setup menu
