@@ -12,6 +12,9 @@ type SeenRepository interface {
 	// HasBeenSeen checks if a PR has been seen
 	HasBeenSeen(id pullrequest.PRIdentifier) bool
 
+	// IsEmpty returns true if no PRs have been marked as seen yet
+	IsEmpty() bool
+
 	// Clear removes all seen PR records
 	Clear() error
 }

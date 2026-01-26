@@ -33,15 +33,27 @@ func (s *TrackingService) HasBeenSeen(id pullrequest.PRIdentifier) bool {
 	return s.seenRepo.HasBeenSeen(id)
 }
 
-// FindNewPullRequests identifies which PRs in the list are new
+// FindNewPullRequests identifies which PRs in the list are new (without marking them as seen)
 func (s *TrackingService) FindNewPullRequests(prs []*pullrequest.PullRequest) []*pullrequest.PullRequest {
 	var newPRs []*pullrequest.PullRequest
 
 	for _, pr := range prs {
-		if s.TrackPullRequest(pr) {
+		if !s.seenRepo.HasBeenSeen(pr.Identifier()) {
 			newPRs = append(newPRs, pr)
 		}
 	}
 
 	return newPRs
+}
+
+// MarkPullRequestsAsSeen marks a list of PRs as seen
+func (s *TrackingService) MarkPullRequestsAsSeen(prs []*pullrequest.PullRequest) {
+	for _, pr := range prs {
+		s.seenRepo.MarkAsSeen(pr.Identifier())
+	}
+}
+
+// IsEmpty returns true if no PRs have been tracked yet
+func (s *TrackingService) IsEmpty() bool {
+	return s.seenRepo.IsEmpty()
 }

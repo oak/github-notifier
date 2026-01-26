@@ -14,4 +14,10 @@ type Service interface {
 
 	// FindNewPullRequests identifies which PRs in the list are new
 	FindNewPullRequests(prs []*pullrequest.PullRequest) []*pullrequest.PullRequest
+
+	// MarkPullRequestsAsSeen marks a list of PRs as seen
+	MarkPullRequestsAsSeen(prs []*pullrequest.PullRequest)
+
+	// IsEmpty returns true if no PRs have been tracked yet
+	IsEmpty() bool
 }

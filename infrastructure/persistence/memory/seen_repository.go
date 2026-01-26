@@ -37,6 +37,14 @@ func (r *SeenPullRequestRepository) HasBeenSeen(id pullrequest.PRIdentifier) boo
 	return r.seen[id.URL()]
 }
 
+// IsEmpty returns true if no PRs have been marked as seen yet
+func (r *SeenPullRequestRepository) IsEmpty() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	return len(r.seen) == 0
+}
+
 // Clear removes all seen PR records
 func (r *SeenPullRequestRepository) Clear() error {
 	r.mu.Lock()

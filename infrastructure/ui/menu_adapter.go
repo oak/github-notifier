@@ -12,6 +12,7 @@ import (
 	"github.com/oak3/github-notifier/assets"
 	"github.com/oak3/github-notifier/config"
 	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak3/github-notifier/domain/tracking"
 )
 
 // MenuAdapter adapts the systray menu to the MenuPort interface
@@ -26,6 +27,10 @@ type MenuAdapter struct {
 	darkIcon                  []byte
 	lightIcon                 []byte
 	themeProvider             ThemeProvider
+	trackingService           tracking.Service
+	requestedReviewPRs        []*pullrequest.PullRequest
+	userCreatedPRs            []*pullrequest.PullRequest
+	clickedPRs                map[string]bool // Track which PRs have been clicked in the menu
 	ctx                       context.Context
 	cancel                    context.CancelFunc
 }
@@ -61,6 +66,7 @@ func NewMenuAdapter(cfg *config.Config, themeProvider ThemeProvider) *MenuAdapte
 		maxNumberOfRepos:      cfg.MaxNumberOfRepos,
 		maxNumberOfPRs:        cfg.MaxNumberOfPRs,
 		themeProvider:         themeProvider,
+		clickedPRs:            make(map[string]bool),
 		ctx:                   ctx,
 		cancel:                cancel,
 	}
@@ -94,10 +100,35 @@ func (m *MenuAdapter) applyThemeIcon() {
 }
 
 // UpdateMenu updates the menu with pull requests
-func (m *MenuAdapter) UpdateMenu(requestedReviewPRs, userCreatedPRs []*pullrequest.PullRequest) {
+func (m *MenuAdapter) UpdateMenu(requestedReviewPRs, userCreatedPRs []*pullrequest.PullRequest, trackingService tracking.Service) {
+	// Store tracking service and PR lists for use in menu item formatting
+	m.trackingService = trackingService
+	m.requestedReviewPRs = requestedReviewPRs
+	m.userCreatedPRs = userCreatedPRs
+
+	// Sync clickedPRs with tracking service's seen state
+	// If a PR has been marked as seen (for notifications), also consider it clicked in the menu
+	// This way: in-memory repos won't show asterisks on first load
+	// And persistent repos will preserve the clicked state across restarts
+	for _, pr := range requestedReviewPRs {
+		if trackingService.HasBeenSeen(pr.Identifier()) && !m.clickedPRs[pr.URL()] {
+			m.clickedPRs[pr.URL()] = true
+		}
+	}
+	for _, pr := range userCreatedPRs {
+		if trackingService.HasBeenSeen(pr.Identifier()) && !m.clickedPRs[pr.URL()] {
+			m.clickedPRs[pr.URL()] = true
+		}
+	}
+
+	// Add asterisk to section title if it contains unseen PRs
+	requestedReviewTitle := fmt.Sprintf("PRs Requested Reviews: %d", len(requestedReviewPRs))
+	if m.hasUnseenPRs(requestedReviewPRs) {
+		requestedReviewTitle = "* " + requestedReviewTitle
+	}
 	m.requestedPRsTitleMenuItem = m.addOrUpdateParentMenuItem(
 		m.requestedPRsTitleMenuItem,
-		fmt.Sprintf("PRs Requested Reviews: %d", len(requestedReviewPRs)),
+		requestedReviewTitle,
 	)
 
 	m.clearMenuItems(m.requestedPRsTitleMenuItem, m.requestedPRsMenuItems)
@@ -110,9 +141,14 @@ func (m *MenuAdapter) UpdateMenu(requestedReviewPRs, userCreatedPRs []*pullreque
 		m.requestedPRsMenuItems[0].Parent.Disable()
 	}
 
+	// Add asterisk to section title if it contains unseen PRs
+	userPRsTitle := fmt.Sprintf("Your PRs: %d", len(userCreatedPRs))
+	if m.hasUnseenPRs(userCreatedPRs) {
+		userPRsTitle = "* " + userPRsTitle
+	}
 	m.userPRsTitleMenuItem = m.addOrUpdateParentMenuItem(
 		m.userPRsTitleMenuItem,
-		fmt.Sprintf("Your PRs: %d", len(userCreatedPRs)),
+		userPRsTitle,
 	)
 
 	m.clearMenuItems(m.userPRsTitleMenuItem, m.userPRsMenuItems)
@@ -180,7 +216,12 @@ func (m *MenuAdapter) buildPRSection(prs []*pullrequest.PullRequest, parentMenuI
 
 	i := 0
 	for repoName, repoPRs := range prsByRepo {
-		parentMenuItem[i].Parent.SetTitle(repoName + "   ")
+		// Add asterisk to repository name if it contains unseen PRs
+		repoTitle := repoName
+		if m.hasUnseenPRs(repoPRs) {
+			repoTitle = "* " + repoName
+		}
+		parentMenuItem[i].Parent.SetTitle(repoTitle + "   ")
 
 		for j, pr := range repoPRs {
 			prTitle := m.formatPRTitle(pr)
@@ -188,7 +229,7 @@ func (m *MenuAdapter) buildPRSection(prs []*pullrequest.PullRequest, parentMenuI
 			parentMenuItem[i].Children[j].Show()
 
 			// Fix goroutine leak by using context
-			go m.handlePRClick(parentMenuItem[i].Children[j], pr.URL())
+			go m.handlePRClick(parentMenuItem[i].Children[j], pr)
 		}
 
 		parentMenuItem[i].Parent.Show()
@@ -197,14 +238,71 @@ func (m *MenuAdapter) buildPRSection(prs []*pullrequest.PullRequest, parentMenuI
 }
 
 // handlePRClick handles PR menu item clicks with proper cleanup
-func (m *MenuAdapter) handlePRClick(item *systray.MenuItem, url string) {
+func (m *MenuAdapter) handlePRClick(item *systray.MenuItem, pr *pullrequest.PullRequest) {
 	for {
 		select {
 		case <-item.ClickedCh:
-			m.openURL(url)
+			// Mark as clicked in our local tracking
+			m.clickedPRs[pr.URL()] = true
+			// Remove asterisk from title immediately
+			newTitle := m.formatPRTitle(pr)
+			item.SetTitle(newTitle)
+			// Refresh the entire menu hierarchy to update asterisks
+			m.refreshMenuHierarchy()
+			// Open the URL
+			m.openURL(pr.URL())
 		case <-m.ctx.Done():
 			return
 		}
+	}
+}
+
+// refreshMenuHierarchy updates the asterisks in the menu hierarchy after a PR is marked as seen
+func (m *MenuAdapter) refreshMenuHierarchy() {
+	// Update requested review section title
+	if m.requestedPRsTitleMenuItem != nil && m.requestedReviewPRs != nil {
+		requestedReviewTitle := fmt.Sprintf("PRs Requested Reviews: %d", len(m.requestedReviewPRs))
+		if m.hasUnseenPRs(m.requestedReviewPRs) {
+			requestedReviewTitle = "* " + requestedReviewTitle
+		}
+		m.requestedPRsTitleMenuItem.SetTitle(requestedReviewTitle + "   ")
+	}
+
+	// Update user PRs section title
+	if m.userPRsTitleMenuItem != nil && m.userCreatedPRs != nil {
+		userPRsTitle := fmt.Sprintf("Your PRs: %d", len(m.userCreatedPRs))
+		if m.hasUnseenPRs(m.userCreatedPRs) {
+			userPRsTitle = "* " + userPRsTitle
+		}
+		m.userPRsTitleMenuItem.SetTitle(userPRsTitle + "   ")
+	}
+
+	// Update repository menu items in requested reviews section
+	if m.requestedReviewPRs != nil {
+		m.refreshRepositoryTitles(m.requestedReviewPRs, m.requestedPRsMenuItems)
+	}
+
+	// Update repository menu items in user PRs section
+	if m.userCreatedPRs != nil {
+		m.refreshRepositoryTitles(m.userCreatedPRs, m.userPRsMenuItems)
+	}
+}
+
+// refreshRepositoryTitles updates the asterisks on repository menu items
+func (m *MenuAdapter) refreshRepositoryTitles(prs []*pullrequest.PullRequest, menuItems []MenuItemPair) {
+	prsByRepo := m.groupPRsByRepository(prs)
+
+	i := 0
+	for repoName, repoPRs := range prsByRepo {
+		if i >= len(menuItems) || menuItems[i].Parent == nil {
+			break
+		}
+		repoTitle := repoName
+		if m.hasUnseenPRs(repoPRs) {
+			repoTitle = "* " + repoName
+		}
+		menuItems[i].Parent.SetTitle(repoTitle + "   ")
+		i++
 	}
 }
 
@@ -236,9 +334,23 @@ func (m *MenuAdapter) groupPRsByRepository(prs []*pullrequest.PullRequest) map[s
 	return grouped
 }
 
-// formatPRTitle returns a formatted PR title with age information
+// formatPRTitle returns a formatted PR title with age information and unseen indicator
 func (m *MenuAdapter) formatPRTitle(pr *pullrequest.PullRequest) string {
-	return fmt.Sprintf("[%s] [#%d] %s", m.formatTimeAgo(pr.CreatedAt()), pr.Number(), pr.Title())
+	prefix := ""
+	if !m.clickedPRs[pr.URL()] {
+		prefix = "* "
+	}
+	return fmt.Sprintf("%s[%s] [#%d] %s", prefix, m.formatTimeAgo(pr.CreatedAt()), pr.Number(), pr.Title())
+}
+
+// hasUnseenPRs checks if any PRs in the list have not been clicked
+func (m *MenuAdapter) hasUnseenPRs(prs []*pullrequest.PullRequest) bool {
+	for _, pr := range prs {
+		if !m.clickedPRs[pr.URL()] {
+			return true
+		}
+	}
+	return false
 }
 
 // formatTimeAgo returns a human-readable time difference

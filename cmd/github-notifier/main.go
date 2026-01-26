@@ -83,9 +83,9 @@ func (app *Application) onReady() {
 	// Setup menu
 	app.menuAdapter.Setup()
 
-	// Initial check
+	// Initial check - mark all existing PRs as seen first to avoid notifications/asterisks on startup
 	log.Println("Performing initial PR check...")
-	if err := app.checkPullRequestsUseCase.Execute(); err != nil {
+	if err := app.checkPullRequestsUseCase.ExecuteInitial(); err != nil {
 		log.Printf("Error during initial check: %v", err)
 	}
 
