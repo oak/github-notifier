@@ -78,3 +78,41 @@ func (c *Client) ExecuteQuery(query string, variables map[string]interface{}) (*
 
 	return &parsed, nil
 }
+
+// ExecuteBatchedTimelineQuery executes a batched GraphQL query with aliases
+func (c *Client) ExecuteBatchedTimelineQuery(query string) (*BatchedTimelineResponse, error) {
+	body, err := json.Marshal(map[string]interface{}{
+		"query": query,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal query: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", githubAPIURL, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var parsed BatchedTimelineResponse
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	// Check for GraphQL errors
+	if len(parsed.Errors) > 0 {
+		return nil, fmt.Errorf("graphql error: %+v", parsed.Errors)
+	}
+
+	return &parsed, nil
+}

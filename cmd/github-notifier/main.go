@@ -64,6 +64,7 @@ func main() {
 		trackingService,
 		notificationAdapter,
 		menuAdapter,
+		cfg.EnableActivityTracking,
 	)
 
 	// Create application

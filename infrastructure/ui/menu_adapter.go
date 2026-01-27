@@ -106,18 +106,30 @@ func (m *MenuAdapter) UpdateMenu(requestedReviewPRs, userCreatedPRs []*pullreque
 	m.requestedReviewPRs = requestedReviewPRs
 	m.userCreatedPRs = userCreatedPRs
 
-	// Sync clickedPRs with tracking service's seen state
-	// If a PR has been marked as seen (for notifications), also consider it clicked in the menu
+	// Sync clickedPRs with tracking service's seen state (bidirectional sync)
+	// If a PR has been marked as seen, consider it clicked in the menu
+	// If a PR has been marked as unseen (e.g., new activity), remove it from clicked
 	// This way: in-memory repos won't show asterisks on first load
 	// And persistent repos will preserve the clicked state across restarts
+	// And PRs with new activity will show asterisks again
 	for _, pr := range requestedReviewPRs {
-		if trackingService.HasBeenSeen(pr.Identifier()) && !m.clickedPRs[pr.URL()] {
-			m.clickedPRs[pr.URL()] = true
+		if trackingService.HasBeenSeen(pr.Identifier()) {
+			if !m.clickedPRs[pr.URL()] {
+				m.clickedPRs[pr.URL()] = true
+			}
+		} else {
+			// PR is unseen - remove from clickedPRs to show asterisk
+			delete(m.clickedPRs, pr.URL())
 		}
 	}
 	for _, pr := range userCreatedPRs {
-		if trackingService.HasBeenSeen(pr.Identifier()) && !m.clickedPRs[pr.URL()] {
-			m.clickedPRs[pr.URL()] = true
+		if trackingService.HasBeenSeen(pr.Identifier()) {
+			if !m.clickedPRs[pr.URL()] {
+				m.clickedPRs[pr.URL()] = true
+			}
+		} else {
+			// PR is unseen - remove from clickedPRs to show asterisk
+			delete(m.clickedPRs, pr.URL())
 		}
 	}
 

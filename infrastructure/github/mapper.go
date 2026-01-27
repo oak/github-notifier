@@ -2,6 +2,7 @@ package github
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
@@ -55,4 +56,86 @@ func (m *Mapper) ToDomainList(dtos []PullRequestDTO) ([]*pullrequest.PullRequest
 	}
 
 	return prs, nil
+}
+
+// ToActivity converts a single timeline item DTO to a domain activity
+func (m *Mapper) ToActivity(pr *pullrequest.PullRequest, dto TimelineItemDTO) *pullrequest.Activity {
+	switch dto.Typename {
+	case "IssueComment":
+		if dto.Author == nil {
+			return nil
+		}
+		author, err := pullrequest.NewAuthor(dto.Author.Login)
+		if err != nil {
+			return nil
+		}
+		return pullrequest.NewActivity(
+			pr.Identifier(),
+			pullrequest.ActivityTypeComment,
+			author,
+			dto.CreatedAt,
+			dto.Body,
+		)
+
+	case "PullRequestReview":
+		if dto.Author == nil {
+			return nil
+		}
+		// Only notify on reviews with comments or approval/changes requested
+		if dto.Body != "" || dto.State == "APPROVED" || dto.State == "CHANGES_REQUESTED" {
+			author, err := pullrequest.NewAuthor(dto.Author.Login)
+			if err != nil {
+				return nil
+			}
+			return pullrequest.NewActivity(
+				pr.Identifier(),
+				pullrequest.ActivityTypeReview,
+				author,
+				dto.CreatedAt,
+				dto.Body,
+			)
+		}
+
+	case "PullRequestCommit":
+		if dto.Commit != nil {
+			// For commits, use the commit date and author from nested structure
+			authorLogin := "unknown"
+			if dto.Commit.Author != nil && dto.Commit.Author.User != nil {
+				authorLogin = dto.Commit.Author.User.Login
+			}
+
+			author, err := pullrequest.NewAuthor(authorLogin)
+			if err != nil {
+				return nil
+			}
+			return pullrequest.NewActivity(
+				pr.Identifier(),
+				pullrequest.ActivityTypeCommit,
+				author,
+				dto.Commit.CommittedDate,
+				dto.Commit.OID[:7], // Use short commit SHA as body
+			)
+		}
+	}
+
+	return nil
+}
+
+// ToActivityList converts timeline item DTOs to domain activities, filtering by time
+func (m *Mapper) ToActivityList(pr *pullrequest.PullRequest, dtos []TimelineItemDTO, since time.Time) []*pullrequest.Activity {
+	var activities []*pullrequest.Activity
+
+	for _, dto := range dtos {
+		// Skip items older than since time
+		if dto.CreatedAt.Before(since) {
+			continue
+		}
+
+		activity := m.ToActivity(pr, dto)
+		if activity != nil {
+			activities = append(activities, activity)
+		}
+	}
+
+	return activities
 }

@@ -53,6 +53,11 @@ func (s *TrackingService) MarkPullRequestsAsSeen(prs []*pullrequest.PullRequest)
 	}
 }
 
+// MarkPullRequestAsUnseen marks a PR as unseen (for when new activity occurs)
+func (s *TrackingService) MarkPullRequestAsUnseen(pr *pullrequest.PullRequest) error {
+	return s.seenRepo.UnmarkAsSeen(pr.Identifier())
+}
+
 // IsEmpty returns true if no PRs have been tracked yet
 func (s *TrackingService) IsEmpty() bool {
 	return s.seenRepo.IsEmpty()

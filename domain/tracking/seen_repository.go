@@ -9,6 +9,9 @@ type SeenRepository interface {
 	// MarkAsSeen marks a PR as seen
 	MarkAsSeen(id pullrequest.PRIdentifier) error
 
+	// UnmarkAsSeen marks a PR as unseen (e.g., when new activity occurs)
+	UnmarkAsSeen(id pullrequest.PRIdentifier) error
+
 	// HasBeenSeen checks if a PR has been seen
 	HasBeenSeen(id pullrequest.PRIdentifier) bool
 

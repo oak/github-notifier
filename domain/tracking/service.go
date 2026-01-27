@@ -18,6 +18,9 @@ type Service interface {
 	// MarkPullRequestsAsSeen marks a list of PRs as seen
 	MarkPullRequestsAsSeen(prs []*pullrequest.PullRequest)
 
+	// MarkPullRequestAsUnseen marks a PR as unseen (triggers notifications again)
+	MarkPullRequestAsUnseen(pr *pullrequest.PullRequest) error
+
 	// IsEmpty returns true if no PRs have been tracked yet
 	IsEmpty() bool
 }

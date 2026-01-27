@@ -35,3 +35,29 @@ type GraphQLError struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
 }
+
+// TimelineItemDTO represents a timeline item (comment, review, etc.)
+type TimelineItemDTO struct {
+	Typename  string    `json:"__typename"`
+	CreatedAt time.Time `json:"createdAt"`
+	Author    *struct {
+		Login string `json:"login"`
+	} `json:"author,omitempty"`
+	Body   string `json:"body,omitempty"`
+	State  string `json:"state,omitempty"` // For reviews
+	Commit *struct {
+		OID           string    `json:"oid"`
+		CommittedDate time.Time `json:"committedDate"`
+		Author        *struct {
+			User *struct {
+				Login string `json:"login"`
+			} `json:"user"`
+		} `json:"author"`
+	} `json:"commit,omitempty"` // For commits
+}
+
+// BatchedTimelineResponse represents the response for batched timeline queries using aliases
+type BatchedTimelineResponse struct {
+	Data   map[string]interface{} `json:"data"`
+	Errors []GraphQLError         `json:"errors"`
+}

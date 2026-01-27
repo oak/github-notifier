@@ -3,6 +3,7 @@ package usecase
 import (
 	"log"
 	"sort"
+	"time"
 
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
@@ -11,24 +12,29 @@ import (
 
 // CheckPullRequestsUseCase handles checking for pull requests and updating the UI
 type CheckPullRequestsUseCase struct {
-	prRepo           pullrequest.Repository
-	trackingService  tracking.Service
-	notificationPort port.NotificationPort
-	menuPort         port.MenuPort
+	prRepo                 pullrequest.PullRequestRepository
+	trackingService        tracking.Service
+	notificationPort       port.NotificationPort
+	menuPort               port.MenuPort
+	enableActivityTracking bool
+	lastCheckTime          time.Time
 }
 
 // NewCheckPullRequestsUseCase creates a new use case
 func NewCheckPullRequestsUseCase(
-	prRepo pullrequest.Repository,
+	prRepo pullrequest.PullRequestRepository,
 	trackingService tracking.Service,
 	notificationPort port.NotificationPort,
 	menuPort port.MenuPort,
+	enableActivityTracking bool,
 ) *CheckPullRequestsUseCase {
 	return &CheckPullRequestsUseCase{
-		prRepo:           prRepo,
-		trackingService:  trackingService,
-		notificationPort: notificationPort,
-		menuPort:         menuPort,
+		prRepo:                 prRepo,
+		trackingService:        trackingService,
+		notificationPort:       notificationPort,
+		menuPort:               menuPort,
+		enableActivityTracking: enableActivityTracking,
+		lastCheckTime:          time.Now(), // Initialize to now
 	}
 }
 
@@ -110,35 +116,122 @@ func (uc *CheckPullRequestsUseCase) Execute() error {
 		return err
 	}
 
+	// Check for activity if enabled (WARNING: uses N+1 GitHub API calls where N = number of PRs)
+	if uc.enableActivityTracking {
+		// Combine all PRs for activity checking
+		allPRs := append([]*pullrequest.PullRequest{}, requestedReviewPRs...)
+		allPRs = append(allPRs, userCreatedPRs...)
+
+		log.Printf("Activity tracking enabled - fetching timeline for %d PRs (this will make %d API calls)", len(allPRs), len(allPRs))
+
+		// Enrich PRs with activities since last check (modifies aggregates)
+		if err := uc.prRepo.EnrichWithActivities(allPRs, uc.lastCheckTime); err != nil {
+			log.Printf("Error enriching PRs with activities: %v", err)
+		}
+
+		// Check for PRs with new activities and mark them as unseen
+		var prsWithNewActivity []*pullrequest.PullRequest
+		for _, pr := range allPRs {
+			if pr.HasActivitiesSince(uc.lastCheckTime) {
+				prsWithNewActivity = append(prsWithNewActivity, pr)
+			}
+		}
+
+		if len(prsWithNewActivity) > 0 {
+			log.Printf("Found %d PRs with new activity", len(prsWithNewActivity))
+			// Mark these PRs as unseen so they trigger notifications and show asterisks
+			for _, pr := range prsWithNewActivity {
+				if err := uc.trackingService.MarkPullRequestAsUnseen(pr); err != nil {
+					log.Printf("Error unmarking PR as seen: %v", err)
+				}
+			}
+		}
+	} else {
+		log.Printf("Activity tracking disabled - only tracking new PRs (set ENABLE_ACTIVITY_TRACKING=true to enable)")
+	}
+
 	// Sort PRs by creation date (oldest first)
 	uc.sortPRsByCreatedAt(requestedReviewPRs)
 	uc.sortPRsByCreatedAt(userCreatedPRs)
 
-	// Update the menu with tracking service
-	uc.menuPort.UpdateMenu(requestedReviewPRs, userCreatedPRs, uc.trackingService)
-
-	// Find new PRs for notification (without marking as seen yet)
+	// Find PRs that need notifications (not seen in tracking service)
+	// These include: truly new PRs AND PRs we just unmarked due to new activity
 	newRequestedReviewPRs := uc.trackingService.FindNewPullRequests(requestedReviewPRs)
 	if len(newRequestedReviewPRs) > 0 {
-		err := uc.notificationPort.NotifyNewPullRequests("New PRs needing review", newRequestedReviewPRs)
-		if err != nil {
-			log.Printf("Error sending notification for requested review PRs: %v", err)
+		// Separate truly new PRs from PRs with new activity
+		var trulyNewPRs []*pullrequest.PullRequest
+		var prsWithActivity []*pullrequest.PullRequest
+
+		for _, pr := range newRequestedReviewPRs {
+			if pr.HasActivitiesSince(uc.lastCheckTime) {
+				prsWithActivity = append(prsWithActivity, pr)
+			} else {
+				trulyNewPRs = append(trulyNewPRs, pr)
+			}
 		}
-		// Only mark as seen after successful notification to avoid duplicate notifications
-		// But user still needs to click them in the menu to remove asterisks
-		uc.trackingService.MarkPullRequestsAsSeen(newRequestedReviewPRs)
+
+		// Send appropriate notifications
+		if len(trulyNewPRs) > 0 {
+			err := uc.notificationPort.NotifyNewPullRequests("New PRs needing review", trulyNewPRs)
+			if err != nil {
+				log.Printf("Error sending notification for new PRs: %v", err)
+			}
+			// Mark truly new PRs as seen for notification purposes
+			// But they stay unseen for menu (user must click)
+			uc.trackingService.MarkPullRequestsAsSeen(trulyNewPRs)
+		}
+
+		if len(prsWithActivity) > 0 {
+			err := uc.notificationPort.NotifyNewPullRequests("New activity on PRs needing review", prsWithActivity)
+			if err != nil {
+				log.Printf("Error sending notification for PR activity: %v", err)
+			}
+			// DON'T mark as seen - keep them unseen so asterisks persist until user clicks
+			// They were already marked as unseen earlier, so notifications will repeat
+			// unless we track this differently. For now, accept repeat notifications
+			// or user can click to acknowledge
+		}
 	}
 
 	newUserCreatedPRs := uc.trackingService.FindNewPullRequests(userCreatedPRs)
 	if len(newUserCreatedPRs) > 0 {
-		err := uc.notificationPort.NotifyNewPullRequests("New PRs by you", newUserCreatedPRs)
-		if err != nil {
-			log.Printf("Error sending notification for user created PRs: %v", err)
+		// Separate truly new PRs from PRs with new activity
+		var trulyNewPRs []*pullrequest.PullRequest
+		var prsWithActivity []*pullrequest.PullRequest
+
+		for _, pr := range newUserCreatedPRs {
+			if pr.HasActivitiesSince(uc.lastCheckTime) {
+				prsWithActivity = append(prsWithActivity, pr)
+			} else {
+				trulyNewPRs = append(trulyNewPRs, pr)
+			}
 		}
-		// Only mark as seen after successful notification to avoid duplicate notifications
-		// But user still needs to click them in the menu to remove asterisks
-		uc.trackingService.MarkPullRequestsAsSeen(newUserCreatedPRs)
+
+		// Send appropriate notifications
+		if len(trulyNewPRs) > 0 {
+			err := uc.notificationPort.NotifyNewPullRequests("New PRs by you", trulyNewPRs)
+			if err != nil {
+				log.Printf("Error sending notification for new PRs: %v", err)
+			}
+			// Mark truly new PRs as seen for notification purposes
+			uc.trackingService.MarkPullRequestsAsSeen(trulyNewPRs)
+		}
+
+		if len(prsWithActivity) > 0 {
+			err := uc.notificationPort.NotifyNewPullRequests("New activity on your PRs", prsWithActivity)
+			if err != nil {
+				log.Printf("Error sending notification for PR activity: %v", err)
+			}
+			// DON'T mark as seen - keep them unseen so asterisks persist until user clicks
+		}
 	}
+
+	// Update the menu AFTER all notification logic completes
+	// This ensures PRs with new activity remain unseen (show asterisks)
+	uc.menuPort.UpdateMenu(requestedReviewPRs, userCreatedPRs, uc.trackingService)
+
+	// Update last check time for next iteration
+	uc.lastCheckTime = time.Now()
 
 	return nil
 }

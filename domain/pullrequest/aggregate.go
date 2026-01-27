@@ -6,12 +6,14 @@ import (
 
 // PullRequest is the aggregate root for pull request domain
 type PullRequest struct {
-	identifier PRIdentifier
-	title      string
-	repository RepositoryInfo
-	author     Author
-	status     PRStatus
-	createdAt  time.Time
+	identifier     PRIdentifier
+	title          string
+	repository     RepositoryInfo
+	author         Author
+	status         PRStatus
+	createdAt      time.Time
+	activities     []*Activity
+	lastActivityAt time.Time
 }
 
 // NewPullRequest creates a new pull request with validation
@@ -37,12 +39,14 @@ func NewPullRequest(
 	}
 
 	return &PullRequest{
-		identifier: identifier,
-		title:      title,
-		repository: repository,
-		author:     author,
-		status:     StatusOpen,
-		createdAt:  createdAt,
+		identifier:     identifier,
+		title:          title,
+		repository:     repository,
+		author:         author,
+		status:         StatusOpen,
+		createdAt:      createdAt,
+		activities:     make([]*Activity, 0),
+		lastActivityAt: createdAt,
 	}, nil
 }
 
@@ -129,4 +133,61 @@ func (pr *PullRequest) Equals(other *PullRequest) bool {
 // FormattedIdentifier returns a formatted string like "owner/repo#123"
 func (pr *PullRequest) FormattedIdentifier() string {
 	return pr.repository.NameWithOwner() + "#" + string(rune(pr.identifier.Number()))
+}
+
+// AddActivity adds a new activity to the PR (through the aggregate)
+// This maintains the aggregate's consistency boundary
+func (pr *PullRequest) AddActivity(activity *Activity) {
+	if activity == nil {
+		return
+	}
+
+	pr.activities = append(pr.activities, activity)
+
+	// Update last activity time if this activity is more recent
+	if activity.CreatedAt().After(pr.lastActivityAt) {
+		pr.lastActivityAt = activity.CreatedAt()
+	}
+}
+
+// AddActivities adds multiple activities at once
+func (pr *PullRequest) AddActivities(activities []*Activity) {
+	for _, activity := range activities {
+		pr.AddActivity(activity)
+	}
+}
+
+// Activities returns all activities for this PR
+func (pr *PullRequest) Activities() []*Activity {
+	// Return a copy to maintain encapsulation
+	result := make([]*Activity, len(pr.activities))
+	copy(result, pr.activities)
+	return result
+}
+
+// ActivitiesSince returns activities that occurred after the given time
+func (pr *PullRequest) ActivitiesSince(since time.Time) []*Activity {
+	var result []*Activity
+	for _, activity := range pr.activities {
+		if activity.CreatedAt().After(since) {
+			result = append(result, activity)
+		}
+	}
+	return result
+}
+
+// HasActivitiesSince returns true if there are any activities after the given time
+func (pr *PullRequest) HasActivitiesSince(since time.Time) bool {
+	return len(pr.ActivitiesSince(since)) > 0
+}
+
+// LastActivityAt returns when the last activity occurred
+func (pr *PullRequest) LastActivityAt() time.Time {
+	return pr.lastActivityAt
+}
+
+// ClearActivities clears all activities (useful for testing or rebuilding state)
+func (pr *PullRequest) ClearActivities() {
+	pr.activities = make([]*Activity, 0)
+	pr.lastActivityAt = pr.createdAt
 }

@@ -29,6 +29,15 @@ func (r *SeenPullRequestRepository) MarkAsSeen(id pullrequest.PRIdentifier) erro
 	return nil
 }
 
+// UnmarkAsSeen marks a PR as unseen
+func (r *SeenPullRequestRepository) UnmarkAsSeen(id pullrequest.PRIdentifier) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	delete(r.seen, id.URL())
+	return nil
+}
+
 // HasBeenSeen checks if a PR has been seen
 func (r *SeenPullRequestRepository) HasBeenSeen(id pullrequest.PRIdentifier) bool {
 	r.mu.RLock()
