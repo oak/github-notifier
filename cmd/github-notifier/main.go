@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"sync"
 	"time"
 
 	"github.com/getlantern/systray"
@@ -23,6 +24,7 @@ type Application struct {
 	checkPullRequestsUseCase *usecase.CheckPullRequestsUseCase
 	menuAdapter              *ui.MenuAdapter
 	checkTicker              *time.Ticker
+	wg                       sync.WaitGroup // Track goroutines for clean shutdown
 }
 
 func main() {
@@ -94,7 +96,9 @@ func (app *Application) onReady() {
 
 	// Setup periodic checks
 	app.checkTicker = time.NewTicker(time.Duration(app.cfg.CheckInterval) * time.Minute)
+	app.wg.Add(1)
 	go func() {
+		defer app.wg.Done()
 		for range app.checkTicker.C {
 			log.Println("Checking for PR updates...")
 			if err := app.checkPullRequestsUseCase.Execute(); err != nil {
@@ -110,4 +114,8 @@ func (app *Application) onExit() {
 		app.checkTicker.Stop()
 	}
 	app.menuAdapter.Shutdown()
+	// Wait for all goroutines to complete
+	log.Println("Waiting for background tasks to complete...")
+	app.wg.Wait()
+	log.Println("Shutdown complete")
 }

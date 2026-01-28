@@ -25,7 +25,7 @@ func LoadConfig() *Config {
 		CheckInterval:           1,
 		MaxNumberOfRepos:        100,
 		MaxNumberOfPRs:          100,
-		EnableActivityTracking:  getEnv("ENABLE_ACTIVITY_TRACKING", "true") == "true",
+		EnableActivityTracking:  getEnv("ENABLE_ACTIVITY_TRACKING", "false") == "true",
 		RecentPRThresholdHours:  getEnvInt("RECENT_PR_THRESHOLD_HOURS", 48),
 		StalePRCheckIntervalMin: getEnvInt("STALE_PR_CHECK_INTERVAL", 15),
 	}

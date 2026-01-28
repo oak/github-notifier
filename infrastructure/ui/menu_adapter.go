@@ -6,6 +6,7 @@ import (
 	"log"
 	"os/exec"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/getlantern/systray"
@@ -31,6 +32,7 @@ type MenuAdapter struct {
 	requestedReviewPRs        []*pullrequest.PullRequest
 	userCreatedPRs            []*pullrequest.PullRequest
 	clickedPRs                map[string]bool // Track which PRs have been clicked in the menu
+	clickedPRsMu              sync.RWMutex    // Protects clickedPRs from concurrent access
 	ctx                       context.Context
 	cancel                    context.CancelFunc
 }
@@ -112,6 +114,7 @@ func (m *MenuAdapter) UpdateMenu(requestedReviewPRs, userCreatedPRs []*pullreque
 	// This way: in-memory repos won't show asterisks on first load
 	// And persistent repos will preserve the clicked state across restarts
 	// And PRs with new activity will show asterisks again
+	m.clickedPRsMu.Lock()
 	for _, pr := range requestedReviewPRs {
 		if trackingService.HasBeenSeen(pr.Identifier()) {
 			if !m.clickedPRs[pr.URL()] {
@@ -132,6 +135,7 @@ func (m *MenuAdapter) UpdateMenu(requestedReviewPRs, userCreatedPRs []*pullreque
 			delete(m.clickedPRs, pr.URL())
 		}
 	}
+	m.clickedPRsMu.Unlock()
 
 	// Add asterisk to section title if it contains unseen PRs
 	requestedReviewTitle := fmt.Sprintf("PRs Requested Reviews: %d", len(requestedReviewPRs))
@@ -255,7 +259,9 @@ func (m *MenuAdapter) handlePRClick(item *systray.MenuItem, pr *pullrequest.Pull
 		select {
 		case <-item.ClickedCh:
 			// Mark as clicked in our local tracking
+			m.clickedPRsMu.Lock()
 			m.clickedPRs[pr.URL()] = true
+			m.clickedPRsMu.Unlock()
 			// Remove asterisk from title immediately
 			newTitle := m.formatPRTitle(pr)
 			item.SetTitle(newTitle)
@@ -349,7 +355,10 @@ func (m *MenuAdapter) groupPRsByRepository(prs []*pullrequest.PullRequest) map[s
 // formatPRTitle returns a formatted PR title with age information and unseen indicator
 func (m *MenuAdapter) formatPRTitle(pr *pullrequest.PullRequest) string {
 	prefix := ""
-	if !m.clickedPRs[pr.URL()] {
+	m.clickedPRsMu.RLock()
+	clicked := m.clickedPRs[pr.URL()]
+	m.clickedPRsMu.RUnlock()
+	if !clicked {
 		prefix = "* "
 	}
 	return fmt.Sprintf("%s[%s] [#%d] %s", prefix, m.formatTimeAgo(pr.CreatedAt()), pr.Number(), pr.Title())
@@ -357,6 +366,8 @@ func (m *MenuAdapter) formatPRTitle(pr *pullrequest.PullRequest) string {
 
 // hasUnseenPRs checks if any PRs in the list have not been clicked
 func (m *MenuAdapter) hasUnseenPRs(prs []*pullrequest.PullRequest) bool {
+	m.clickedPRsMu.RLock()
+	defer m.clickedPRsMu.RUnlock()
 	for _, pr := range prs {
 		if !m.clickedPRs[pr.URL()] {
 			return true
