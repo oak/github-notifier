@@ -67,6 +67,7 @@ func main() {
 		notificationAdapter,
 		menuAdapter,
 		cfg.EnableActivityTracking,
+		cfg.IncludeDraftPRs,
 		cfg.RecentPRThresholdHours,
 		cfg.StalePRCheckIntervalMin,
 	)

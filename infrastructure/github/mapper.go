@@ -34,6 +34,7 @@ func (m *Mapper) ToDomain(dto PullRequestDTO) (*pullrequest.PullRequest, error) 
 		repo,
 		author,
 		dto.CreatedAt,
+		dto.IsDraft,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pull request: %w", err)

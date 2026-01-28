@@ -9,12 +9,13 @@ import (
 type Config struct {
 	GitHubToken             string
 	SlackOAuthToken         string
-	CheckInterval           int // in minutes
+	CheckInterval           int  // in minutes
 	MaxNumberOfRepos        int
 	MaxNumberOfPRs          int
 	EnableActivityTracking  bool // Enable checking for comments/reviews/commits (increases API usage)
 	RecentPRThresholdHours  int  // PRs created within this are "recent" and checked every minute
 	StalePRCheckIntervalMin int  // Check stale PRs every N minutes
+	IncludeDraftPRs         bool // Include draft PRs where user participated (default: true)
 }
 
 // LoadConfig loads configuration from environment variables
@@ -26,8 +27,9 @@ func LoadConfig() *Config {
 		MaxNumberOfRepos:        100,
 		MaxNumberOfPRs:          100,
 		EnableActivityTracking:  getEnv("ENABLE_ACTIVITY_TRACKING", "false") == "true",
-		RecentPRThresholdHours:  getEnvInt("RECENT_PR_THRESHOLD_HOURS", 48),
+		RecentPRThresholdHours:  getEnvInt("RECENT_PR_THRESHOLD_HOURS", 72),
 		StalePRCheckIntervalMin: getEnvInt("STALE_PR_CHECK_INTERVAL", 15),
+		IncludeDraftPRs:         getEnv("INCLUDE_DRAFT_PRS", "true") == "true",
 	}
 }
 

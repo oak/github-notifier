@@ -17,6 +17,7 @@ type CheckPullRequestsUseCase struct {
 	notificationPort       port.NotificationPort
 	menuPort               port.MenuPort
 	enableActivityTracking bool
+	includeDraftPRs        bool
 	lastCheckTime          time.Time
 	recentPRThreshold      time.Duration
 	stalePRCheckInterval   time.Duration
@@ -30,6 +31,7 @@ func NewCheckPullRequestsUseCase(
 	notificationPort port.NotificationPort,
 	menuPort port.MenuPort,
 	enableActivityTracking bool,
+	includeDraftPRs bool,
 	recentThresholdHours int,
 	staleCheckIntervalMin int,
 ) *CheckPullRequestsUseCase {
@@ -39,6 +41,7 @@ func NewCheckPullRequestsUseCase(
 		notificationPort:       notificationPort,
 		menuPort:               menuPort,
 		enableActivityTracking: enableActivityTracking,
+		includeDraftPRs:        includeDraftPRs,
 		lastCheckTime:          time.Now(), // Initialize to now
 		recentPRThreshold:      time.Duration(recentThresholdHours) * time.Hour,
 		stalePRCheckInterval:   time.Duration(staleCheckIntervalMin) * time.Minute,
@@ -66,6 +69,10 @@ func (uc *CheckPullRequestsUseCase) ExecuteInitial() error {
 		log.Printf("Error fetching user created PRs: %v", err)
 		return err
 	}
+
+	// Filter draft PRs if configured
+	requestedReviewPRs = uc.filterDraftPRs(requestedReviewPRs)
+	userCreatedPRs = uc.filterDraftPRs(userCreatedPRs)
 
 	// Sort PRs by creation date (oldest first)
 	uc.sortPRsByCreatedAt(requestedReviewPRs)
@@ -123,6 +130,10 @@ func (uc *CheckPullRequestsUseCase) Execute() error {
 		log.Printf("Error fetching user created PRs: %v", err)
 		return err
 	}
+
+	// Filter draft PRs if configured
+	requestedReviewPRs = uc.filterDraftPRs(requestedReviewPRs)
+	userCreatedPRs = uc.filterDraftPRs(userCreatedPRs)
 
 	// Check for activity if enabled with two-tier optimization
 	if uc.enableActivityTracking {
@@ -289,4 +300,19 @@ func (uc *CheckPullRequestsUseCase) sortPRsByCreatedAt(prs []*pullrequest.PullRe
 	sort.Slice(prs, func(i, j int) bool {
 		return prs[i].CreatedAt().Before(prs[j].CreatedAt())
 	})
+}
+
+// filterDraftPRs filters out draft PRs if configured to do so
+func (uc *CheckPullRequestsUseCase) filterDraftPRs(prs []*pullrequest.PullRequest) []*pullrequest.PullRequest {
+	if uc.includeDraftPRs {
+		return prs
+	}
+
+	filtered := make([]*pullrequest.PullRequest, 0, len(prs))
+	for _, pr := range prs {
+		if !pr.IsDraft() {
+			filtered = append(filtered, pr)
+		}
+	}
+	return filtered
 }

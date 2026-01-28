@@ -23,9 +23,11 @@ func NewAdapter(token string) *Adapter {
 	}
 }
 
-// FetchRequestedReviews fetches PRs where the user is requested to review
+// FetchRequestedReviews fetches PRs where the user is requested to review or has reviewed
+// Note: GitHub search doesn't support OR operator, so we fetch both separately and deduplicate
 func (a *Adapter) FetchRequestedReviews() ([]*pullrequest.PullRequest, error) {
-	query := `
+	// Fetch PRs where user is requested as reviewer
+	requestedQuery := `
 		query($cursor: String) {
 			search(
 				query: "is:open is:pr review-requested:@me"
@@ -39,6 +41,7 @@ func (a *Adapter) FetchRequestedReviews() ([]*pullrequest.PullRequest, error) {
 						url
 						number
 						createdAt
+						isDraft
 						author { login }
 						repository { nameWithOwner }
 					}
@@ -51,7 +54,63 @@ func (a *Adapter) FetchRequestedReviews() ([]*pullrequest.PullRequest, error) {
 		}
 	`
 
-	return a.fetchPaginatedPRs(query)
+	requestedPRs, err := a.fetchPaginatedPRs(requestedQuery)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch review-requested PRs: %w", err)
+	}
+
+	// Fetch PRs where user has reviewed
+	reviewedQuery := `
+		query($cursor: String) {
+			search(
+				query: "is:open is:pr reviewed-by:@me"
+				type: ISSUE
+				first: 50
+				after: $cursor
+			) {
+				nodes {
+					... on PullRequest {
+						title
+						url
+						number
+						createdAt
+						isDraft
+						author { login }
+						repository { nameWithOwner }
+					}
+				}
+				pageInfo {
+					endCursor
+					hasNextPage
+				}
+			}
+		}
+	`
+
+	reviewedPRs, err := a.fetchPaginatedPRs(reviewedQuery)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch reviewed-by PRs: %w", err)
+	}
+
+	// Deduplicate by PR URL (a PR could be in both lists if still review-requested after reviewing)
+	return a.deduplicatePRs(requestedPRs, reviewedPRs), nil
+}
+
+// deduplicatePRs merges two PR lists and removes duplicates based on URL
+func (a *Adapter) deduplicatePRs(lists ...[]*pullrequest.PullRequest) []*pullrequest.PullRequest {
+	seen := make(map[string]bool)
+	var result []*pullrequest.PullRequest
+
+	for _, list := range lists {
+		for _, pr := range list {
+			if !seen[pr.URL()] {
+				seen[pr.URL()] = true
+				result = append(result, pr)
+			}
+		}
+	}
+
+	return result
 }
 
 // FetchUserCreated fetches PRs created by the user
@@ -70,6 +129,7 @@ func (a *Adapter) FetchUserCreated() ([]*pullrequest.PullRequest, error) {
 						url
 						number
 						createdAt
+						isDraft
 						author { login }
 						repository { nameWithOwner }
 					}

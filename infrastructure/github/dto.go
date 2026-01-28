@@ -8,6 +8,7 @@ type PullRequestDTO struct {
 	URL        string    `json:"url"`
 	Number     int       `json:"number"`
 	CreatedAt  time.Time `json:"createdAt"`
+	IsDraft    bool      `json:"isDraft"`
 	Repository struct {
 		NameWithOwner string `json:"nameWithOwner"`
 	} `json:"repository"`

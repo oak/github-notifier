@@ -12,6 +12,7 @@ type PullRequest struct {
 	author            Author
 	status            PRStatus
 	createdAt         time.Time
+	isDraft           bool
 	activities        []*Activity
 	lastActivityAt    time.Time
 	lastActivityCheck time.Time // When we last checked for activities
@@ -25,6 +26,7 @@ func NewPullRequest(
 	repository RepositoryInfo,
 	author Author,
 	createdAt time.Time,
+	isDraft bool,
 ) (*PullRequest, error) {
 	identifier, err := NewPRIdentifier(url, number)
 	if err != nil {
@@ -46,6 +48,7 @@ func NewPullRequest(
 		author:            author,
 		status:            StatusOpen,
 		createdAt:         createdAt,
+		isDraft:           isDraft,
 		activities:        make([]*Activity, 0),
 		lastActivityAt:    createdAt,
 		lastActivityCheck: time.Time{}, // Zero value - will be checked immediately on first run
@@ -80,6 +83,11 @@ func (pr *PullRequest) Status() PRStatus {
 // CreatedAt returns when the PR was created
 func (pr *PullRequest) CreatedAt() time.Time {
 	return pr.createdAt
+}
+
+// IsDraft returns whether the PR is a draft
+func (pr *PullRequest) IsDraft() bool {
+	return pr.isDraft
 }
 
 // URL returns the PR URL
