@@ -6,14 +6,15 @@ import (
 
 // PullRequest is the aggregate root for pull request domain
 type PullRequest struct {
-	identifier     PRIdentifier
-	title          string
-	repository     RepositoryInfo
-	author         Author
-	status         PRStatus
-	createdAt      time.Time
-	activities     []*Activity
-	lastActivityAt time.Time
+	identifier        PRIdentifier
+	title             string
+	repository        RepositoryInfo
+	author            Author
+	status            PRStatus
+	createdAt         time.Time
+	activities        []*Activity
+	lastActivityAt    time.Time
+	lastActivityCheck time.Time // When we last checked for activities
 }
 
 // NewPullRequest creates a new pull request with validation
@@ -39,14 +40,15 @@ func NewPullRequest(
 	}
 
 	return &PullRequest{
-		identifier:     identifier,
-		title:          title,
-		repository:     repository,
-		author:         author,
-		status:         StatusOpen,
-		createdAt:      createdAt,
-		activities:     make([]*Activity, 0),
-		lastActivityAt: createdAt,
+		identifier:        identifier,
+		title:             title,
+		repository:        repository,
+		author:            author,
+		status:            StatusOpen,
+		createdAt:         createdAt,
+		activities:        make([]*Activity, 0),
+		lastActivityAt:    createdAt,
+		lastActivityCheck: time.Time{}, // Zero value - will be checked immediately on first run
 	}, nil
 }
 
@@ -190,4 +192,32 @@ func (pr *PullRequest) LastActivityAt() time.Time {
 func (pr *PullRequest) ClearActivities() {
 	pr.activities = make([]*Activity, 0)
 	pr.lastActivityAt = pr.createdAt
+}
+
+// ShouldCheckForActivities determines if we should fetch activities for this PR
+// Uses a two-tier approach:
+// - Recent PRs (< recentThreshold old): always check
+// - Stale PRs (≥ recentThreshold old): check only if enough time has passed since last check
+func (pr *PullRequest) ShouldCheckForActivities(recentThreshold, staleCheckInterval time.Duration) bool {
+	now := time.Now()
+	prAge := now.Sub(pr.createdAt)
+
+	// Recent PRs: always check
+	if prAge < recentThreshold {
+		return true
+	}
+
+	// Stale PRs: check if enough time passed since last check
+	timeSinceLastCheck := now.Sub(pr.lastActivityCheck)
+	return timeSinceLastCheck >= staleCheckInterval
+}
+
+// UpdateLastActivityCheck updates the timestamp when we last checked for activities
+func (pr *PullRequest) UpdateLastActivityCheck() {
+	pr.lastActivityCheck = time.Now()
+}
+
+// LastActivityCheck returns when we last checked for activities
+func (pr *PullRequest) LastActivityCheck() time.Time {
+	return pr.lastActivityCheck
 }

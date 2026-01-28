@@ -18,6 +18,8 @@ type CheckPullRequestsUseCase struct {
 	menuPort               port.MenuPort
 	enableActivityTracking bool
 	lastCheckTime          time.Time
+	recentPRThreshold      time.Duration
+	stalePRCheckInterval   time.Duration
 }
 
 // NewCheckPullRequestsUseCase creates a new use case
@@ -27,6 +29,8 @@ func NewCheckPullRequestsUseCase(
 	notificationPort port.NotificationPort,
 	menuPort port.MenuPort,
 	enableActivityTracking bool,
+	recentThresholdHours int,
+	staleCheckIntervalMin int,
 ) *CheckPullRequestsUseCase {
 	return &CheckPullRequestsUseCase{
 		prRepo:                 prRepo,
@@ -35,6 +39,8 @@ func NewCheckPullRequestsUseCase(
 		menuPort:               menuPort,
 		enableActivityTracking: enableActivityTracking,
 		lastCheckTime:          time.Now(), // Initialize to now
+		recentPRThreshold:      time.Duration(recentThresholdHours) * time.Hour,
+		stalePRCheckInterval:   time.Duration(staleCheckIntervalMin) * time.Minute,
 	}
 }
 
@@ -116,22 +122,50 @@ func (uc *CheckPullRequestsUseCase) Execute() error {
 		return err
 	}
 
-	// Check for activity if enabled (WARNING: uses N+1 GitHub API calls where N = number of PRs)
+	// Check for activity if enabled with two-tier optimization
 	if uc.enableActivityTracking {
 		// Combine all PRs for activity checking
 		allPRs := append([]*pullrequest.PullRequest{}, requestedReviewPRs...)
 		allPRs = append(allPRs, userCreatedPRs...)
 
-		log.Printf("Activity tracking enabled - fetching timeline for %d PRs (this will make %d API calls)", len(allPRs), len(allPRs))
+		// Filter PRs that need activity checking (two-tier logic)
+		var prsToCheck []*pullrequest.PullRequest
+		var countRecent, countStale int
 
-		// Enrich PRs with activities since last check (modifies aggregates)
-		if err := uc.prRepo.EnrichWithActivities(allPRs, uc.lastCheckTime); err != nil {
-			log.Printf("Error enriching PRs with activities: %v", err)
+		for _, pr := range allPRs {
+			if pr.ShouldCheckForActivities(uc.recentPRThreshold, uc.stalePRCheckInterval) {
+				prsToCheck = append(prsToCheck, pr)
+
+				// Count for logging
+				prAge := time.Since(pr.CreatedAt())
+				if prAge < uc.recentPRThreshold {
+					countRecent++
+				} else {
+					countStale++
+				}
+			}
+		}
+
+		skipped := len(allPRs) - len(prsToCheck)
+		log.Printf("Activity tracking: checking %d/%d PRs (%d recent < %dh, %d stale due for check, %d skipped)",
+			len(prsToCheck), len(allPRs), countRecent,
+			int(uc.recentPRThreshold.Hours()), countStale, skipped)
+
+		// Enrich only the filtered PRs with activities since last check
+		if len(prsToCheck) > 0 {
+			if err := uc.prRepo.EnrichWithActivities(prsToCheck, uc.lastCheckTime); err != nil {
+				log.Printf("Error enriching PRs with activities: %v", err)
+			}
+
+			// Update lastActivityCheck for all checked PRs
+			for _, pr := range prsToCheck {
+				pr.UpdateLastActivityCheck()
+			}
 		}
 
 		// Check for PRs with new activities and mark them as unseen
 		var prsWithNewActivity []*pullrequest.PullRequest
-		for _, pr := range allPRs {
+		for _, pr := range prsToCheck {
 			if pr.HasActivitiesSince(uc.lastCheckTime) {
 				prsWithNewActivity = append(prsWithNewActivity, pr)
 			}

@@ -65,6 +65,8 @@ func main() {
 		notificationAdapter,
 		menuAdapter,
 		cfg.EnableActivityTracking,
+		cfg.RecentPRThresholdHours,
+		cfg.StalePRCheckIntervalMin,
 	)
 
 	// Create application
