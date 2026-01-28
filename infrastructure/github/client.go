@@ -116,3 +116,46 @@ func (c *Client) ExecuteBatchedTimelineQuery(query string) (*BatchedTimelineResp
 
 	return &parsed, nil
 }
+
+// FetchAuthenticatedUserLogin fetches the login of the authenticated user
+func (c *Client) FetchAuthenticatedUserLogin() (string, error) {
+	query := `query { viewer { login } }`
+
+	body, err := json.Marshal(map[string]interface{}{
+		"query": query,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal query: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", githubAPIURL, bytes.NewBuffer(body))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data struct {
+			Viewer struct {
+				Login string `json:"login"`
+			} `json:"viewer"`
+		} `json:"data"`
+		Errors []GraphQLError `json:"errors"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Check for GraphQL errors
+	if len(result.Errors) > 0 {
+		return "", fmt.Errorf("graphql error: %+v", result.Errors)
+	}
+
+	return result.Data.Viewer.Login, nil
+}

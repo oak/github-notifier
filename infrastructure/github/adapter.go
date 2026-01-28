@@ -11,15 +11,28 @@ import (
 
 // Adapter implements the pullrequest.PullRequestRepository interface
 type Adapter struct {
-	client *Client
-	mapper *Mapper
+	client            *Client
+	mapper            *Mapper
+	authenticatedUser string // GitHub login of authenticated user
 }
 
 // NewAdapter creates a new GitHub adapter
 func NewAdapter(token string) *Adapter {
+	client := NewClient(token)
+
+	// Fetch authenticated user login
+	authenticatedUser, err := client.FetchAuthenticatedUserLogin()
+	if err != nil {
+		log.Printf("Warning: Failed to fetch authenticated user login: %v. Activity filtering will be disabled.", err)
+		authenticatedUser = "" // Empty string = no filtering
+	} else {
+		log.Printf("Authenticated as: %s", authenticatedUser)
+	}
+
 	return &Adapter{
-		client: NewClient(token),
-		mapper: NewMapper(),
+		client:            client,
+		mapper:            NewMapper(),
+		authenticatedUser: authenticatedUser,
 	}
 }
 
@@ -308,8 +321,8 @@ func (a *Adapter) fetchBatchedTimelines(prs []*pullrequest.PullRequest, since ti
 							}
 						}
 
-						// Map to domain activities
-						activities := a.mapper.ToActivityList(info.pr, dtos, since)
+						// Map to domain activities, filtering out activities by authenticated user
+						activities := a.mapper.ToActivityList(info.pr, dtos, since, a.authenticatedUser)
 						result[info.pr.URL()] = activities
 					}
 				}

@@ -122,8 +122,8 @@ func (m *Mapper) ToActivity(pr *pullrequest.PullRequest, dto TimelineItemDTO) *p
 	return nil
 }
 
-// ToActivityList converts timeline item DTOs to domain activities, filtering by time
-func (m *Mapper) ToActivityList(pr *pullrequest.PullRequest, dtos []TimelineItemDTO, since time.Time) []*pullrequest.Activity {
+// ToActivityList converts timeline item DTOs to domain activities, filtering by time and authenticated user
+func (m *Mapper) ToActivityList(pr *pullrequest.PullRequest, dtos []TimelineItemDTO, since time.Time, authenticatedUser string) []*pullrequest.Activity {
 	var activities []*pullrequest.Activity
 
 	for _, dto := range dtos {
@@ -134,6 +134,10 @@ func (m *Mapper) ToActivityList(pr *pullrequest.PullRequest, dtos []TimelineItem
 
 		activity := m.ToActivity(pr, dto)
 		if activity != nil {
+			// Filter out activities created by the authenticated user
+			if authenticatedUser != "" && activity.Author().Login() == authenticatedUser {
+				continue // Skip this activity - it's from @me
+			}
 			activities = append(activities, activity)
 		}
 	}
