@@ -20,6 +20,7 @@ type CheckPullRequestsUseCase struct {
 	lastCheckTime          time.Time
 	recentPRThreshold      time.Duration
 	stalePRCheckInterval   time.Duration
+	lastActivityCheckMap   map[string]time.Time // Tracks when each PR was last checked for activities
 }
 
 // NewCheckPullRequestsUseCase creates a new use case
@@ -41,6 +42,7 @@ func NewCheckPullRequestsUseCase(
 		lastCheckTime:          time.Now(), // Initialize to now
 		recentPRThreshold:      time.Duration(recentThresholdHours) * time.Hour,
 		stalePRCheckInterval:   time.Duration(staleCheckIntervalMin) * time.Minute,
+		lastActivityCheckMap:   make(map[string]time.Time),
 	}
 }
 
@@ -131,18 +133,30 @@ func (uc *CheckPullRequestsUseCase) Execute() error {
 		// Filter PRs that need activity checking (two-tier logic)
 		var prsToCheck []*pullrequest.PullRequest
 		var countRecent, countStale int
+		now := time.Now()
 
 		for _, pr := range allPRs {
-			if pr.ShouldCheckForActivities(uc.recentPRThreshold, uc.stalePRCheckInterval) {
-				prsToCheck = append(prsToCheck, pr)
+			prURL := pr.URL()
+			prAge := now.Sub(pr.CreatedAt())
+			lastCheck := uc.lastActivityCheckMap[prURL]
 
-				// Count for logging
-				prAge := time.Since(pr.CreatedAt())
-				if prAge < uc.recentPRThreshold {
-					countRecent++
-				} else {
+			// Determine if this PR should be checked
+			shouldCheck := false
+			if prAge < uc.recentPRThreshold {
+				// Recent PR: always check
+				shouldCheck = true
+				countRecent++
+			} else {
+				// Stale PR: check if enough time passed since last check
+				timeSinceLastCheck := now.Sub(lastCheck)
+				if timeSinceLastCheck >= uc.stalePRCheckInterval {
+					shouldCheck = true
 					countStale++
 				}
+			}
+
+			if shouldCheck {
+				prsToCheck = append(prsToCheck, pr)
 			}
 		}
 
@@ -157,9 +171,9 @@ func (uc *CheckPullRequestsUseCase) Execute() error {
 				log.Printf("Error enriching PRs with activities: %v", err)
 			}
 
-			// Update lastActivityCheck for all checked PRs
+			// Update lastActivityCheckMap for all checked PRs
 			for _, pr := range prsToCheck {
-				pr.UpdateLastActivityCheck()
+				uc.lastActivityCheckMap[pr.URL()] = now
 			}
 		}
 
