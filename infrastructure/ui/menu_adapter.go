@@ -6,6 +6,7 @@ import (
 	"log"
 	"os/exec"
 	"runtime"
+	"sort"
 	"sync"
 	"time"
 
@@ -230,8 +231,16 @@ func (m *MenuAdapter) addOrUpdateParentMenuItem(menuItem *systray.MenuItem, titl
 func (m *MenuAdapter) buildPRSection(prs []*pullrequest.PullRequest, parentMenuItem []MenuItemPair) {
 	prsByRepo := m.groupPRsByRepository(prs)
 
+	// Sort repository names to ensure consistent ordering
+	repoNames := make([]string, 0, len(prsByRepo))
+	for repoName := range prsByRepo {
+		repoNames = append(repoNames, repoName)
+	}
+	sort.Strings(repoNames)
+
 	i := 0
-	for repoName, repoPRs := range prsByRepo {
+	for _, repoName := range repoNames {
+		repoPRs := prsByRepo[repoName]
 		// Add asterisk to repository name if it contains unseen PRs
 		repoTitle := repoName
 		if m.hasUnseenPRs(repoPRs) {
@@ -310,8 +319,16 @@ func (m *MenuAdapter) refreshMenuHierarchy() {
 func (m *MenuAdapter) refreshRepositoryTitles(prs []*pullrequest.PullRequest, menuItems []MenuItemPair) {
 	prsByRepo := m.groupPRsByRepository(prs)
 
+	// Sort repository names to ensure consistent ordering
+	repoNames := make([]string, 0, len(prsByRepo))
+	for repoName := range prsByRepo {
+		repoNames = append(repoNames, repoName)
+	}
+	sort.Strings(repoNames)
+
 	i := 0
-	for repoName, repoPRs := range prsByRepo {
+	for _, repoName := range repoNames {
+		repoPRs := prsByRepo[repoName]
 		if i >= len(menuItems) || menuItems[i].Parent == nil {
 			break
 		}
