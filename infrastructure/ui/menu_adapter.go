@@ -250,6 +250,7 @@ func (m *MenuAdapter) buildPRSection(prs []*pullrequest.PullRequest, parentMenuI
 		parentMenuItem[i].Parent.SetTitle(repoTitle + "   ")
 
 		for j, pr := range repoPRs {
+			pr := pr // Capture loop variable to avoid closure bug
 			prTitle := m.formatPRTitle(pr)
 			parentMenuItem[i].Children[j].SetTitle(prTitle)
 			parentMenuItem[i].Children[j].Show()

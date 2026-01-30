@@ -21,6 +21,7 @@ linters:
     - goimports
     - misspell
     - revive
+    - exportloopref  # Catches loop variable capture bugs
 
 linters-settings:
   errcheck:
