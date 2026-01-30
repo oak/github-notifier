@@ -38,25 +38,33 @@ func (h *NotificationEventHandler) Handle(ctx context.Context, event pullrequest
 
 // handleNewPRDetected sends a notification for newly detected PRs
 func (h *NotificationEventHandler) handleNewPRDetected(event *pullrequest.NewPullRequestDetected) error {
-	// For now, we'll need to reconstruct a PR from the event
-	// In a real system, you might pass the full PR or fetch it
-	log.Printf("Notification: New PR detected - %s in %s",
+	log.Printf("Sending notification: New PR detected - %s in %s",
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner())
 
-	// Note: The current NotificationPort expects a slice of PRs
-	// In Phase 3, we'll refactor the use cases to provide the full PR list
-	// For now, this handler just logs
+	// Send notification with the PR from the event
+	prs := []*pullrequest.PullRequest{event.PullRequest}
+	if err := h.notificationPort.NotifyNewPullRequests("New PR needing review", prs); err != nil {
+		log.Printf("Error sending notification for new PR: %v", err)
+		return err
+	}
+
 	return nil
 }
 
 // handlePRActivityDetected sends a notification for PR activity
 func (h *NotificationEventHandler) handlePRActivityDetected(event *pullrequest.PullRequestActivityDetected) error {
-	log.Printf("Notification: New activity on PR - %s in %s (%d activities)",
+	log.Printf("Sending notification: New activity on PR - %s in %s (%d activities)",
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner(),
 		len(event.Activities))
 
-	// Note: Same as above - will be properly implemented in Phase 3
+	// Send notification with the PR from the event
+	prs := []*pullrequest.PullRequest{event.PullRequest}
+	if err := h.notificationPort.NotifyNewPullRequests("New activity on PR", prs); err != nil {
+		log.Printf("Error sending notification for PR activity: %v", err)
+		return err
+	}
+
 	return nil
 }

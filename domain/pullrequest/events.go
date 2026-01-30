@@ -12,6 +12,7 @@ type NewPullRequestDetected struct {
 	PullRequestID PRIdentifier
 	Repository    RepositoryInfo
 	Author        Author
+	PullRequest   *PullRequest // Full PR for notification purposes
 	occurredAt    time.Time
 }
 
@@ -21,6 +22,7 @@ func NewNewPullRequestDetected(pr *PullRequest) NewPullRequestDetected {
 		PullRequestID: pr.Identifier(),
 		Repository:    pr.Repository(),
 		Author:        pr.Author(),
+		PullRequest:   pr,
 		occurredAt:    time.Now(),
 	}
 }
@@ -79,6 +81,7 @@ type PullRequestActivityDetected struct {
 	PullRequestID PRIdentifier
 	Repository    RepositoryInfo
 	Activities    []*Activity
+	PullRequest   *PullRequest // Full PR for notification purposes
 	occurredAt    time.Time
 }
 
@@ -88,6 +91,7 @@ func NewPullRequestActivityDetected(pr *PullRequest) PullRequestActivityDetected
 		PullRequestID: pr.Identifier(),
 		Repository:    pr.Repository(),
 		Activities:    pr.Activities(),
+		PullRequest:   pr,
 		occurredAt:    time.Now(),
 	}
 }
