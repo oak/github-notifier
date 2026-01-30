@@ -55,6 +55,15 @@ type TimelineItemDTO struct {
 			} `json:"user"`
 		} `json:"author"`
 	} `json:"commit,omitempty"` // For commits
+	Reactions *struct {
+		Nodes []struct {
+			Content   string    `json:"content"`
+			CreatedAt time.Time `json:"createdAt"`
+			User      *struct {
+				Login string `json:"login"`
+			} `json:"user"`
+		} `json:"nodes"`
+	} `json:"reactions,omitempty"` // For comment and review reactions
 }
 
 // BatchedTimelineResponse represents the response for batched timeline queries using aliases

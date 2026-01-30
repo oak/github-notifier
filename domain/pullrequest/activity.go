@@ -15,9 +15,10 @@ type Activity struct {
 type ActivityType string
 
 const (
-	ActivityTypeComment ActivityType = "comment"
-	ActivityTypeReview  ActivityType = "review"
-	ActivityTypeCommit  ActivityType = "commit"
+	ActivityTypeComment  ActivityType = "comment"
+	ActivityTypeReview   ActivityType = "review"
+	ActivityTypeCommit   ActivityType = "commit"
+	ActivityTypeReaction ActivityType = "reaction"
 )
 
 // NewActivity creates a new activity

@@ -140,6 +140,61 @@ func (m *Mapper) ToActivityList(pr *pullrequest.PullRequest, dtos []TimelineItem
 			}
 			activities = append(activities, activity)
 		}
+
+		// Also extract reactions from this timeline item
+		reactionActivities := m.ToReactionActivities(pr, dto, since, authenticatedUser)
+		activities = append(activities, reactionActivities...)
+	}
+
+	return activities
+}
+
+// ToReactionActivities extracts reaction activities from a timeline item (comment or review)
+func (m *Mapper) ToReactionActivities(pr *pullrequest.PullRequest, dto TimelineItemDTO, since time.Time, authenticatedUser string) []*pullrequest.Activity {
+	var activities []*pullrequest.Activity
+
+	// Only process reactions for comments and reviews
+	if dto.Typename != "IssueComment" && dto.Typename != "PullRequestReview" {
+		return activities
+	}
+
+	// Check if reactions exist
+	if dto.Reactions == nil || len(dto.Reactions.Nodes) == 0 {
+		return activities
+	}
+
+	// Convert each reaction to an activity
+	for _, reaction := range dto.Reactions.Nodes {
+		// Skip reactions older than since time
+		if reaction.CreatedAt.Before(since) {
+			continue
+		}
+
+		// Skip if no user info
+		if reaction.User == nil {
+			continue
+		}
+
+		// Filter out reactions by authenticated user
+		if authenticatedUser != "" && reaction.User.Login == authenticatedUser {
+			continue
+		}
+
+		author, err := pullrequest.NewAuthor(reaction.User.Login)
+		if err != nil {
+			continue
+		}
+
+		// Create reaction activity with emoji as body
+		activity := pullrequest.NewActivity(
+			pr.Identifier(),
+			pullrequest.ActivityTypeReaction,
+			author,
+			reaction.CreatedAt,
+			reaction.Content, // Emoji like THUMBS_UP, HEART, etc.
+		)
+
+		activities = append(activities, activity)
 	}
 
 	return activities

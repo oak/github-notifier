@@ -270,12 +270,26 @@ func (a *Adapter) fetchBatchedTimelines(prs []*pullrequest.PullRequest, since ti
 								createdAt
 								author { login }
 								body
+								reactions(first: 100) {
+									nodes {
+										content
+										user { login }
+										createdAt
+									}
+								}
 							}
 							... on PullRequestReview {
 								createdAt
 								author { login }
 								body
 								state
+								reactions(first: 100) {
+									nodes {
+										content
+										user { login }
+										createdAt
+									}
+								}
 							}
 							... on PullRequestCommit {
 								commit {
