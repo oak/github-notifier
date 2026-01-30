@@ -73,3 +73,26 @@ func NewPullRequestStatusChanged(pr *PullRequest, oldStatus, newStatus PRStatus)
 func (e PullRequestStatusChanged) OccurredAt() time.Time {
 	return e.occurredAt
 }
+
+// PullRequestActivityDetected is raised when new activity is detected on a PR
+type PullRequestActivityDetected struct {
+	PullRequestID PRIdentifier
+	Repository    RepositoryInfo
+	Activities    []*Activity
+	occurredAt    time.Time
+}
+
+// NewPullRequestActivityDetected creates a new event
+func NewPullRequestActivityDetected(pr *PullRequest) PullRequestActivityDetected {
+	return PullRequestActivityDetected{
+		PullRequestID: pr.Identifier(),
+		Repository:    pr.Repository(),
+		Activities:    pr.Activities(),
+		occurredAt:    time.Now(),
+	}
+}
+
+// OccurredAt returns when the event occurred
+func (e PullRequestActivityDetected) OccurredAt() time.Time {
+	return e.occurredAt
+}
