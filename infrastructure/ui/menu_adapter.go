@@ -102,8 +102,9 @@ func (m *MenuAdapter) applyThemeIcon() {
 	}
 }
 
-// UpdateMenu updates the menu with pull requests
-func (m *MenuAdapter) UpdateMenu(requestedReviewPRs, userCreatedPRs []*pullrequest.PullRequest, trackingService tracking.Service) {
+// UpdateDisplay implements the UIPort interface for systray menu display
+// This adapter specifically renders PRs as a system tray menu with dropdowns
+func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullrequest.PullRequest, trackingService tracking.Service) {
 	// Store tracking service and PR lists for use in menu item formatting
 	m.trackingService = trackingService
 	m.requestedReviewPRs = requestedReviewPRs

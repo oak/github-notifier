@@ -15,7 +15,7 @@ type CheckPullRequestsUseCase struct {
 	prRepo                 pullrequest.PullRequestRepository
 	trackingService        tracking.Service
 	notificationPort       port.NotificationPort
-	menuPort               port.MenuPort
+	uiPort                 port.UIPort
 	enableActivityTracking bool
 	includeDraftPRs        bool
 	lastCheckTime          time.Time
@@ -29,7 +29,7 @@ func NewCheckPullRequestsUseCase(
 	prRepo pullrequest.PullRequestRepository,
 	trackingService tracking.Service,
 	notificationPort port.NotificationPort,
-	menuPort port.MenuPort,
+	uiPort port.UIPort,
 	enableActivityTracking bool,
 	includeDraftPRs bool,
 	recentThresholdHours int,
@@ -39,7 +39,7 @@ func NewCheckPullRequestsUseCase(
 		prRepo:                 prRepo,
 		trackingService:        trackingService,
 		notificationPort:       notificationPort,
-		menuPort:               menuPort,
+		uiPort:                 uiPort,
 		enableActivityTracking: enableActivityTracking,
 		includeDraftPRs:        includeDraftPRs,
 		lastCheckTime:          time.Now(), // Initialize to now
@@ -84,14 +84,14 @@ func (uc *CheckPullRequestsUseCase) ExecuteInitial() error {
 		uc.trackingService.MarkPullRequestsAsSeen(requestedReviewPRs)
 		uc.trackingService.MarkPullRequestsAsSeen(userCreatedPRs)
 
-		// Update the menu with tracking service
-		uc.menuPort.UpdateMenu(requestedReviewPRs, userCreatedPRs, uc.trackingService)
+		// Update the UI with tracking service
+		uc.uiPort.UpdateDisplay(requestedReviewPRs, userCreatedPRs, uc.trackingService)
 	} else {
 		// Not first run: repository has data, behave normally
 		log.Println("Existing state detected - checking for new PRs")
 
-		// Update the menu first
-		uc.menuPort.UpdateMenu(requestedReviewPRs, userCreatedPRs, uc.trackingService)
+		// Update the UI first
+		uc.uiPort.UpdateDisplay(requestedReviewPRs, userCreatedPRs, uc.trackingService)
 
 		// Track and notify new PRs (same logic as Execute)
 		newRequestedReviewPRs := uc.trackingService.FindNewPullRequests(requestedReviewPRs)
@@ -285,9 +285,9 @@ func (uc *CheckPullRequestsUseCase) Execute() error {
 		}
 	}
 
-	// Update the menu AFTER all notification logic completes
+	// Update the UI AFTER all notification logic completes
 	// This ensures PRs with new activity remain unseen (show asterisks)
-	uc.menuPort.UpdateMenu(requestedReviewPRs, userCreatedPRs, uc.trackingService)
+	uc.uiPort.UpdateDisplay(requestedReviewPRs, userCreatedPRs, uc.trackingService)
 
 	// Update last check time for next iteration
 	uc.lastCheckTime = time.Now()
