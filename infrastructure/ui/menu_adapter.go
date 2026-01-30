@@ -32,8 +32,10 @@ type MenuAdapter struct {
 	trackingService           tracking.Service
 	requestedReviewPRs        []*pullrequest.PullRequest
 	userCreatedPRs            []*pullrequest.PullRequest
-	clickedPRs                map[string]bool // Track which PRs have been clicked in the menu
-	clickedPRsMu              sync.RWMutex    // Protects clickedPRs from concurrent access
+	clickedPRs                map[string]bool              // Track which PRs have been clicked in the menu
+	clickedPRsMu              sync.RWMutex                 // Protects clickedPRs from concurrent access
+	menuItemCancels           map[*systray.MenuItem]context.CancelFunc // Track cancel funcs for each menu item
+	menuItemCancelsMu         sync.RWMutex                 // Protects menuItemCancels
 	ctx                       context.Context
 	cancel                    context.CancelFunc
 }
@@ -70,6 +72,7 @@ func NewMenuAdapter(cfg *config.Config, themeProvider ThemeProvider) *MenuAdapte
 		maxNumberOfPRs:        cfg.MaxNumberOfPRs,
 		themeProvider:         themeProvider,
 		clickedPRs:            make(map[string]bool),
+		menuItemCancels:       make(map[*systray.MenuItem]context.CancelFunc),
 		ctx:                   ctx,
 		cancel:                cancel,
 	}
@@ -251,12 +254,25 @@ func (m *MenuAdapter) buildPRSection(prs []*pullrequest.PullRequest, parentMenuI
 
 		for j, pr := range repoPRs {
 			pr := pr // Capture loop variable to avoid closure bug
-			prTitle := m.formatPRTitle(pr)
-			parentMenuItem[i].Children[j].SetTitle(prTitle)
-			parentMenuItem[i].Children[j].Show()
+			menuItem := parentMenuItem[i].Children[j]
 
-			// Fix goroutine leak by using context
-			go m.handlePRClick(parentMenuItem[i].Children[j], pr)
+			prTitle := m.formatPRTitle(pr)
+			menuItem.SetTitle(prTitle)
+			menuItem.Show()
+
+			// Cancel old goroutine for this menu item if it exists
+			m.menuItemCancelsMu.Lock()
+			if cancelFunc, exists := m.menuItemCancels[menuItem]; exists {
+				cancelFunc() // Cancel the old goroutine
+			}
+
+			// Create new context for this menu item
+			itemCtx, itemCancel := context.WithCancel(m.ctx)
+			m.menuItemCancels[menuItem] = itemCancel
+			m.menuItemCancelsMu.Unlock()
+
+			// Start new goroutine with its own context
+			go m.handlePRClick(itemCtx, menuItem, pr)
 		}
 
 		parentMenuItem[i].Parent.Show()
@@ -265,7 +281,7 @@ func (m *MenuAdapter) buildPRSection(prs []*pullrequest.PullRequest, parentMenuI
 }
 
 // handlePRClick handles PR menu item clicks with proper cleanup
-func (m *MenuAdapter) handlePRClick(item *systray.MenuItem, pr *pullrequest.PullRequest) {
+func (m *MenuAdapter) handlePRClick(ctx context.Context, item *systray.MenuItem, pr *pullrequest.PullRequest) {
 	for {
 		select {
 		case <-item.ClickedCh:
@@ -280,7 +296,7 @@ func (m *MenuAdapter) handlePRClick(item *systray.MenuItem, pr *pullrequest.Pull
 			m.refreshMenuHierarchy()
 			// Open the URL
 			m.openURL(pr.URL())
-		case <-m.ctx.Done():
+		case <-ctx.Done():
 			return
 		}
 	}
