@@ -1,0 +1,152 @@
+package events_test
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak3/github-notifier/infrastructure/events"
+	"github.com/oak3/github-notifier/internal/mocks"
+	"github.com/oak3/github-notifier/internal/testutil"
+	"github.com/stretchr/testify/require"
+)
+
+func TestTrackingHandler_HandleNewPRDetected_Success(t *testing.T) {
+	// Arrange
+	mockTrackingService := mocks.NewService(t)
+	handler := events.NewTrackingEventHandler(mockTrackingService)
+
+	pr := testutil.NewTestPullRequest(1)
+	event := pullrequest.NewNewPullRequestDetected(pr)
+
+	// Act
+	err := handler.Handle(context.Background(), &event)
+
+	// Assert
+	require.NoError(t, err)
+	// Handler currently just logs, no tracking service calls expected
+	mockTrackingService.AssertNotCalled(t, "MarkPullRequestsAsSeen")
+}
+
+func TestTrackingHandler_HandleActivityDetected_Success(t *testing.T) {
+	// Arrange
+	mockTrackingService := mocks.NewService(t)
+	handler := events.NewTrackingEventHandler(mockTrackingService)
+
+	pr := testutil.NewTestPullRequest(1)
+	activity := testutil.NewTestActivity(
+		pullrequest.ActivityTypeComment,
+		time.Now(),
+		testutil.WithActivityPR(pr.URL(), pr.Number()),
+	)
+	pr.AddActivities([]*pullrequest.Activity{activity})
+
+	event := pullrequest.NewPullRequestActivityDetected(pr)
+
+	// Act
+	err := handler.Handle(context.Background(), &event)
+
+	// Assert
+	require.NoError(t, err)
+	// Handler currently just logs, no tracking service calls expected
+	mockTrackingService.AssertNotCalled(t, "MarkPullRequestAsUnseen")
+}
+
+func TestTrackingHandler_HandleUnknownEvent_Ignored(t *testing.T) {
+	// Arrange
+	mockTrackingService := mocks.NewService(t)
+	handler := events.NewTrackingEventHandler(mockTrackingService)
+
+	// Create a mock event type (not a real event, just for testing)
+	type UnknownEvent struct {
+		pullrequest.Event
+	}
+	unknownEvent := &UnknownEvent{}
+
+	// Act
+	err := handler.Handle(context.Background(), unknownEvent)
+
+	// Assert
+	require.NoError(t, err)
+	// No tracking service calls should be made for unknown event types
+	mockTrackingService.AssertNotCalled(t, "MarkPullRequestsAsSeen")
+	mockTrackingService.AssertNotCalled(t, "MarkPullRequestAsUnseen")
+}
+
+func TestTrackingHandler_HandleMultipleNewPRs(t *testing.T) {
+	// Arrange
+	mockTrackingService := mocks.NewService(t)
+	handler := events.NewTrackingEventHandler(mockTrackingService)
+
+	pr1 := testutil.NewTestPullRequest(1)
+	pr2 := testutil.NewTestPullRequest(2)
+
+	event1 := pullrequest.NewNewPullRequestDetected(pr1)
+	event2 := pullrequest.NewNewPullRequestDetected(pr2)
+
+	// Act
+	err1 := handler.Handle(context.Background(), &event1)
+	err2 := handler.Handle(context.Background(), &event2)
+
+	// Assert
+	require.NoError(t, err1)
+	require.NoError(t, err2)
+	// Both events should be handled successfully
+}
+
+func TestTrackingHandler_HandleMultipleActivities(t *testing.T) {
+	// Arrange
+	mockTrackingService := mocks.NewService(t)
+	handler := events.NewTrackingEventHandler(mockTrackingService)
+
+	pr := testutil.NewTestPullRequest(1)
+	activity1 := testutil.NewTestActivity(
+		pullrequest.ActivityTypeComment,
+		time.Now(),
+		testutil.WithActivityPR(pr.URL(), pr.Number()),
+	)
+	activity2 := testutil.NewTestActivity(
+		pullrequest.ActivityTypeReview,
+		time.Now(),
+		testutil.WithActivityPR(pr.URL(), pr.Number()),
+	)
+	pr.AddActivities([]*pullrequest.Activity{activity1, activity2})
+
+	event := pullrequest.NewPullRequestActivityDetected(pr)
+
+	// Act
+	err := handler.Handle(context.Background(), &event)
+
+	// Assert
+	require.NoError(t, err)
+	// Event with multiple activities should be handled successfully
+}
+
+func TestTrackingHandler_HandleMixedEvents(t *testing.T) {
+	// Arrange
+	mockTrackingService := mocks.NewService(t)
+	handler := events.NewTrackingEventHandler(mockTrackingService)
+
+	pr1 := testutil.NewTestPullRequest(1)
+	pr2 := testutil.NewTestPullRequest(2)
+
+	activity := testutil.NewTestActivity(
+		pullrequest.ActivityTypeComment,
+		time.Now(),
+		testutil.WithActivityPR(pr2.URL(), pr2.Number()),
+	)
+	pr2.AddActivities([]*pullrequest.Activity{activity})
+
+	newPREvent := pullrequest.NewNewPullRequestDetected(pr1)
+	activityEvent := pullrequest.NewPullRequestActivityDetected(pr2)
+
+	// Act
+	err1 := handler.Handle(context.Background(), &newPREvent)
+	err2 := handler.Handle(context.Background(), &activityEvent)
+
+	// Assert
+	require.NoError(t, err1)
+	require.NoError(t, err2)
+	// Both event types should be handled successfully
+}
