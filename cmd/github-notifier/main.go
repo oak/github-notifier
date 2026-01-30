@@ -6,10 +6,13 @@ import (
 	"time"
 
 	"github.com/getlantern/systray"
+	"github.com/oak3/github-notifier/application"
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/application/usecase"
 	"github.com/oak3/github-notifier/config"
+	"github.com/oak3/github-notifier/domain/pullrequest"
 	"github.com/oak3/github-notifier/domain/tracking"
+	"github.com/oak3/github-notifier/infrastructure/events"
 	"github.com/oak3/github-notifier/infrastructure/github"
 	"github.com/oak3/github-notifier/infrastructure/notification"
 	"github.com/oak3/github-notifier/infrastructure/notification/desktop"
@@ -18,13 +21,13 @@ import (
 	"github.com/oak3/github-notifier/infrastructure/ui"
 )
 
-// Application orchestrates the startup and lifecycle
-type Application struct {
-	cfg                      *config.Config
-	checkPullRequestsUseCase *usecase.CheckPullRequestsUseCase
-	menuAdapter              *ui.MenuAdapter
-	checkTicker              *time.Ticker
-	wg                       sync.WaitGroup // Track goroutines for clean shutdown
+// App orchestrates the startup and lifecycle
+type App struct {
+	cfg          *config.Config
+	orchestrator *application.PullRequestOrchestrator
+	menuAdapter  *ui.MenuAdapter
+	checkTicker  *time.Ticker
+	wg           sync.WaitGroup // Track goroutines for clean shutdown
 }
 
 func main() {
@@ -60,38 +63,82 @@ func main() {
 
 	menuAdapter := ui.NewMenuAdapter(cfg, themeProvider)
 
-	// Initialize use case
-	checkPullRequestsUseCase := usecase.NewCheckPullRequestsUseCase(
-		githubAdapter,
-		trackingService,
-		notificationAdapter,
-		menuAdapter,
-		cfg.EnableActivityTracking,
-		cfg.IncludeDraftPRs,
+	// Initialize domain services
+	prFilter := pullrequest.NewPRFilter(cfg.IncludeDraftPRs)
+	prClassifier := pullrequest.NewPRClassifier()
+	activityScheduler := pullrequest.NewActivityCheckScheduler(
 		cfg.RecentPRThresholdHours,
 		cfg.StalePRCheckIntervalMin,
 	)
 
+	// Initialize event infrastructure
+	eventBus := events.NewInMemoryEventBus()
+
+	// Register event handlers
+	notificationHandler := events.NewNotificationEventHandler(notificationAdapter)
+	trackingHandler := events.NewTrackingEventHandler(trackingService)
+
+	eventBus.Subscribe("NewPullRequestDetected", notificationHandler)
+	eventBus.Subscribe("PullRequestActivityDetected", notificationHandler)
+	eventBus.Subscribe("NewPullRequestDetected", trackingHandler)
+	eventBus.Subscribe("PullRequestActivityDetected", trackingHandler)
+
+	// Initialize use cases
+	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(
+		githubAdapter,
+		trackingService,
+		prFilter,
+		menuAdapter,
+	)
+
+	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(
+		githubAdapter,
+		trackingService,
+		prFilter,
+		prClassifier,
+		eventBus,
+	)
+
+	trackActivityUseCase := usecase.NewTrackPullRequestActivityUseCase(
+		githubAdapter,
+		activityScheduler,
+		trackingService,
+		eventBus,
+	)
+
+	updateDisplayUseCase := usecase.NewUpdatePullRequestDisplayUseCase(
+		menuAdapter,
+		trackingService,
+	)
+
+	// Create orchestrator
+	orchestrator := application.NewPullRequestOrchestrator(
+		initializeUseCase,
+		checkNewPRsUseCase,
+		trackActivityUseCase,
+		updateDisplayUseCase,
+		cfg.EnableActivityTracking,
+	)
+
 	// Create application
-	app := &Application{
-		cfg:                      cfg,
-		checkPullRequestsUseCase: checkPullRequestsUseCase,
-		menuAdapter:              menuAdapter,
+	app := &App{
+		cfg:          cfg,
+		orchestrator: orchestrator,
+		menuAdapter:  menuAdapter,
 	}
 
 	// Start systray
 	systray.Run(app.onReady, app.onExit)
 }
 
-func (app *Application) onReady() {
+func (app *App) onReady() {
 	systray.SetTooltip("GitHub PR Notifier")
 
 	// Setup menu
 	app.menuAdapter.Setup()
 
-	// Initial check - mark all existing PRs as seen first to avoid notifications/asterisks on startup
-	log.Println("Performing initial PR check...")
-	if err := app.checkPullRequestsUseCase.ExecuteInitial(); err != nil {
+	// Initial check
+	if err := app.orchestrator.ExecuteInitialCheck(); err != nil {
 		log.Printf("Error during initial check: %v", err)
 	}
 
@@ -102,14 +149,14 @@ func (app *Application) onReady() {
 		defer app.wg.Done()
 		for range app.checkTicker.C {
 			log.Println("Checking for PR updates...")
-			if err := app.checkPullRequestsUseCase.Execute(); err != nil {
+			if err := app.orchestrator.ExecuteRegularCheck(); err != nil {
 				log.Printf("Error checking PRs: %v", err)
 			}
 		}
 	}()
 }
 
-func (app *Application) onExit() {
+func (app *App) onExit() {
 	log.Println("Shutting down...")
 	if app.checkTicker != nil {
 		app.checkTicker.Stop()
