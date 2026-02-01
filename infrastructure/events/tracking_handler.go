@@ -5,17 +5,16 @@ import (
 	"log"
 
 	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/oak3/github-notifier/domain/tracking"
 )
 
 // TrackingEventHandler handles domain events by updating tracking state
 // Implements the EventHandler port
 type TrackingEventHandler struct {
-	trackingService tracking.Service
+	trackingService *pullrequest.TrackingService
 }
 
 // NewTrackingEventHandler creates a new tracking event handler
-func NewTrackingEventHandler(trackingService tracking.Service) *TrackingEventHandler {
+func NewTrackingEventHandler(trackingService *pullrequest.TrackingService) *TrackingEventHandler {
 	return &TrackingEventHandler{
 		trackingService: trackingService,
 	}

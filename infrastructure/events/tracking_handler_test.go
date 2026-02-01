@@ -14,8 +14,9 @@ import (
 
 func TestTrackingHandler_HandleNewPRDetected_Success(t *testing.T) {
 	// Arrange
-	mockTrackingService := mocks.NewService(t)
-	handler := events.NewTrackingEventHandler(mockTrackingService)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(trackingService)
 
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewNewPullRequestDetected(pr)
@@ -26,13 +27,14 @@ func TestTrackingHandler_HandleNewPRDetected_Success(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	// Handler currently just logs, no tracking service calls expected
-	mockTrackingService.AssertNotCalled(t, "MarkPullRequestsAsSeen")
+	mockSeenRepo.AssertNotCalled(t, "MarkAsSeen")
 }
 
 func TestTrackingHandler_HandleActivityDetected_Success(t *testing.T) {
 	// Arrange
-	mockTrackingService := mocks.NewService(t)
-	handler := events.NewTrackingEventHandler(mockTrackingService)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(trackingService)
 
 	pr := testutil.NewTestPullRequest(1)
 	activity := testutil.NewTestActivity(
@@ -50,13 +52,14 @@ func TestTrackingHandler_HandleActivityDetected_Success(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	// Handler currently just logs, no tracking service calls expected
-	mockTrackingService.AssertNotCalled(t, "MarkPullRequestAsUnseen")
+	mockSeenRepo.AssertNotCalled(t, "UnmarkAsSeen")
 }
 
 func TestTrackingHandler_HandleUnknownEvent_Ignored(t *testing.T) {
 	// Arrange
-	mockTrackingService := mocks.NewService(t)
-	handler := events.NewTrackingEventHandler(mockTrackingService)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(trackingService)
 
 	// Create a mock event type (not a real event, just for testing)
 	type UnknownEvent struct {
@@ -70,14 +73,15 @@ func TestTrackingHandler_HandleUnknownEvent_Ignored(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	// No tracking service calls should be made for unknown event types
-	mockTrackingService.AssertNotCalled(t, "MarkPullRequestsAsSeen")
-	mockTrackingService.AssertNotCalled(t, "MarkPullRequestAsUnseen")
+	mockSeenRepo.AssertNotCalled(t, "MarkAsSeen")
+	mockSeenRepo.AssertNotCalled(t, "UnmarkAsSeen")
 }
 
 func TestTrackingHandler_HandleMultipleNewPRs(t *testing.T) {
 	// Arrange
-	mockTrackingService := mocks.NewService(t)
-	handler := events.NewTrackingEventHandler(mockTrackingService)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(trackingService)
 
 	pr1 := testutil.NewTestPullRequest(1)
 	pr2 := testutil.NewTestPullRequest(2)
@@ -97,8 +101,9 @@ func TestTrackingHandler_HandleMultipleNewPRs(t *testing.T) {
 
 func TestTrackingHandler_HandleMultipleActivities(t *testing.T) {
 	// Arrange
-	mockTrackingService := mocks.NewService(t)
-	handler := events.NewTrackingEventHandler(mockTrackingService)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(trackingService)
 
 	pr := testutil.NewTestPullRequest(1)
 	activity1 := testutil.NewTestActivity(
@@ -125,8 +130,9 @@ func TestTrackingHandler_HandleMultipleActivities(t *testing.T) {
 
 func TestTrackingHandler_HandleMixedEvents(t *testing.T) {
 	// Arrange
-	mockTrackingService := mocks.NewService(t)
-	handler := events.NewTrackingEventHandler(mockTrackingService)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(trackingService)
 
 	pr1 := testutil.NewTestPullRequest(1)
 	pr2 := testutil.NewTestPullRequest(2)

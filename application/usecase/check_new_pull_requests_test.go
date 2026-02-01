@@ -16,8 +16,9 @@ import (
 
 func TestCheckNewPRs_NoNewPRs(t *testing.T) {
 	// Arrange
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockTrackingService := mocks.NewService(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	prFilter := pullrequest.NewPRFilter(false)
 	prClassifier := pullrequest.NewPRClassifier()
@@ -30,9 +31,13 @@ func TestCheckNewPRs_NoNewPRs(t *testing.T) {
 	mockPRRepo.On("FetchUserCreated").Return(userPRs, nil)
 
 	// No new PRs found
-	mockTrackingService.On("FindNewPullRequests", mock.AnythingOfType("[]*pullrequest.PullRequest")).Return([]*pullrequest.PullRequest{}).Twice()
+	mockSeenRepo.On("HasBeenSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(false).Times(3)
+	mockSeenRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Times(3)
 
-	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingService, prFilter, prClassifier, mockEventPublisher)
+	// Events should be published for each PR (2 + 1 = 3 events)
+	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.NewPullRequestDetected")).Return(nil).Times(3)
+
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
 
 	// Act
 	result, err := uc.Execute()
@@ -42,14 +47,15 @@ func TestCheckNewPRs_NoNewPRs(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.Len(t, result.RequestedReviewPRs, 2)
 	assert.Len(t, result.UserCreatedPRs, 1)
-	mockEventPublisher.AssertNotCalled(t, "Publish")
-	mockTrackingService.AssertNotCalled(t, "MarkPullRequestsAsSeen")
+	mockEventPublisher.AssertExpectations(t)
+	mockSeenRepo.AssertExpectations(t)
 }
 
 func TestCheckNewPRs_TrulyNewPRs_EmitsEvents(t *testing.T) {
 	// Arrange
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockTrackingService := mocks.NewService(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	prFilter := pullrequest.NewPRFilter(false)
 	prClassifier := pullrequest.NewPRClassifier()
@@ -62,17 +68,15 @@ func TestCheckNewPRs_TrulyNewPRs_EmitsEvents(t *testing.T) {
 	mockPRRepo.On("FetchUserCreated").Return(userPRs, nil)
 
 	// All PRs are new
-	mockTrackingService.On("FindNewPullRequests", requestedPRs).Return(requestedPRs).Once()
-	mockTrackingService.On("FindNewPullRequests", userPRs).Return(userPRs).Once()
+	mockSeenRepo.On("HasBeenSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(false).Times(3)
 
 	// All new PRs should be marked as seen
-	mockTrackingService.On("MarkPullRequestsAsSeen", requestedPRs).Once()
-	mockTrackingService.On("MarkPullRequestsAsSeen", userPRs).Once()
+	mockSeenRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Times(3)
 
 	// Events should be published for each PR (2 + 1 = 3 events)
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.NewPullRequestDetected")).Return(nil).Times(3)
 
-	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingService, prFilter, prClassifier, mockEventPublisher)
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
 
 	// Act
 	result, err := uc.Execute()
@@ -81,19 +85,20 @@ func TestCheckNewPRs_TrulyNewPRs_EmitsEvents(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	mockEventPublisher.AssertExpectations(t)
-	mockTrackingService.AssertExpectations(t)
+	mockSeenRepo.AssertExpectations(t)
 }
 
 func TestCheckNewPRs_PRsWithActivity(t *testing.T) {
 	// Arrange
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockTrackingService := mocks.NewService(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	prFilter := pullrequest.NewPRFilter(false)
 	prClassifier := pullrequest.NewPRClassifier()
 
 	// Create use case first to establish lastCheckTime
-	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingService, prFilter, prClassifier, mockEventPublisher)
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
 
 	// Sleep briefly to ensure activities are after lastCheckTime
 	time.Sleep(10 * time.Millisecond)
@@ -117,8 +122,7 @@ func TestCheckNewPRs_PRsWithActivity(t *testing.T) {
 	mockPRRepo.On("FetchUserCreated").Return([]*pullrequest.PullRequest{}, nil)
 
 	// PRs are found as new
-	mockTrackingService.On("FindNewPullRequests", prsWithActivity).Return(prsWithActivity)
-	mockTrackingService.On("FindNewPullRequests", mock.AnythingOfType("[]*pullrequest.PullRequest")).Return([]*pullrequest.PullRequest{})
+	mockSeenRepo.On("HasBeenSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(true)
 
 	// PRs with activity should NOT be marked as seen (handled by activity tracking)
 	// No events should be published for PRs with activity
@@ -130,19 +134,20 @@ func TestCheckNewPRs_PRsWithActivity(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	mockEventPublisher.AssertNotCalled(t, "Publish") // No events for PRs with activity
-	mockTrackingService.AssertNotCalled(t, "MarkPullRequestsAsSeen") // Not marked as seen
+	mockSeenRepo.AssertNotCalled(t, "MarkAsSeen")    // Not marked as seen
 }
 
 func TestCheckNewPRs_MixedNewAndActivity(t *testing.T) {
 	// Arrange
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockTrackingService := mocks.NewService(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	prFilter := pullrequest.NewPRFilter(false)
 	prClassifier := pullrequest.NewPRClassifier()
 
 	// Create use case first
-	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingService, prFilter, prClassifier, mockEventPublisher)
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
 
 	// Sleep briefly
 	time.Sleep(10 * time.Millisecond)
@@ -169,13 +174,12 @@ func TestCheckNewPRs_MixedNewAndActivity(t *testing.T) {
 	mockPRRepo.On("FetchRequestedReviews").Return(allPRs, nil)
 	mockPRRepo.On("FetchUserCreated").Return([]*pullrequest.PullRequest{}, nil)
 
-	mockTrackingService.On("FindNewPullRequests", allPRs).Return(allPRs)
-	mockTrackingService.On("FindNewPullRequests", mock.AnythingOfType("[]*pullrequest.PullRequest")).Return([]*pullrequest.PullRequest{})
+	// All 4 PRs are not seen yet
+	mockSeenRepo.On("HasBeenSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(false)
 
-	// Only truly new PRs should be marked as seen
-	mockTrackingService.On("MarkPullRequestsAsSeen", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
-		return len(prs) == 2 // Only the 2 truly new PRs
-	})).Once()
+	// Only truly new PRs (the 2 without recent activities) should be marked as seen
+	// The 2 PRs with activities should NOT be marked as seen
+	mockSeenRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Twice()
 
 	// Events only for truly new PRs (2 events)
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.NewPullRequestDetected")).Return(nil).Twice()
@@ -188,13 +192,14 @@ func TestCheckNewPRs_MixedNewAndActivity(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.Len(t, result.RequestedReviewPRs, 4)
 	mockEventPublisher.AssertExpectations(t)
-	mockTrackingService.AssertExpectations(t)
+	mockSeenRepo.AssertExpectations(t)
 }
 
 func TestCheckNewPRs_FetchRequestedReviewsError(t *testing.T) {
 	// Arrange
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockTrackingService := mocks.NewService(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	prFilter := pullrequest.NewPRFilter(false)
 	prClassifier := pullrequest.NewPRClassifier()
@@ -204,7 +209,7 @@ func TestCheckNewPRs_FetchRequestedReviewsError(t *testing.T) {
 	// Mock expectations
 	mockPRRepo.On("FetchRequestedReviews").Return(nil, expectedErr)
 
-	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingService, prFilter, prClassifier, mockEventPublisher)
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
 
 	// Act
 	result, err := uc.Execute()
@@ -218,8 +223,9 @@ func TestCheckNewPRs_FetchRequestedReviewsError(t *testing.T) {
 
 func TestCheckNewPRs_FetchUserCreatedError(t *testing.T) {
 	// Arrange
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockTrackingService := mocks.NewService(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	prFilter := pullrequest.NewPRFilter(false)
 	prClassifier := pullrequest.NewPRClassifier()
@@ -231,7 +237,7 @@ func TestCheckNewPRs_FetchUserCreatedError(t *testing.T) {
 	mockPRRepo.On("FetchRequestedReviews").Return(requestedPRs, nil)
 	mockPRRepo.On("FetchUserCreated").Return(nil, expectedErr)
 
-	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingService, prFilter, prClassifier, mockEventPublisher)
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
 
 	// Act
 	result, err := uc.Execute()
@@ -244,8 +250,9 @@ func TestCheckNewPRs_FetchUserCreatedError(t *testing.T) {
 
 func TestCheckNewPRs_FiltersDrafts(t *testing.T) {
 	// Arrange
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockTrackingService := mocks.NewService(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	prFilter := pullrequest.NewPRFilter(false) // exclude drafts
 	prClassifier := pullrequest.NewPRClassifier()
@@ -257,16 +264,13 @@ func TestCheckNewPRs_FiltersDrafts(t *testing.T) {
 	mockPRRepo.On("FetchRequestedReviews").Return(requestedPRs, nil)
 	mockPRRepo.On("FetchUserCreated").Return([]*pullrequest.PullRequest{}, nil)
 
-	// Only 2 non-draft PRs should be found as new
-	mockTrackingService.On("FindNewPullRequests", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
-		return len(prs) == 2 && !prs[0].IsDraft() && !prs[1].IsDraft()
-	})).Return(requestedPRs[:2]) // Return the 2 non-draft PRs
-	mockTrackingService.On("FindNewPullRequests", mock.AnythingOfType("[]*pullrequest.PullRequest")).Return([]*pullrequest.PullRequest{})
-
-	mockTrackingService.On("MarkPullRequestsAsSeen", mock.AnythingOfType("[]*pullrequest.PullRequest")).Once()
+	// Only 2 non-draft PRs should be checked (drafts are filtered out)
+	// Both non-draft PRs are new
+	mockSeenRepo.On("HasBeenSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(false).Twice()
+	mockSeenRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Twice()
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.NewPullRequestDetected")).Return(nil).Twice()
 
-	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingService, prFilter, prClassifier, mockEventPublisher)
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
 
 	// Act
 	result, err := uc.Execute()
@@ -279,8 +283,9 @@ func TestCheckNewPRs_FiltersDrafts(t *testing.T) {
 
 func TestCheckNewPRs_PublishEventError_ContinuesProcessing(t *testing.T) {
 	// Arrange
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockTrackingService := mocks.NewService(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	prFilter := pullrequest.NewPRFilter(false)
 	prClassifier := pullrequest.NewPRClassifier()
@@ -291,17 +296,17 @@ func TestCheckNewPRs_PublishEventError_ContinuesProcessing(t *testing.T) {
 	mockPRRepo.On("FetchRequestedReviews").Return(newPRs, nil)
 	mockPRRepo.On("FetchUserCreated").Return([]*pullrequest.PullRequest{}, nil)
 
-	mockTrackingService.On("FindNewPullRequests", newPRs).Return(newPRs)
-	mockTrackingService.On("FindNewPullRequests", mock.AnythingOfType("[]*pullrequest.PullRequest")).Return([]*pullrequest.PullRequest{})
+	// Both PRs are new
+	mockSeenRepo.On("HasBeenSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(false).Twice()
 
 	// First event fails, second succeeds
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.NewPullRequestDetected")).Return(errors.New("event bus error")).Once()
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.NewPullRequestDetected")).Return(nil).Once()
 
 	// PRs should still be marked as seen even if event fails
-	mockTrackingService.On("MarkPullRequestsAsSeen", newPRs).Once()
+	mockSeenRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Twice()
 
-	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingService, prFilter, prClassifier, mockEventPublisher)
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
 
 	// Act
 	result, err := uc.Execute()
@@ -310,5 +315,5 @@ func TestCheckNewPRs_PublishEventError_ContinuesProcessing(t *testing.T) {
 	require.NoError(t, err) // Use case doesn't return error on event publish failure
 	assert.NotNil(t, result)
 	mockEventPublisher.AssertExpectations(t)
-	mockTrackingService.AssertExpectations(t)
+	mockSeenRepo.AssertExpectations(t)
 }

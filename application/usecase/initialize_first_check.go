@@ -5,14 +5,13 @@ import (
 
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/oak3/github-notifier/domain/tracking"
 )
 
 // InitializeFirstCheckUseCase handles the first-run initialization
 // On first run, all existing PRs are marked as seen to avoid notifications
 type InitializeFirstCheckUseCase struct {
 	prRepo          pullrequest.PullRequestRepository
-	trackingService tracking.Service
+	trackingService *pullrequest.TrackingService
 	prFilter        *pullrequest.PRFilter
 	uiPort          port.UIPort
 }
@@ -20,7 +19,7 @@ type InitializeFirstCheckUseCase struct {
 // NewInitializeFirstCheckUseCase creates a new use case
 func NewInitializeFirstCheckUseCase(
 	prRepo pullrequest.PullRequestRepository,
-	trackingService tracking.Service,
+	trackingService *pullrequest.TrackingService,
 	prFilter *pullrequest.PRFilter,
 	uiPort port.UIPort,
 ) *InitializeFirstCheckUseCase {

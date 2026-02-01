@@ -14,7 +14,6 @@ import (
 	"github.com/oak3/github-notifier/assets"
 	"github.com/oak3/github-notifier/config"
 	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/oak3/github-notifier/domain/tracking"
 )
 
 // MenuAdapter adapts the systray menu to the MenuPort interface
@@ -29,13 +28,13 @@ type MenuAdapter struct {
 	darkIcon                  []byte
 	lightIcon                 []byte
 	themeProvider             ThemeProvider
-	trackingService           tracking.Service
+	trackingService           *pullrequest.TrackingService
 	requestedReviewPRs        []*pullrequest.PullRequest
 	userCreatedPRs            []*pullrequest.PullRequest
-	clickedPRs                map[string]bool              // Track which PRs have been clicked in the menu
-	clickedPRsMu              sync.RWMutex                 // Protects clickedPRs from concurrent access
+	clickedPRs                map[string]bool                          // Track which PRs have been clicked in the menu
+	clickedPRsMu              sync.RWMutex                             // Protects clickedPRs from concurrent access
 	menuItemCancels           map[*systray.MenuItem]context.CancelFunc // Track cancel funcs for each menu item
-	menuItemCancelsMu         sync.RWMutex                 // Protects menuItemCancels
+	menuItemCancelsMu         sync.RWMutex                             // Protects menuItemCancels
 	ctx                       context.Context
 	cancel                    context.CancelFunc
 }
@@ -107,7 +106,7 @@ func (m *MenuAdapter) applyThemeIcon() {
 
 // UpdateDisplay implements the UIPort interface for systray menu display
 // This adapter specifically renders PRs as a system tray menu with dropdowns
-func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullrequest.PullRequest, trackingService tracking.Service) {
+func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullrequest.PullRequest, trackingService *pullrequest.TrackingService) {
 	// Store tracking service and PR lists for use in menu item formatting
 	m.trackingService = trackingService
 	m.requestedReviewPRs = requestedReviewPRs

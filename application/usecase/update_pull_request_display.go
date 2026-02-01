@@ -5,19 +5,18 @@ import (
 
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/oak3/github-notifier/domain/tracking"
 )
 
 // UpdatePullRequestDisplayUseCase handles updating the UI with current PR state
 type UpdatePullRequestDisplayUseCase struct {
 	uiPort          port.UIPort
-	trackingService tracking.Service
+	trackingService *pullrequest.TrackingService
 }
 
 // NewUpdatePullRequestDisplayUseCase creates a new use case
 func NewUpdatePullRequestDisplayUseCase(
 	uiPort port.UIPort,
-	trackingService tracking.Service,
+	trackingService *pullrequest.TrackingService,
 ) *UpdatePullRequestDisplayUseCase {
 	return &UpdatePullRequestDisplayUseCase{
 		uiPort:          uiPort,

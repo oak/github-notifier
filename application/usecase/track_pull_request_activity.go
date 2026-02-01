@@ -6,7 +6,6 @@ import (
 
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/oak3/github-notifier/domain/tracking"
 )
 
 // TrackPullRequestActivityUseCase handles checking for new activity on PRs
@@ -14,7 +13,7 @@ import (
 type TrackPullRequestActivityUseCase struct {
 	prRepo          pullrequest.PullRequestRepository
 	scheduler       *pullrequest.ActivityCheckScheduler
-	trackingService tracking.Service
+	trackingService *pullrequest.TrackingService
 	eventPublisher  port.EventPublisher
 }
 
@@ -22,7 +21,7 @@ type TrackPullRequestActivityUseCase struct {
 func NewTrackPullRequestActivityUseCase(
 	prRepo pullrequest.PullRequestRepository,
 	scheduler *pullrequest.ActivityCheckScheduler,
-	trackingService tracking.Service,
+	trackingService *pullrequest.TrackingService,
 	eventPublisher port.EventPublisher,
 ) *TrackPullRequestActivityUseCase {
 	return &TrackPullRequestActivityUseCase{

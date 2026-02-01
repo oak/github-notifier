@@ -2,7 +2,6 @@ package port
 
 import (
 	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/oak3/github-notifier/domain/tracking"
 )
 
 // UIPort represents the boundary between the application and any UI implementation
@@ -13,5 +12,5 @@ type UIPort interface {
 	// - Systray menu adapter: Shows PRs in dropdown menus
 	// - Web UI adapter: Renders HTML with PR cards
 	// - Terminal UI adapter: Displays in a TUI with lists
-	UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullrequest.PullRequest, trackingService tracking.Service)
+	UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullrequest.PullRequest, trackingService *pullrequest.TrackingService)
 }

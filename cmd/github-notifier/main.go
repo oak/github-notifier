@@ -11,7 +11,6 @@ import (
 	"github.com/oak3/github-notifier/application/usecase"
 	"github.com/oak3/github-notifier/config"
 	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/oak3/github-notifier/domain/tracking"
 	"github.com/oak3/github-notifier/infrastructure/events"
 	"github.com/oak3/github-notifier/infrastructure/github"
 	"github.com/oak3/github-notifier/infrastructure/notification"
@@ -40,7 +39,7 @@ func main() {
 	// Initialize infrastructure adapters
 	githubAdapter := github.NewAdapter(cfg.GitHubToken)
 	seenRepo := memory.NewSeenPullRequestRepository()
-	trackingService := tracking.NewTrackingService(seenRepo)
+	trackingService := pullrequest.NewTrackingService(seenRepo)
 	themeProvider := ui.NewSystemThemeProvider()
 
 	// Setup notification adapters (desktop + optional Slack)

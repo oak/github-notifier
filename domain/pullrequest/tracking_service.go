@@ -1,8 +1,4 @@
-package tracking
-
-import (
-	"github.com/oak3/github-notifier/domain/pullrequest"
-)
+package pullrequest
 
 // TrackingService implements the Service interface
 type TrackingService struct {
@@ -17,7 +13,7 @@ func NewTrackingService(seenRepo SeenRepository) *TrackingService {
 }
 
 // TrackPullRequest tracks a PR and returns true if it's new (not seen before)
-func (s *TrackingService) TrackPullRequest(pr *pullrequest.PullRequest) bool {
+func (s *TrackingService) TrackPullRequest(pr *PullRequest) bool {
 	id := pr.Identifier()
 
 	if s.seenRepo.HasBeenSeen(id) {
@@ -29,13 +25,13 @@ func (s *TrackingService) TrackPullRequest(pr *pullrequest.PullRequest) bool {
 }
 
 // HasBeenSeen checks if a PR has been seen before
-func (s *TrackingService) HasBeenSeen(id pullrequest.PRIdentifier) bool {
+func (s *TrackingService) HasBeenSeen(id PRIdentifier) bool {
 	return s.seenRepo.HasBeenSeen(id)
 }
 
 // FindNewPullRequests identifies which PRs in the list are new (without marking them as seen)
-func (s *TrackingService) FindNewPullRequests(prs []*pullrequest.PullRequest) []*pullrequest.PullRequest {
-	var newPRs []*pullrequest.PullRequest
+func (s *TrackingService) FindNewPullRequests(prs []*PullRequest) []*PullRequest {
+	var newPRs []*PullRequest
 
 	for _, pr := range prs {
 		if !s.seenRepo.HasBeenSeen(pr.Identifier()) {
@@ -47,14 +43,14 @@ func (s *TrackingService) FindNewPullRequests(prs []*pullrequest.PullRequest) []
 }
 
 // MarkPullRequestsAsSeen marks a list of PRs as seen
-func (s *TrackingService) MarkPullRequestsAsSeen(prs []*pullrequest.PullRequest) {
+func (s *TrackingService) MarkPullRequestsAsSeen(prs []*PullRequest) {
 	for _, pr := range prs {
 		s.seenRepo.MarkAsSeen(pr.Identifier())
 	}
 }
 
 // MarkPullRequestAsUnseen marks a PR as unseen (for when new activity occurs)
-func (s *TrackingService) MarkPullRequestAsUnseen(pr *pullrequest.PullRequest) error {
+func (s *TrackingService) MarkPullRequestAsUnseen(pr *PullRequest) error {
 	return s.seenRepo.UnmarkAsSeen(pr.Identifier())
 }
 

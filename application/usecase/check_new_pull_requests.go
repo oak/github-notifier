@@ -6,14 +6,13 @@ import (
 
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/oak3/github-notifier/domain/tracking"
 )
 
 // CheckNewPullRequestsUseCase handles fetching and detecting new PRs
 // Emits domain events for new PRs instead of directly sending notifications
 type CheckNewPullRequestsUseCase struct {
 	prRepo          pullrequest.PullRequestRepository
-	trackingService tracking.Service
+	trackingService *pullrequest.TrackingService
 	prFilter        *pullrequest.PRFilter
 	prClassifier    *pullrequest.PRClassifier
 	eventPublisher  port.EventPublisher
@@ -23,7 +22,7 @@ type CheckNewPullRequestsUseCase struct {
 // NewCheckNewPullRequestsUseCase creates a new use case
 func NewCheckNewPullRequestsUseCase(
 	prRepo pullrequest.PullRequestRepository,
-	trackingService tracking.Service,
+	trackingService *pullrequest.TrackingService,
 	prFilter *pullrequest.PRFilter,
 	prClassifier *pullrequest.PRClassifier,
 	eventPublisher port.EventPublisher,

@@ -17,11 +17,12 @@ import (
 func TestTrackActivity_EmptyPRList(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockTrackingService := mocks.NewService(t)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
-	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, mockTrackingService, mockEventPublisher)
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
 	// Act
 	err := uc.Execute([]*pullrequest.PullRequest{}, time.Now())
@@ -35,7 +36,8 @@ func TestTrackActivity_EmptyPRList(t *testing.T) {
 func TestTrackActivity_NoPRsDueForCheck(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockTrackingService := mocks.NewService(t)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
@@ -48,7 +50,7 @@ func TestTrackActivity_NoPRsDueForCheck(t *testing.T) {
 	// Mark them as already checked
 	scheduler.MarkChecked(prs)
 
-	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, mockTrackingService, mockEventPublisher)
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
 	// Act
 	err := uc.Execute(prs, now.Add(-1*time.Hour))
@@ -61,7 +63,8 @@ func TestTrackActivity_NoPRsDueForCheck(t *testing.T) {
 func TestTrackActivity_NoNewActivity(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockTrackingService := mocks.NewService(t)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
@@ -74,7 +77,7 @@ func TestTrackActivity_NoNewActivity(t *testing.T) {
 	// Mock expectations
 	mockPRRepo.On("EnrichWithActivities", prs, lastCheckTime).Return(nil)
 
-	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, mockTrackingService, mockEventPublisher)
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
 	// Act
 	err := uc.Execute(prs, lastCheckTime)
@@ -82,14 +85,15 @@ func TestTrackActivity_NoNewActivity(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	mockPRRepo.AssertExpectations(t)
-	mockTrackingService.AssertNotCalled(t, "MarkPullRequestAsUnseen")
+	mockSeenRepo.AssertNotCalled(t, "UnmarkAsSeen")
 	mockEventPublisher.AssertNotCalled(t, "Publish")
 }
 
 func TestTrackActivity_NewActivity_EmitsEvents(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockTrackingService := mocks.NewService(t)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
@@ -116,13 +120,13 @@ func TestTrackActivity_NewActivity_EmitsEvents(t *testing.T) {
 	}).Return(nil)
 
 	// PRs with new activity should be marked as unseen
-	mockTrackingService.On("MarkPullRequestAsUnseen", pr1).Return(nil)
-	mockTrackingService.On("MarkPullRequestAsUnseen", pr2).Return(nil)
+	mockSeenRepo.On("UnmarkAsSeen", pr1.Identifier()).Return(nil)
+	mockSeenRepo.On("UnmarkAsSeen", pr2.Identifier()).Return(nil)
 
 	// Events should be published
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.PullRequestActivityDetected")).Return(nil).Twice()
 
-	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, mockTrackingService, mockEventPublisher)
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
 	// Act
 	err := uc.Execute(prs, lastCheckTime)
@@ -130,14 +134,15 @@ func TestTrackActivity_NewActivity_EmitsEvents(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	mockPRRepo.AssertExpectations(t)
-	mockTrackingService.AssertExpectations(t)
+	mockSeenRepo.AssertExpectations(t)
 	mockEventPublisher.AssertExpectations(t)
 }
 
 func TestTrackActivity_EnrichError(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockTrackingService := mocks.NewService(t)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
@@ -150,7 +155,7 @@ func TestTrackActivity_EnrichError(t *testing.T) {
 	// Mock expectations
 	mockPRRepo.On("EnrichWithActivities", prs, lastCheckTime).Return(expectedErr)
 
-	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, mockTrackingService, mockEventPublisher)
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
 	// Act
 	err := uc.Execute(prs, lastCheckTime)
@@ -158,14 +163,15 @@ func TestTrackActivity_EnrichError(t *testing.T) {
 	// Assert
 	assert.Error(t, err)
 	assert.Equal(t, expectedErr, err)
-	mockTrackingService.AssertNotCalled(t, "MarkPullRequestAsUnseen")
+	mockSeenRepo.AssertNotCalled(t, "UnmarkAsSeen")
 	mockEventPublisher.AssertNotCalled(t, "Publish")
 }
 
 func TestTrackActivity_MarkUnseenError_ContinuesProcessing(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockTrackingService := mocks.NewService(t)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
@@ -189,14 +195,14 @@ func TestTrackActivity_MarkUnseenError_ContinuesProcessing(t *testing.T) {
 		}
 	}).Return(nil)
 
-	// First MarkAsUnseen fails, second succeeds
-	mockTrackingService.On("MarkPullRequestAsUnseen", pr1).Return(errors.New("tracking error"))
-	mockTrackingService.On("MarkPullRequestAsUnseen", pr2).Return(nil)
+	// First UnmarkAsSeen fails, second succeeds
+	mockSeenRepo.On("UnmarkAsSeen", pr1.Identifier()).Return(errors.New("tracking error"))
+	mockSeenRepo.On("UnmarkAsSeen", pr2.Identifier()).Return(nil)
 
 	// Events should still be published even if marking fails
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.PullRequestActivityDetected")).Return(nil).Twice()
 
-	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, mockTrackingService, mockEventPublisher)
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
 	// Act
 	err := uc.Execute(prs, lastCheckTime)
@@ -209,7 +215,8 @@ func TestTrackActivity_MarkUnseenError_ContinuesProcessing(t *testing.T) {
 func TestTrackActivity_PublishEventError_ContinuesProcessing(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockTrackingService := mocks.NewService(t)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
@@ -232,13 +239,13 @@ func TestTrackActivity_PublishEventError_ContinuesProcessing(t *testing.T) {
 		}
 	}).Return(nil)
 
-	mockTrackingService.On("MarkPullRequestAsUnseen", mock.AnythingOfType("*pullrequest.PullRequest")).Return(nil).Twice()
+	mockSeenRepo.On("UnmarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Twice()
 
 	// First event fails, second succeeds
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.PullRequestActivityDetected")).Return(errors.New("event bus error")).Once()
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.PullRequestActivityDetected")).Return(nil).Once()
 
-	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, mockTrackingService, mockEventPublisher)
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
 	// Act
 	err := uc.Execute(prs, lastCheckTime)
@@ -251,7 +258,8 @@ func TestTrackActivity_PublishEventError_ContinuesProcessing(t *testing.T) {
 func TestTrackActivity_TwoTierScheduling(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockTrackingService := mocks.NewService(t)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
@@ -269,7 +277,7 @@ func TestTrackActivity_TwoTierScheduling(t *testing.T) {
 	// Mock: Both PRs should be enriched on first call
 	mockPRRepo.On("EnrichWithActivities", prs, lastCheckTime).Return(nil).Once()
 
-	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, mockTrackingService, mockEventPublisher)
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
 	// Act - First execution
 	err := uc.Execute(prs, lastCheckTime)

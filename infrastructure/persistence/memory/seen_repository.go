@@ -4,7 +4,6 @@ import (
 	"sync"
 
 	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/oak3/github-notifier/domain/tracking"
 )
 
 // SeenPullRequestRepository is an in-memory implementation of the SeenRepository
@@ -14,7 +13,7 @@ type SeenPullRequestRepository struct {
 }
 
 // NewSeenPullRequestRepository creates a new in-memory seen repository
-func NewSeenPullRequestRepository() tracking.SeenRepository {
+func NewSeenPullRequestRepository() pullrequest.SeenRepository {
 	return &SeenPullRequestRepository{
 		seen: make(map[string]bool),
 	}
