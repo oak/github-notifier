@@ -2,8 +2,9 @@ package usecase
 
 import (
 	"context"
-	"log"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
@@ -50,13 +51,13 @@ func (uc *CheckNewPullRequestsUseCase) Execute(ctx context.Context) (*PRCheckRes
 	// Fetch PRs from both sources
 	requestedReviewPRs, err := uc.prRepo.FetchRequestedReviews()
 	if err != nil {
-		log.Printf("Error fetching requested review PRs: %v", err)
+		log.Error().Err(err).Msg("Error fetching requested review PRs")
 		return nil, err
 	}
 
 	userCreatedPRs, err := uc.prRepo.FetchUserCreated()
 	if err != nil {
-		log.Printf("Error fetching user created PRs: %v", err)
+		log.Error().Err(err).Msg("Error fetching user created PRs")
 		return nil, err
 	}
 
@@ -66,12 +67,12 @@ func (uc *CheckNewPullRequestsUseCase) Execute(ctx context.Context) (*PRCheckRes
 
 	// Process requested review PRs
 	if err := uc.processNewPRs(requestedReviewPRs, "requested review"); err != nil {
-		log.Printf("Error processing requested review PRs: %v", err)
+		log.Error().Err(err).Msg("Error processing requested review PRs")
 	}
 
 	// Process user created PRs
 	if err := uc.processNewPRs(userCreatedPRs, "user created"); err != nil {
-		log.Printf("Error processing user created PRs: %v", err)
+		log.Error().Err(err).Msg("Error processing user created PRs")
 	}
 
 	// Update last check time
@@ -92,7 +93,7 @@ func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequ
 		return nil
 	}
 
-	log.Printf("Found %d new %s PRs", len(newPRs), category)
+	log.Info().Msgf("Found %d new %s PRs", len(newPRs), category)
 
 	// Classify PRs: truly new vs. PRs with new activity
 	trulyNewPRs, prsWithActivity := uc.prClassifier.ClassifyPRs(newPRs, uc.lastCheckTime)
@@ -101,7 +102,7 @@ func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequ
 	for _, pr := range trulyNewPRs {
 		event := pullrequest.NewNewPullRequestDetected(pr)
 		if err := uc.eventPublisher.Publish(&event); err != nil {
-			log.Printf("Error publishing new PR event: %v", err)
+			log.Error().Err(err).Msg("Error publishing new PR event")
 		}
 	}
 
@@ -114,7 +115,7 @@ func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequ
 	// PRs with activity remain unseen and will trigger activity events
 	// They're handled by the TrackPullRequestActivityUseCase
 	if len(prsWithActivity) > 0 {
-		log.Printf("%d PRs have new activity (handled separately)", len(prsWithActivity))
+		log.Info().Msgf("%d PRs have new activity (handled separately)", len(prsWithActivity))
 	}
 
 	return nil

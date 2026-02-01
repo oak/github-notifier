@@ -2,7 +2,8 @@ package usecase
 
 import (
 	"context"
-	"log"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
@@ -47,13 +48,13 @@ func (uc *InitializeFirstCheckUseCase) Execute(ctx context.Context) (bool, error
 	// Fetch all PRs
 	requestedReviewPRs, err := uc.prRepo.FetchRequestedReviews()
 	if err != nil {
-		log.Printf("Error fetching requested review PRs: %v", err)
+		log.Error().Err(err).Msg("Error fetching requested review PRs")
 		return false, err
 	}
 
 	userCreatedPRs, err := uc.prRepo.FetchUserCreated()
 	if err != nil {
-		log.Printf("Error fetching user created PRs: %v", err)
+		log.Error().Err(err).Msg("Error fetching user created PRs")
 		return false, err
 	}
 

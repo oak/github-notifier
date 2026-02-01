@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"sync"
@@ -10,6 +9,8 @@ import (
 	"time"
 
 	"github.com/getlantern/systray"
+	"github.com/rs/zerolog/log"
+
 	"github.com/oak3/github-notifier/application"
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/application/usecase"
@@ -22,6 +23,7 @@ import (
 	"github.com/oak3/github-notifier/infrastructure/notification/slack"
 	"github.com/oak3/github-notifier/infrastructure/persistence/memory"
 	"github.com/oak3/github-notifier/infrastructure/ui"
+	"github.com/oak3/github-notifier/internal/logger"
 )
 
 // App orchestrates the startup and lifecycle
@@ -36,11 +38,16 @@ type App struct {
 }
 
 func main() {
+	// Initialize logger
+	logger.Initialize()
+
 	// Load configuration
 	cfg := config.LoadConfig()
 	if !cfg.IsValid() {
-		log.Fatal("GitHub token not configured. Set GITHUB_TOKEN environment variable.")
+		log.Fatal().Msg("GitHub token not configured. Set GITHUB_TOKEN environment variable.")
 	}
+
+	log.Info().Msg("Starting GitHub PR Notifier...")
 
 	// Initialize infrastructure adapters
 	githubAdapter := github.NewAdapter(cfg.GitHubToken)
@@ -53,13 +60,15 @@ func main() {
 	desktopAdapter := desktop.NewAdapter(themeProvider)
 
 	if cfg.SlackOAuthToken != "" {
-		log.Println("Slack OAuth token detected, enabling Slack notifications...")
+		log.Info().Msg("Slack OAuth token detected, enabling Slack notifications")
 		slackAdapter, err := slack.NewAdapter(cfg.SlackOAuthToken)
 		if err != nil {
-			log.Printf("Warning: Failed to initialize Slack adapter: %v. Continuing with desktop-only notifications.", err)
+			log.Warn().
+				Err(err).
+				Msg("Failed to initialize Slack adapter. Continuing with desktop-only notifications")
 			notificationAdapter = desktopAdapter
 		} else {
-			log.Println("Slack notifications enabled successfully")
+			log.Info().Msg("Slack notifications enabled successfully")
 			notificationAdapter = notification.NewCompositeAdapter(desktopAdapter, slackAdapter)
 		}
 	} else {
@@ -142,14 +151,14 @@ func main() {
 	// Start signal handler in background
 	go func() {
 		sig := <-sigChan
-		log.Printf("Received signal: %v. Initiating graceful shutdown...", sig)
+		log.Info().Str("signal", sig.String()).Msg("Received shutdown signal")
 		systray.Quit()
 	}()
 
 	// Start systray (blocking call)
-	log.Println("Starting GitHub PR Notifier...")
+	log.Info().Msg("Application starting")
 	systray.Run(app.onReady, app.onExit)
-	log.Println("Application terminated")
+	log.Info().Msg("Application terminated")
 }
 
 func (app *App) onReady() {
@@ -160,7 +169,7 @@ func (app *App) onReady() {
 
 	// Initial check
 	if err := app.orchestrator.ExecuteInitialCheck(app.ctx); err != nil {
-		log.Printf("Error during initial check: %v", err)
+		log.Error().Err(err).Msg("Error during initial check")
 	}
 
 	// Setup periodic checks with context cancellation
@@ -171,12 +180,12 @@ func (app *App) onReady() {
 		for {
 			select {
 			case <-app.ctx.Done():
-				log.Println("Check goroutine received cancellation signal")
+				log.Debug().Msg("Check goroutine received cancellation signal")
 				return
 			case <-app.checkTicker.C:
-				log.Println("Checking for PR updates...")
+				log.Info().Msg("Checking for PR updates")
 				if err := app.orchestrator.ExecuteRegularCheck(app.ctx); err != nil {
-					log.Printf("Error checking PRs: %v", err)
+					log.Error().Err(err).Msg("Error checking PRs")
 				}
 			}
 		}
@@ -184,31 +193,30 @@ func (app *App) onReady() {
 }
 
 func (app *App) onExit() {
-	log.Println("Shutting down...")
-
+	log.Info().Msg("Shutting down")
+	
 	// Cancel context to stop goroutines
 	app.cancel()
-
+	
 	// Stop ticker
 	if app.checkTicker != nil {
 		app.checkTicker.Stop()
 	}
-
+	
 	// Shutdown menu adapter
 	app.menuAdapter.Shutdown()
-
+	
 	// Wait for all goroutines to complete with timeout
-	log.Println("Waiting for background tasks to complete...")
+	log.Info().Msg("Waiting for background tasks to complete")
 	done := make(chan struct{})
 	go func() {
 		app.wg.Wait()
 		close(done)
 	}()
-
+	
 	select {
 	case <-done:
-		log.Println("Shutdown complete")
+		log.Info().Msg("Shutdown complete")
 	case <-time.After(5 * time.Second):
-		log.Println("Shutdown timeout - forcing exit")
-	}
+		log.Warn().Msg("Shutdown timeout - forcing exit")
 }

@@ -2,8 +2,9 @@ package application
 
 import (
 	"context"
-	"log"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/oak3/github-notifier/application/usecase"
 	"github.com/oak3/github-notifier/domain/pullrequest"
@@ -41,7 +42,7 @@ func NewPullRequestOrchestrator(
 // ExecuteInitialCheck runs the initial check on application startup
 // Returns true if this was the first run ever
 func (o *PullRequestOrchestrator) ExecuteInitialCheck(ctx context.Context) error {
-	log.Println("Performing initial PR check...")
+	log.Info().Msg("Performing initial PR check")
 
 	// Try first-run initialization
 	wasFirstRun, err := o.initializeUseCase.Execute(ctx)
@@ -50,12 +51,12 @@ func (o *PullRequestOrchestrator) ExecuteInitialCheck(ctx context.Context) error
 	}
 
 	if wasFirstRun {
-		log.Println("First run complete - all existing PRs marked as seen")
+		log.Info().Msg("First run complete - all existing PRs marked as seen")
 		return nil
 	}
 
 	// Not first run - execute regular check
-	log.Println("Existing state detected - checking for updates")
+	log.Info().Msg("Existing state detected - checking for updates")
 	return o.ExecuteRegularCheck(ctx)
 }
 
@@ -64,7 +65,7 @@ func (o *PullRequestOrchestrator) ExecuteRegularCheck(ctx context.Context) error
 	// Step 1: Fetch and check for new PRs (emits events)
 	result, err := o.checkNewPRsUseCase.Execute(ctx)
 	if err != nil {
-		log.Printf("Error checking for new PRs: %v", err)
+		log.Error().Err(err).Msg("Error checking for new PRs")
 		return err
 	}
 
@@ -74,16 +75,16 @@ func (o *PullRequestOrchestrator) ExecuteRegularCheck(ctx context.Context) error
 		allPRs = append(allPRs, result.UserCreatedPRs...)
 
 		if err := o.trackActivityUseCase.Execute(ctx, allPRs, o.lastCheckTime); err != nil {
-			log.Printf("Error tracking activity: %v", err)
+			log.Error().Err(err).Msg("Error tracking activity")
 			// Don't return error - continue with display update
 		}
 	} else {
-		log.Printf("Activity tracking disabled (set ENABLE_ACTIVITY_TRACKING=true to enable)")
+		log.Debug().Msg("Activity tracking disabled (set ENABLE_ACTIVITY_TRACKING=true to enable)")
 	}
 
 	// Step 3: Update display (after all events are emitted and state is updated)
 	if err := o.updateDisplayUseCase.Execute(ctx, result.RequestedReviewPRs, result.UserCreatedPRs); err != nil {
-		log.Printf("Error updating display: %v", err)
+		log.Error().Err(err).Msg("Error updating display")
 		return err
 	}
 

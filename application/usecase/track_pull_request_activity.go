@@ -2,8 +2,9 @@ package usecase
 
 import (
 	"context"
-	"log"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
@@ -55,7 +56,7 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 
 	// Enrich PRs with activities since last check
 	if err := uc.prRepo.EnrichWithActivities(prsToCheck, lastCheckTime); err != nil {
-		log.Printf("Error enriching PRs with activities: %v", err)
+		log.Error().Err(err).Msg("Error enriching PRs with activities")
 		return err
 	}
 
@@ -75,18 +76,18 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 		return nil
 	}
 
-	log.Printf("Found %d PRs with new activity", len(prsWithNewActivity))
+	log.Info().Msgf("Found %d PRs with new activity", len(prsWithNewActivity))
 
 	// Mark PRs with new activity as unseen (to show asterisks and trigger notifications)
 	for _, pr := range prsWithNewActivity {
 		if err := uc.trackingService.MarkPullRequestAsUnseen(pr); err != nil {
-			log.Printf("Error marking PR as unseen: %v", err)
+			log.Error().Err(err).Msg("Error marking PR as unseen")
 		}
 
 		// Emit event for each PR with new activity
 		event := pullrequest.NewPullRequestActivityDetected(pr)
 		if err := uc.eventPublisher.Publish(&event); err != nil {
-			log.Printf("Error publishing activity event: %v", err)
+			log.Error().Err(err).Msg("Error publishing activity event")
 		}
 	}
 
