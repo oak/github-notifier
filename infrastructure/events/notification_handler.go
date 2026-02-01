@@ -30,6 +30,16 @@ func (h *NotificationEventHandler) Handle(ctx context.Context, event pullrequest
 	case *pullrequest.PullRequestActivityDetected:
 		return h.handlePRActivityDetected(e)
 
+	case *pullrequest.PullRequestMerged:
+		return h.handlePRMerged(e)
+
+	case *pullrequest.PullRequestClosed:
+		return h.handlePRClosed(e)
+
+	case *pullrequest.PullRequestStatusChanged:
+		// Status changes are already handled by specific events (merged, closed)
+		return nil
+
 	default:
 		// Ignore other event types
 		return nil
@@ -66,5 +76,23 @@ func (h *NotificationEventHandler) handlePRActivityDetected(event *pullrequest.P
 		return err
 	}
 
+	return nil
+}
+
+// handlePRMerged sends a notification when a PR is merged
+func (h *NotificationEventHandler) handlePRMerged(event *pullrequest.PullRequestMerged) error {
+	log.Printf("PR merged: %s in %s",
+		event.PullRequestID.URL(),
+		event.Repository.NameWithOwner())
+	// Could send a notification if desired, but typically merges don't need notifications
+	return nil
+}
+
+// handlePRClosed sends a notification when a PR is closed
+func (h *NotificationEventHandler) handlePRClosed(event *pullrequest.PullRequestClosed) error {
+	log.Printf("PR closed: %s in %s",
+		event.PullRequestID.URL(),
+		event.Repository.NameWithOwner())
+	// Could send a notification if desired, but typically closes don't need notifications
 	return nil
 }

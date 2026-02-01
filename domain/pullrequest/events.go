@@ -100,3 +100,45 @@ func NewPullRequestActivityDetected(pr *PullRequest) PullRequestActivityDetected
 func (e PullRequestActivityDetected) OccurredAt() time.Time {
 	return e.occurredAt
 }
+
+// PullRequestClosed is raised when a PR is closed
+type PullRequestClosed struct {
+	PullRequestID PRIdentifier
+	Repository    RepositoryInfo
+	occurredAt    time.Time
+}
+
+// NewPullRequestClosed creates a new event
+func NewPullRequestClosed(pr *PullRequest) PullRequestClosed {
+	return PullRequestClosed{
+		PullRequestID: pr.Identifier(),
+		Repository:    pr.Repository(),
+		occurredAt:    time.Now(),
+	}
+}
+
+// OccurredAt returns when the event occurred
+func (e PullRequestClosed) OccurredAt() time.Time {
+	return e.occurredAt
+}
+
+// PullRequestMerged is raised when a PR is merged
+type PullRequestMerged struct {
+	PullRequestID PRIdentifier
+	Repository    RepositoryInfo
+	occurredAt    time.Time
+}
+
+// NewPullRequestMerged creates a new event
+func NewPullRequestMerged(pr *PullRequest) PullRequestMerged {
+	return PullRequestMerged{
+		PullRequestID: pr.Identifier(),
+		Repository:    pr.Repository(),
+		occurredAt:    time.Now(),
+	}
+}
+
+// OccurredAt returns when the event occurred
+func (e PullRequestMerged) OccurredAt() time.Time {
+	return e.occurredAt
+}

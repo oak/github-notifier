@@ -189,3 +189,51 @@ func TestNotificationHandler_HandleNewPR_WithDraftStatus(t *testing.T) {
 	require.NoError(t, err)
 	mockNotificationPort.AssertExpectations(t)
 }
+
+func TestNotificationHandler_HandlePRMerged_Success(t *testing.T) {
+	// Arrange
+	mockNotificationPort := mocks.NewNotificationPort(t)
+	handler := events.NewNotificationEventHandler(mockNotificationPort)
+
+	pr := testutil.NewTestPullRequest(1)
+	event := pullrequest.NewPullRequestMerged(pr)
+
+	// Act
+	err := handler.Handle(context.Background(), &event)
+
+	// Assert
+	require.NoError(t, err)
+	// No notification should be sent, so no mock expectations needed
+}
+
+func TestNotificationHandler_HandlePRClosed_Success(t *testing.T) {
+	// Arrange
+	mockNotificationPort := mocks.NewNotificationPort(t)
+	handler := events.NewNotificationEventHandler(mockNotificationPort)
+
+	pr := testutil.NewTestPullRequest(1)
+	event := pullrequest.NewPullRequestClosed(pr)
+
+	// Act
+	err := handler.Handle(context.Background(), &event)
+
+	// Assert
+	require.NoError(t, err)
+	// No notification should be sent, so no mock expectations needed
+}
+
+func TestNotificationHandler_HandleStatusChanged_Success(t *testing.T) {
+	// Arrange
+	mockNotificationPort := mocks.NewNotificationPort(t)
+	handler := events.NewNotificationEventHandler(mockNotificationPort)
+
+	pr := testutil.NewTestPullRequest(1)
+	event := pullrequest.NewPullRequestStatusChanged(pr, pullrequest.StatusOpen, pullrequest.StatusMerged)
+
+	// Act
+	err := handler.Handle(context.Background(), &event)
+
+	// Assert
+	require.NoError(t, err)
+	// Status changes are handled by specific events, so no notification expected
+}

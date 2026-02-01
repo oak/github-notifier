@@ -16,6 +16,7 @@ type PullRequest struct {
 	activities        []*Activity
 	lastActivityAt    time.Time
 	lastActivityCheck time.Time // When we last checked for activities
+	events            []Event   // Domain events pending publication
 }
 
 // NewPullRequest creates a new pull request with validation
@@ -52,6 +53,7 @@ func NewPullRequest(
 		activities:        make([]*Activity, 0),
 		lastActivityAt:    createdAt,
 		lastActivityCheck: time.Time{}, // Zero value - will be checked immediately on first run
+		events:            make([]Event, 0),
 	}, nil
 }
 
@@ -117,12 +119,22 @@ func (pr *PullRequest) Age() time.Duration {
 
 // Close marks the PR as closed
 func (pr *PullRequest) Close() {
-	pr.status = StatusClosed
+	if pr.status != StatusClosed {
+		oldStatus := pr.status
+		pr.status = StatusClosed
+		event := NewPullRequestStatusChanged(pr, oldStatus, StatusClosed)
+		pr.raiseEvent(&event)
+	}
 }
 
 // Merge marks the PR as merged
 func (pr *PullRequest) Merge() {
-	pr.status = StatusMerged
+	if pr.status != StatusMerged {
+		oldStatus := pr.status
+		pr.status = StatusMerged
+		event := NewPullRequestStatusChanged(pr, oldStatus, StatusMerged)
+		pr.raiseEvent(&event)
+	}
 }
 
 // RepositoryName returns the repository name with owner
@@ -228,4 +240,30 @@ func (pr *PullRequest) UpdateLastActivityCheck() {
 // LastActivityCheck returns when we last checked for activities
 func (pr *PullRequest) LastActivityCheck() time.Time {
 	return pr.lastActivityCheck
+}
+
+// CollectEvents returns all pending domain events and clears the internal event list
+func (pr *PullRequest) CollectEvents() []Event {
+	events := pr.events
+	pr.events = make([]Event, 0)
+	return events
+}
+
+// raiseEvent adds a domain event to the internal event list
+func (pr *PullRequest) raiseEvent(event Event) {
+	pr.events = append(pr.events, event)
+}
+
+// MarkAsNewlyDetected marks this PR as newly detected and raises the appropriate event
+func (pr *PullRequest) MarkAsNewlyDetected() {
+	event := NewNewPullRequestDetected(pr)
+	pr.raiseEvent(&event)
+}
+
+// RecordNewActivity records that new activity has been detected and raises an event
+func (pr *PullRequest) RecordNewActivity() {
+	if len(pr.activities) > 0 {
+		event := NewPullRequestActivityDetected(pr)
+		pr.raiseEvent(&event)
+	}
 }

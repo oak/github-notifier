@@ -29,6 +29,15 @@ func (h *TrackingEventHandler) Handle(ctx context.Context, event pullrequest.Eve
 	case *pullrequest.PullRequestActivityDetected:
 		return h.handlePRActivityDetected(e)
 
+	case *pullrequest.PullRequestMerged:
+		return h.handlePRMerged(e)
+
+	case *pullrequest.PullRequestClosed:
+		return h.handlePRClosed(e)
+
+	case *pullrequest.PullRequestStatusChanged:
+		return h.handleStatusChanged(e)
+
 	default:
 		// Ignore other event types
 		return nil
@@ -50,5 +59,32 @@ func (h *TrackingEventHandler) handlePRActivityDetected(event *pullrequest.PullR
 	log.Printf("Tracking: Activity detected on PR - %s (%d activities)",
 		event.PullRequestID.URL(),
 		len(event.Activities))
+	return nil
+}
+
+// handlePRMerged handles PR merged events
+func (h *TrackingEventHandler) handlePRMerged(event *pullrequest.PullRequestMerged) error {
+	log.Printf("Tracking: PR merged - %s in %s",
+		event.PullRequestID.URL(),
+		event.Repository.NameWithOwner())
+	// Could remove from tracking or mark differently
+	return nil
+}
+
+// handlePRClosed handles PR closed events
+func (h *TrackingEventHandler) handlePRClosed(event *pullrequest.PullRequestClosed) error {
+	log.Printf("Tracking: PR closed - %s in %s",
+		event.PullRequestID.URL(),
+		event.Repository.NameWithOwner())
+	// Could remove from tracking or mark differently
+	return nil
+}
+
+// handleStatusChanged handles PR status change events
+func (h *TrackingEventHandler) handleStatusChanged(event *pullrequest.PullRequestStatusChanged) error {
+	log.Printf("Tracking: PR status changed from %v to %v - %s",
+		event.OldStatus,
+		event.NewStatus,
+		event.PullRequestID.URL())
 	return nil
 }

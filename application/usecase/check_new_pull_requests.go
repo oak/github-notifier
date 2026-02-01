@@ -98,11 +98,15 @@ func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequ
 	// Classify PRs: truly new vs. PRs with new activity
 	trulyNewPRs, prsWithActivity := uc.prClassifier.ClassifyPRs(newPRs, uc.lastCheckTime)
 
-	// Emit events for truly new PRs
+	// Mark truly new PRs as newly detected (raises domain events)
 	for _, pr := range trulyNewPRs {
-		event := pullrequest.NewNewPullRequestDetected(pr)
-		if err := uc.eventPublisher.Publish(&event); err != nil {
-			log.Error().Err(err).Msg("Error publishing new PR event")
+		pr.MarkAsNewlyDetected()
+
+		// Collect and publish events from the aggregate
+		for _, event := range pr.CollectEvents() {
+			if err := uc.eventPublisher.Publish(event); err != nil {
+				log.Error().Err(err).Msg("Error publishing new PR event")
+			}
 		}
 	}
 

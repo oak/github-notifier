@@ -84,10 +84,14 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 			log.Error().Err(err).Msg("Error marking PR as unseen")
 		}
 
-		// Emit event for each PR with new activity
-		event := pullrequest.NewPullRequestActivityDetected(pr)
-		if err := uc.eventPublisher.Publish(&event); err != nil {
-			log.Error().Err(err).Msg("Error publishing activity event")
+		// Record activity (raises domain event)
+		pr.RecordNewActivity()
+
+		// Collect and publish events from the aggregate
+		for _, event := range pr.CollectEvents() {
+			if err := uc.eventPublisher.Publish(event); err != nil {
+				log.Error().Err(err).Msg("Error publishing activity event")
+			}
 		}
 	}
 

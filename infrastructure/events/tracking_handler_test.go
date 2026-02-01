@@ -156,3 +156,51 @@ func TestTrackingHandler_HandleMixedEvents(t *testing.T) {
 	require.NoError(t, err2)
 	// Both event types should be handled successfully
 }
+
+func TestTrackingHandler_HandlePRMerged(t *testing.T) {
+	// Arrange
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(trackingService)
+
+	pr := testutil.NewTestPullRequest(1)
+	event := pullrequest.NewPullRequestMerged(pr)
+
+	// Act
+	err := handler.Handle(context.Background(), &event)
+
+	// Assert
+	require.NoError(t, err)
+}
+
+func TestTrackingHandler_HandlePRClosed(t *testing.T) {
+	// Arrange
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(trackingService)
+
+	pr := testutil.NewTestPullRequest(1)
+	event := pullrequest.NewPullRequestClosed(pr)
+
+	// Act
+	err := handler.Handle(context.Background(), &event)
+
+	// Assert
+	require.NoError(t, err)
+}
+
+func TestTrackingHandler_HandleStatusChanged(t *testing.T) {
+	// Arrange
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(trackingService)
+
+	pr := testutil.NewTestPullRequest(1)
+	event := pullrequest.NewPullRequestStatusChanged(pr, pullrequest.StatusOpen, pullrequest.StatusMerged)
+
+	// Act
+	err := handler.Handle(context.Background(), &event)
+
+	// Assert
+	require.NoError(t, err)
+}

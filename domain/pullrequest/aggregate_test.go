@@ -341,3 +341,151 @@ func TestPullRequest_TableDriven(t *testing.T) {
 		})
 	}
 }
+
+func TestPullRequest_MarkAsNewlyDetected_RaisesEvent(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+
+	// Act
+	pr.MarkAsNewlyDetected()
+	events := pr.CollectEvents()
+
+	// Assert
+	require.Len(t, events, 1)
+	event, ok := events[0].(*pullrequest.NewPullRequestDetected)
+	require.True(t, ok, "Expected NewPullRequestDetected event")
+	assert.Equal(t, pr.Identifier(), event.PullRequestID)
+	assert.Equal(t, pr.Repository(), event.Repository)
+	assert.Equal(t, pr.Author(), event.Author)
+	assert.Equal(t, pr, event.PullRequest)
+}
+
+func TestPullRequest_RecordNewActivity_RaisesEvent(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+	activity := testutil.NewTestActivity(pullrequest.ActivityTypeComment, time.Now())
+	pr.AddActivity(activity)
+
+	// Act
+	pr.RecordNewActivity()
+	events := pr.CollectEvents()
+
+	// Assert
+	require.Len(t, events, 1)
+	event, ok := events[0].(*pullrequest.PullRequestActivityDetected)
+	require.True(t, ok, "Expected PullRequestActivityDetected event")
+	assert.Equal(t, pr.Identifier(), event.PullRequestID)
+	assert.Equal(t, pr.Repository(), event.Repository)
+	assert.Len(t, event.Activities, 1)
+	assert.Equal(t, pr, event.PullRequest)
+}
+
+func TestPullRequest_RecordNewActivity_NoActivities_NoEvent(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+
+	// Act
+	pr.RecordNewActivity()
+	events := pr.CollectEvents()
+
+	// Assert
+	assert.Len(t, events, 0, "Should not raise event when there are no activities")
+}
+
+func TestPullRequest_Close_RaisesStatusChangedEvent(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+
+	// Act
+	pr.Close()
+	events := pr.CollectEvents()
+
+	// Assert
+	require.Len(t, events, 1)
+	event, ok := events[0].(*pullrequest.PullRequestStatusChanged)
+	require.True(t, ok, "Expected PullRequestStatusChanged event")
+	assert.Equal(t, pr.Identifier(), event.PullRequestID)
+	assert.Equal(t, pullrequest.StatusOpen, event.OldStatus)
+	assert.Equal(t, pullrequest.StatusClosed, event.NewStatus)
+}
+
+func TestPullRequest_Merge_RaisesStatusChangedEvent(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+
+	// Act
+	pr.Merge()
+	events := pr.CollectEvents()
+
+	// Assert
+	require.Len(t, events, 1)
+	event, ok := events[0].(*pullrequest.PullRequestStatusChanged)
+	require.True(t, ok, "Expected PullRequestStatusChanged event")
+	assert.Equal(t, pr.Identifier(), event.PullRequestID)
+	assert.Equal(t, pullrequest.StatusOpen, event.OldStatus)
+	assert.Equal(t, pullrequest.StatusMerged, event.NewStatus)
+}
+
+func TestPullRequest_CloseAlreadyClosed_NoEvent(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+	pr.Close()
+	pr.CollectEvents() // Clear events
+
+	// Act
+	pr.Close()
+	events := pr.CollectEvents()
+
+	// Assert
+	assert.Len(t, events, 0, "Should not raise event when already closed")
+}
+
+func TestPullRequest_MergeAlreadyMerged_NoEvent(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+	pr.Merge()
+	pr.CollectEvents() // Clear events
+
+	// Act
+	pr.Merge()
+	events := pr.CollectEvents()
+
+	// Assert
+	assert.Len(t, events, 0, "Should not raise event when already merged")
+}
+
+func TestPullRequest_CollectEvents_ClearsEventList(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+	pr.MarkAsNewlyDetected()
+
+	// Act
+	events1 := pr.CollectEvents()
+	events2 := pr.CollectEvents()
+
+	// Assert
+	assert.Len(t, events1, 1, "First collection should have events")
+	assert.Len(t, events2, 0, "Second collection should be empty")
+}
+
+func TestPullRequest_MultipleEvents_CollectedInOrder(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+	activity := testutil.NewTestActivity(pullrequest.ActivityTypeComment, time.Now())
+	pr.AddActivity(activity)
+
+	// Act
+	pr.MarkAsNewlyDetected()
+	pr.RecordNewActivity()
+	pr.Close()
+	events := pr.CollectEvents()
+
+	// Assert
+	require.Len(t, events, 3)
+	_, ok1 := events[0].(*pullrequest.NewPullRequestDetected)
+	_, ok2 := events[1].(*pullrequest.PullRequestActivityDetected)
+	_, ok3 := events[2].(*pullrequest.PullRequestStatusChanged)
+	assert.True(t, ok1, "First event should be NewPullRequestDetected")
+	assert.True(t, ok2, "Second event should be PullRequestActivityDetected")
+	assert.True(t, ok3, "Third event should be PullRequestStatusChanged")
+}
