@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"log"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/getlantern/systray"
@@ -27,7 +30,9 @@ type App struct {
 	orchestrator *application.PullRequestOrchestrator
 	menuAdapter  *ui.MenuAdapter
 	checkTicker  *time.Ticker
-	wg           sync.WaitGroup // Track goroutines for clean shutdown
+	ctx          context.Context    // Application context
+	cancel       context.CancelFunc // Cancel function for graceful shutdown
+	wg           sync.WaitGroup     // Track goroutines for clean shutdown
 }
 
 func main() {
@@ -120,15 +125,31 @@ func main() {
 		cfg.EnableActivityTracking,
 	)
 
-	// Create application
+	// Create application with context
+	ctx, cancel := context.WithCancel(context.Background())
 	app := &App{
 		cfg:          cfg,
 		orchestrator: orchestrator,
 		menuAdapter:  menuAdapter,
+		ctx:          ctx,
+		cancel:       cancel,
 	}
 
-	// Start systray
+	// Setup signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+
+	// Start signal handler in background
+	go func() {
+		sig := <-sigChan
+		log.Printf("Received signal: %v. Initiating graceful shutdown...", sig)
+		systray.Quit()
+	}()
+
+	// Start systray (blocking call)
+	log.Println("Starting GitHub PR Notifier...")
 	systray.Run(app.onReady, app.onExit)
+	log.Println("Application terminated")
 }
 
 func (app *App) onReady() {
@@ -138,21 +159,25 @@ func (app *App) onReady() {
 	app.menuAdapter.Setup()
 
 	// Initial check
-	ctx := context.Background()
-	if err := app.orchestrator.ExecuteInitialCheck(ctx); err != nil {
+	if err := app.orchestrator.ExecuteInitialCheck(app.ctx); err != nil {
 		log.Printf("Error during initial check: %v", err)
 	}
 
-	// Setup periodic checks
+	// Setup periodic checks with context cancellation
 	app.checkTicker = time.NewTicker(time.Duration(app.cfg.CheckInterval) * time.Minute)
 	app.wg.Add(1)
 	go func() {
 		defer app.wg.Done()
-		for range app.checkTicker.C {
-			log.Println("Checking for PR updates...")
-			ctx := context.Background()
-			if err := app.orchestrator.ExecuteRegularCheck(ctx); err != nil {
-				log.Printf("Error checking PRs: %v", err)
+		for {
+			select {
+			case <-app.ctx.Done():
+				log.Println("Check goroutine received cancellation signal")
+				return
+			case <-app.checkTicker.C:
+				log.Println("Checking for PR updates...")
+				if err := app.orchestrator.ExecuteRegularCheck(app.ctx); err != nil {
+					log.Printf("Error checking PRs: %v", err)
+				}
 			}
 		}
 	}()
@@ -160,12 +185,30 @@ func (app *App) onReady() {
 
 func (app *App) onExit() {
 	log.Println("Shutting down...")
+
+	// Cancel context to stop goroutines
+	app.cancel()
+
+	// Stop ticker
 	if app.checkTicker != nil {
 		app.checkTicker.Stop()
 	}
+
+	// Shutdown menu adapter
 	app.menuAdapter.Shutdown()
-	// Wait for all goroutines to complete
+
+	// Wait for all goroutines to complete with timeout
 	log.Println("Waiting for background tasks to complete...")
-	app.wg.Wait()
-	log.Println("Shutdown complete")
+	done := make(chan struct{})
+	go func() {
+		app.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		log.Println("Shutdown complete")
+	case <-time.After(5 * time.Second):
+		log.Println("Shutdown timeout - forcing exit")
+	}
 }
