@@ -6,6 +6,7 @@ require (
 	github.com/gen2brain/beeep v0.11.2
 	github.com/getlantern/systray v1.2.2
 	github.com/nikoksr/notify v1.5.0
+	github.com/stretchr/testify v1.11.1
 )
 
 require (
@@ -30,7 +31,6 @@ require (
 	github.com/sergeymakinen/go-ico v1.0.0-beta.0 // indirect
 	github.com/slack-go/slack v0.17.3 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/tadvi/systray v0.0.0-20190226123456-11a2b8fa57af // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
