@@ -9,7 +9,7 @@ import (
 type Config struct {
 	GitHubToken             string
 	SlackOAuthToken         string
-	CheckInterval           int  // in minutes
+	CheckInterval           int // in minutes
 	MaxNumberOfRepos        int
 	MaxNumberOfPRs          int
 	EnableActivityTracking  bool // Enable checking for comments/reviews/commits (increases API usage)
@@ -23,7 +23,7 @@ func LoadConfig() *Config {
 	return &Config{
 		GitHubToken:             getEnv("GITHUB_TOKEN", ""),
 		SlackOAuthToken:         getEnv("SLACK_OAUTH_TOKEN", ""),
-		CheckInterval:           1,
+		CheckInterval:           getEnvInt("CHECK_INTERVAL_MINUTES", 1),
 		MaxNumberOfRepos:        100,
 		MaxNumberOfPRs:          100,
 		EnableActivityTracking:  getEnv("ENABLE_ACTIVITY_TRACKING", "false") == "true",
