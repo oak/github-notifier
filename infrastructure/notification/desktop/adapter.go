@@ -2,11 +2,11 @@ package desktop
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/gen2brain/beeep"
 	"github.com/oak3/github-notifier/assets"
 	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/rs/zerolog/log"
 )
 
 // Adapter implements the NotificationPort interface
@@ -41,7 +41,7 @@ func (a *Adapter) NotifyNewPullRequests(title string, prs []*pullrequest.PullReq
 
 	err := beeep.Notify("GitHub Notifier", message, iconData)
 	if err != nil {
-		log.Printf("Error sending notification: %v", err)
+		log.Error().Msgf("Error sending notification: %v", err)
 		return err
 	}
 

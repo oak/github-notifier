@@ -3,12 +3,12 @@ package slack
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/nikoksr/notify"
 	"github.com/nikoksr/notify/service/slack"
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/rs/zerolog/log"
 )
 
 // Adapter implements port.NotificationPort using Slack
@@ -59,10 +59,10 @@ func (a *Adapter) NotifyNewPullRequests(title string, prs []*pullrequest.PullReq
 	// Send notification
 	ctx := context.Background()
 	if err := a.notifier.Send(ctx, slackTitle, message); err != nil {
-		log.Printf("Failed to send Slack notification: %v", err)
+		log.Error().Msgf("Failed to send Slack notification: %v", err)
 		return fmt.Errorf("slack notification failed: %w", err)
 	}
 
-	log.Printf("Sent Slack notification: %s with %d PRs", title, len(prs))
+	log.Info().Msgf("Sent Slack notification: %s with %d PRs", title, len(prs))
 	return nil
 }

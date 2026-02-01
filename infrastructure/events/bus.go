@@ -3,11 +3,11 @@ package events
 import (
 	"context"
 	"fmt"
-	"log"
 	"reflect"
 
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/rs/zerolog/log"
 )
 
 // InMemoryEventBus is a simple in-memory event dispatcher
@@ -27,7 +27,7 @@ func NewInMemoryEventBus() *InMemoryEventBus {
 // eventType should be the concrete type name (e.g., "NewPullRequestDetected")
 func (bus *InMemoryEventBus) Subscribe(eventType string, handler port.EventHandler) {
 	bus.handlers[eventType] = append(bus.handlers[eventType], handler)
-	log.Printf("Event handler registered for: %s", eventType)
+	log.Info().Msgf("Event handler registered for: %s", eventType)
 }
 
 // Publish dispatches an event to all registered handlers for that event type
@@ -37,11 +37,11 @@ func (bus *InMemoryEventBus) Publish(event pullrequest.Event) error {
 
 	handlers, exists := bus.handlers[eventType]
 	if !exists || len(handlers) == 0 {
-		log.Printf("No handlers registered for event: %s", eventType)
+		log.Info().Msgf("No handlers registered for event: %s", eventType)
 		return nil
 	}
 
-	log.Printf("Publishing event: %s to %d handler(s)", eventType, len(handlers))
+	log.Info().Msgf("Publishing event: %s to %d handler(s)", eventType, len(handlers))
 
 	ctx := context.Background()
 	var errs []error
@@ -55,7 +55,7 @@ func (bus *InMemoryEventBus) Publish(event pullrequest.Event) error {
 	if len(errs) > 0 {
 		// Return first error but log all
 		for _, err := range errs {
-			log.Printf("Event handler error: %v", err)
+			log.Error().Msgf("Event handler error: %v", err)
 		}
 		return errs[0]
 	}

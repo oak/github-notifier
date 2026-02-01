@@ -3,7 +3,6 @@ package ui
 import (
 	"context"
 	"fmt"
-	"log"
 	"os/exec"
 	"runtime"
 	"sort"
@@ -14,6 +13,7 @@ import (
 	"github.com/oak3/github-notifier/assets"
 	"github.com/oak3/github-notifier/config"
 	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/rs/zerolog/log"
 )
 
 // MenuAdapter adapts the systray menu to the MenuPort interface
@@ -369,11 +369,11 @@ func (m *MenuAdapter) openURL(url string) {
 	case "windows":
 		cmd = exec.Command("cmd", "/c", "start", url)
 	default:
-		log.Printf("Unsupported OS: %s", runtime.GOOS)
+		log.Warn().Msgf("Unsupported OS: %s", runtime.GOOS)
 		return
 	}
 	if err := cmd.Run(); err != nil {
-		log.Printf("Failed to open URL: %v", err)
+		log.Error().Msgf("Failed to open URL: %v", err)
 	}
 }
 

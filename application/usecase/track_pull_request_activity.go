@@ -50,7 +50,7 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 	prsToCheck := scheduleResult.PRsToCheck
 
 	if len(prsToCheck) == 0 {
-		log.Printf("Activity tracking: No PRs due for checking")
+		log.Info().Msgf("Activity tracking: No PRs due for checking")
 		return nil
 	}
 
@@ -72,7 +72,7 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 	}
 
 	if len(prsWithNewActivity) == 0 {
-		log.Printf("No new activity detected on checked PRs")
+		log.Info().Msgf("No new activity detected on checked PRs")
 		return nil
 	}
 

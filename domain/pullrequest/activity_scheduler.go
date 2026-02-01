@@ -1,8 +1,9 @@
 package pullrequest
 
 import (
-	"log"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // ActivityCheckScheduler implements a two-tier scheduling strategy for checking PR activities
@@ -69,7 +70,7 @@ func (s *ActivityCheckScheduler) DeterminePRsToCheck(prs []*PullRequest) *Schedu
 
 	result.SkippedCount = len(prs) - len(result.PRsToCheck)
 
-	log.Printf("Activity scheduler: checking %d/%d PRs (%d recent < %dh, %d stale due for check, %d skipped)",
+	log.Info().Msgf("Activity scheduler: checking %d/%d PRs (%d recent < %dh, %d stale due for check, %d skipped)",
 		len(result.PRsToCheck), len(prs), result.RecentCount,
 		int(s.recentThreshold.Hours()), result.StaleCount, result.SkippedCount)
 

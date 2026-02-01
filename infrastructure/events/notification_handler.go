@@ -2,10 +2,10 @@ package events
 
 import (
 	"context"
-	"log"
 
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/rs/zerolog/log"
 )
 
 // NotificationEventHandler handles domain events by sending notifications
@@ -48,14 +48,14 @@ func (h *NotificationEventHandler) Handle(ctx context.Context, event pullrequest
 
 // handleNewPRDetected sends a notification for newly detected PRs
 func (h *NotificationEventHandler) handleNewPRDetected(event *pullrequest.NewPullRequestDetected) error {
-	log.Printf("Sending notification: New PR detected - %s in %s",
+	log.Info().Msgf("Sending notification: New PR detected - %s in %s",
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner())
 
 	// Send notification with the PR from the event
 	prs := []*pullrequest.PullRequest{event.PullRequest}
 	if err := h.notificationPort.NotifyNewPullRequests("New PR needing review", prs); err != nil {
-		log.Printf("Error sending notification for new PR: %v", err)
+		log.Error().Msgf("Error sending notification for new PR: %v", err)
 		return err
 	}
 
@@ -64,7 +64,7 @@ func (h *NotificationEventHandler) handleNewPRDetected(event *pullrequest.NewPul
 
 // handlePRActivityDetected sends a notification for PR activity
 func (h *NotificationEventHandler) handlePRActivityDetected(event *pullrequest.PullRequestActivityDetected) error {
-	log.Printf("Sending notification: New activity on PR - %s in %s (%d activities)",
+	log.Info().Msgf("Sending notification: New activity on PR - %s in %s (%d activities)",
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner(),
 		len(event.Activities))
@@ -72,7 +72,7 @@ func (h *NotificationEventHandler) handlePRActivityDetected(event *pullrequest.P
 	// Send notification with the PR from the event
 	prs := []*pullrequest.PullRequest{event.PullRequest}
 	if err := h.notificationPort.NotifyNewPullRequests("New activity on PR", prs); err != nil {
-		log.Printf("Error sending notification for PR activity: %v", err)
+		log.Error().Msgf("Error sending notification for PR activity: %v", err)
 		return err
 	}
 
@@ -81,7 +81,7 @@ func (h *NotificationEventHandler) handlePRActivityDetected(event *pullrequest.P
 
 // handlePRMerged sends a notification when a PR is merged
 func (h *NotificationEventHandler) handlePRMerged(event *pullrequest.PullRequestMerged) error {
-	log.Printf("PR merged: %s in %s",
+	log.Info().Msgf("PR merged: %s in %s",
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner())
 	// Could send a notification if desired, but typically merges don't need notifications
@@ -90,7 +90,7 @@ func (h *NotificationEventHandler) handlePRMerged(event *pullrequest.PullRequest
 
 // handlePRClosed sends a notification when a PR is closed
 func (h *NotificationEventHandler) handlePRClosed(event *pullrequest.PullRequestClosed) error {
-	log.Printf("PR closed: %s in %s",
+	log.Info().Msgf("PR closed: %s in %s",
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner())
 	// Could send a notification if desired, but typically closes don't need notifications

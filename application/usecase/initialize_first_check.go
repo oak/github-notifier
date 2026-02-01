@@ -69,7 +69,7 @@ func (uc *InitializeFirstCheckUseCase) Execute(ctx context.Context) (bool, error
 	// Update the UI with tracking service
 	uc.uiPort.UpdateDisplay(requestedReviewPRs, userCreatedPRs, uc.trackingService)
 
-	log.Printf("First run complete: marked %d PRs as seen",
+	log.Info().Msgf("First run complete: marked %d PRs as seen",
 		len(requestedReviewPRs)+len(userCreatedPRs))
 
 	return true, nil

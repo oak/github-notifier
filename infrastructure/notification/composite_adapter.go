@@ -1,10 +1,9 @@
 package notification
 
 import (
-	"log"
-
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/rs/zerolog/log"
 )
 
 // CompositeAdapter implements port.NotificationPort by delegating to multiple adapters
@@ -28,7 +27,7 @@ func (c *CompositeAdapter) NotifyNewPullRequests(title string, prs []*pullreques
 	var firstError error
 	for _, adapter := range c.adapters {
 		if err := adapter.NotifyNewPullRequests(title, prs); err != nil {
-			log.Printf("Notification adapter failed: %v", err)
+			log.Error().Msgf("Notification adapter failed: %v", err)
 			if firstError == nil {
 				firstError = err
 			}

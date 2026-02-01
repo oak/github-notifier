@@ -2,11 +2,11 @@ package github
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/rs/zerolog/log"
 )
 
 // Adapter implements the pullrequest.PullRequestRepository interface
@@ -23,10 +23,10 @@ func NewAdapter(token string) *Adapter {
 	// Fetch authenticated user login
 	authenticatedUser, err := client.FetchAuthenticatedUserLogin()
 	if err != nil {
-		log.Printf("Warning: Failed to fetch authenticated user login: %v. Activity filtering will be disabled.", err)
+		log.Warn().Msgf("Warning: Failed to fetch authenticated user login: %v. Activity filtering will be disabled.", err)
 		authenticatedUser = "" // Empty string = no filtering
 	} else {
-		log.Printf("Authenticated as: %s", authenticatedUser)
+		log.Info().Msgf("Authenticated as: %s", authenticatedUser)
 	}
 
 	return &Adapter{
@@ -208,12 +208,12 @@ func (a *Adapter) EnrichWithActivities(prs []*pullrequest.PullRequest, since tim
 		}
 		batch := prs[i:end]
 
-		log.Printf("Fetching activities for batch of %d PRs (batch %d/%d)", len(batch), (i/batchSize)+1, (len(prs)+batchSize-1)/batchSize)
+		log.Info().Msgf("Fetching activities for batch of %d PRs (batch %d/%d)", len(batch), (i/batchSize)+1, (len(prs)+batchSize-1)/batchSize)
 
 		// Fetch activities for this batch
 		activitiesMap, err := a.fetchBatchedTimelines(batch, since)
 		if err != nil {
-			log.Printf("Error fetching batch timeline: %v", err)
+			log.Error().Msgf("Error fetching batch timeline: %v", err)
 			continue
 		}
 
@@ -227,7 +227,7 @@ func (a *Adapter) EnrichWithActivities(prs []*pullrequest.PullRequest, since tim
 	}
 
 	apiCalls := (len(prs) + batchSize - 1) / batchSize
-	log.Printf("Enriched %d PRs with %d total activities using %d API calls (was %d before batching)", len(prs), totalActivities, apiCalls, len(prs))
+	log.Info().Msgf("Enriched %d PRs with %d total activities using %d API calls (was %d before batching)", len(prs), totalActivities, apiCalls, len(prs))
 	return nil
 }
 
@@ -251,7 +251,7 @@ func (a *Adapter) fetchBatchedTimelines(prs []*pullrequest.PullRequest, since ti
 	for i, pr := range prs {
 		parts := strings.Split(pr.RepositoryName(), "/")
 		if len(parts) != 2 {
-			log.Printf("Invalid repository name: %s", pr.RepositoryName())
+			log.Warn().Msgf("Invalid repository name: %s", pr.RepositoryName())
 			continue
 		}
 
