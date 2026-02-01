@@ -6,13 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/oak3/github-notifier/domain/pullrequest"
 	"github.com/oak3/github-notifier/infrastructure/events"
 	"github.com/oak3/github-notifier/internal/mocks"
 	"github.com/oak3/github-notifier/internal/testutil"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 func TestNotificationHandler_HandleNewPRDetected_Success(t *testing.T) {
@@ -71,7 +72,7 @@ func TestNotificationHandler_HandleActivityDetected_Success(t *testing.T) {
 	)
 	pr.AddActivities([]*pullrequest.Activity{activity})
 
-	event := pullrequest.NewPullRequestActivityDetected(pr)
+	event := pullrequest.NewActivityDetected(pr)
 
 	// Mock expectations
 	mockNotificationPort.On("NotifyNewPullRequests", "New activity on PR", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
@@ -99,7 +100,7 @@ func TestNotificationHandler_HandleActivityDetected_NotificationError(t *testing
 	)
 	pr.AddActivities([]*pullrequest.Activity{activity})
 
-	event := pullrequest.NewPullRequestActivityDetected(pr)
+	event := pullrequest.NewActivityDetected(pr)
 
 	expectedErr := errors.New("notification failed")
 
@@ -153,7 +154,7 @@ func TestNotificationHandler_HandleMultipleActivities(t *testing.T) {
 	)
 	pr.AddActivities([]*pullrequest.Activity{activity1, activity2})
 
-	event := pullrequest.NewPullRequestActivityDetected(pr)
+	event := pullrequest.NewActivityDetected(pr)
 
 	// Mock expectations
 	mockNotificationPort.On("NotifyNewPullRequests", "New activity on PR", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
@@ -196,7 +197,7 @@ func TestNotificationHandler_HandlePRMerged_Success(t *testing.T) {
 	handler := events.NewNotificationEventHandler(mockNotificationPort)
 
 	pr := testutil.NewTestPullRequest(1)
-	event := pullrequest.NewPullRequestMerged(pr)
+	event := pullrequest.NewMerged(pr)
 
 	// Act
 	err := handler.Handle(context.Background(), &event)
@@ -212,7 +213,7 @@ func TestNotificationHandler_HandlePRClosed_Success(t *testing.T) {
 	handler := events.NewNotificationEventHandler(mockNotificationPort)
 
 	pr := testutil.NewTestPullRequest(1)
-	event := pullrequest.NewPullRequestClosed(pr)
+	event := pullrequest.NewClosed(pr)
 
 	// Act
 	err := handler.Handle(context.Background(), &event)
@@ -228,7 +229,7 @@ func TestNotificationHandler_HandleStatusChanged_Success(t *testing.T) {
 	handler := events.NewNotificationEventHandler(mockNotificationPort)
 
 	pr := testutil.NewTestPullRequest(1)
-	event := pullrequest.NewPullRequestStatusChanged(pr, pullrequest.StatusOpen, pullrequest.StatusMerged)
+	event := pullrequest.NewStatusChanged(pr, pullrequest.StatusOpen, pullrequest.StatusMerged)
 
 	// Act
 	err := handler.Handle(context.Background(), &event)

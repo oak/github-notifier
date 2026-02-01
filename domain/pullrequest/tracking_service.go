@@ -20,7 +20,8 @@ func (s *TrackingService) TrackPullRequest(pr *PullRequest) bool {
 		return false
 	}
 
-	s.seenRepo.MarkAsSeen(id)
+	// Best-effort: we don't fail tracking if marking as seen fails
+	_ = s.seenRepo.MarkAsSeen(id) //nolint:errcheck // marking as seen is best-effort
 	return true
 }
 
@@ -45,7 +46,8 @@ func (s *TrackingService) FindNewPullRequests(prs []*PullRequest) []*PullRequest
 // MarkPullRequestsAsSeen marks a list of PRs as seen
 func (s *TrackingService) MarkPullRequestsAsSeen(prs []*PullRequest) {
 	for _, pr := range prs {
-		s.seenRepo.MarkAsSeen(pr.Identifier())
+		// Best-effort: we don't fail tracking if marking as seen fails
+		_ = s.seenRepo.MarkAsSeen(pr.Identifier()) //nolint:errcheck // marking as seen is best-effort
 	}
 }
 

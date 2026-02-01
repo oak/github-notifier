@@ -3,8 +3,9 @@ package events
 import (
 	"context"
 
-	"github.com/oak3/github-notifier/domain/pullrequest"
 	"github.com/rs/zerolog/log"
+
+	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
 // TrackingEventHandler handles domain events by updating tracking state
@@ -26,16 +27,16 @@ func (h *TrackingEventHandler) Handle(ctx context.Context, event pullrequest.Eve
 	case *pullrequest.NewPullRequestDetected:
 		return h.handleNewPRDetected(e)
 
-	case *pullrequest.PullRequestActivityDetected:
+	case *pullrequest.ActivityDetected:
 		return h.handlePRActivityDetected(e)
 
-	case *pullrequest.PullRequestMerged:
+	case *pullrequest.Merged:
 		return h.handlePRMerged(e)
 
-	case *pullrequest.PullRequestClosed:
+	case *pullrequest.Closed:
 		return h.handlePRClosed(e)
 
-	case *pullrequest.PullRequestStatusChanged:
+	case *pullrequest.StatusChanged:
 		return h.handleStatusChanged(e)
 
 	default:
@@ -53,7 +54,7 @@ func (h *TrackingEventHandler) handleNewPRDetected(event *pullrequest.NewPullReq
 }
 
 // handlePRActivityDetected handles activity detection events
-func (h *TrackingEventHandler) handlePRActivityDetected(event *pullrequest.PullRequestActivityDetected) error {
+func (h *TrackingEventHandler) handlePRActivityDetected(event *pullrequest.ActivityDetected) error {
 	// When activity is detected, the PR should remain unseen to show asterisks
 	// This handler could implement additional activity tracking logic
 	log.Info().Msgf("Tracking: Activity detected on PR - %s (%d activities)",
@@ -63,7 +64,7 @@ func (h *TrackingEventHandler) handlePRActivityDetected(event *pullrequest.PullR
 }
 
 // handlePRMerged handles PR merged events
-func (h *TrackingEventHandler) handlePRMerged(event *pullrequest.PullRequestMerged) error {
+func (h *TrackingEventHandler) handlePRMerged(event *pullrequest.Merged) error {
 	log.Info().Msgf("Tracking: PR merged - %s in %s",
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner())
@@ -72,7 +73,7 @@ func (h *TrackingEventHandler) handlePRMerged(event *pullrequest.PullRequestMerg
 }
 
 // handlePRClosed handles PR closed events
-func (h *TrackingEventHandler) handlePRClosed(event *pullrequest.PullRequestClosed) error {
+func (h *TrackingEventHandler) handlePRClosed(event *pullrequest.Closed) error {
 	log.Info().Msgf("Tracking: PR closed - %s in %s",
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner())
@@ -81,7 +82,7 @@ func (h *TrackingEventHandler) handlePRClosed(event *pullrequest.PullRequestClos
 }
 
 // handleStatusChanged handles PR status change events
-func (h *TrackingEventHandler) handleStatusChanged(event *pullrequest.PullRequestStatusChanged) error {
+func (h *TrackingEventHandler) handleStatusChanged(event *pullrequest.StatusChanged) error {
 	log.Info().Msgf("Tracking: PR status changed from %v to %v - %s",
 		event.OldStatus,
 		event.NewStatus,

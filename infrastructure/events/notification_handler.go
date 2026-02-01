@@ -3,9 +3,10 @@ package events
 import (
 	"context"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/rs/zerolog/log"
 )
 
 // NotificationEventHandler handles domain events by sending notifications
@@ -27,16 +28,16 @@ func (h *NotificationEventHandler) Handle(ctx context.Context, event pullrequest
 	case *pullrequest.NewPullRequestDetected:
 		return h.handleNewPRDetected(e)
 
-	case *pullrequest.PullRequestActivityDetected:
+	case *pullrequest.ActivityDetected:
 		return h.handlePRActivityDetected(e)
 
-	case *pullrequest.PullRequestMerged:
+	case *pullrequest.Merged:
 		return h.handlePRMerged(e)
 
-	case *pullrequest.PullRequestClosed:
+	case *pullrequest.Closed:
 		return h.handlePRClosed(e)
 
-	case *pullrequest.PullRequestStatusChanged:
+	case *pullrequest.StatusChanged:
 		// Status changes are already handled by specific events (merged, closed)
 		return nil
 
@@ -63,7 +64,7 @@ func (h *NotificationEventHandler) handleNewPRDetected(event *pullrequest.NewPul
 }
 
 // handlePRActivityDetected sends a notification for PR activity
-func (h *NotificationEventHandler) handlePRActivityDetected(event *pullrequest.PullRequestActivityDetected) error {
+func (h *NotificationEventHandler) handlePRActivityDetected(event *pullrequest.ActivityDetected) error {
 	log.Info().Msgf("Sending notification: New activity on PR - %s in %s (%d activities)",
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner(),
@@ -80,7 +81,7 @@ func (h *NotificationEventHandler) handlePRActivityDetected(event *pullrequest.P
 }
 
 // handlePRMerged sends a notification when a PR is merged
-func (h *NotificationEventHandler) handlePRMerged(event *pullrequest.PullRequestMerged) error {
+func (h *NotificationEventHandler) handlePRMerged(event *pullrequest.Merged) error {
 	log.Info().Msgf("PR merged: %s in %s",
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner())
@@ -89,7 +90,7 @@ func (h *NotificationEventHandler) handlePRMerged(event *pullrequest.PullRequest
 }
 
 // handlePRClosed sends a notification when a PR is closed
-func (h *NotificationEventHandler) handlePRClosed(event *pullrequest.PullRequestClosed) error {
+func (h *NotificationEventHandler) handlePRClosed(event *pullrequest.Closed) error {
 	log.Info().Msgf("PR closed: %s in %s",
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner())

@@ -122,7 +122,7 @@ func (pr *PullRequest) Close() {
 	if pr.status != StatusClosed {
 		oldStatus := pr.status
 		pr.status = StatusClosed
-		event := NewPullRequestStatusChanged(pr, oldStatus, StatusClosed)
+		event := NewStatusChanged(pr, oldStatus, StatusClosed)
 		pr.raiseEvent(&event)
 	}
 }
@@ -132,7 +132,7 @@ func (pr *PullRequest) Merge() {
 	if pr.status != StatusMerged {
 		oldStatus := pr.status
 		pr.status = StatusMerged
-		event := NewPullRequestStatusChanged(pr, oldStatus, StatusMerged)
+		event := NewStatusChanged(pr, oldStatus, StatusMerged)
 		pr.raiseEvent(&event)
 	}
 }
@@ -263,7 +263,7 @@ func (pr *PullRequest) MarkAsNewlyDetected() {
 // RecordNewActivity records that new activity has been detected and raises an event
 func (pr *PullRequest) RecordNewActivity() {
 	if len(pr.activities) > 0 {
-		event := NewPullRequestActivityDetected(pr)
+		event := NewActivityDetected(pr)
 		pr.raiseEvent(&event)
 	}
 }

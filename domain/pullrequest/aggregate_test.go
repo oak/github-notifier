@@ -372,8 +372,8 @@ func TestPullRequest_RecordNewActivity_RaisesEvent(t *testing.T) {
 
 	// Assert
 	require.Len(t, events, 1)
-	event, ok := events[0].(*pullrequest.PullRequestActivityDetected)
-	require.True(t, ok, "Expected PullRequestActivityDetected event")
+	event, ok := events[0].(*pullrequest.ActivityDetected)
+	require.True(t, ok, "Expected ActivityDetected event")
 	assert.Equal(t, pr.Identifier(), event.PullRequestID)
 	assert.Equal(t, pr.Repository(), event.Repository)
 	assert.Len(t, event.Activities, 1)
@@ -402,8 +402,8 @@ func TestPullRequest_Close_RaisesStatusChangedEvent(t *testing.T) {
 
 	// Assert
 	require.Len(t, events, 1)
-	event, ok := events[0].(*pullrequest.PullRequestStatusChanged)
-	require.True(t, ok, "Expected PullRequestStatusChanged event")
+	event, ok := events[0].(*pullrequest.StatusChanged)
+	require.True(t, ok, "Expected StatusChanged event")
 	assert.Equal(t, pr.Identifier(), event.PullRequestID)
 	assert.Equal(t, pullrequest.StatusOpen, event.OldStatus)
 	assert.Equal(t, pullrequest.StatusClosed, event.NewStatus)
@@ -419,8 +419,8 @@ func TestPullRequest_Merge_RaisesStatusChangedEvent(t *testing.T) {
 
 	// Assert
 	require.Len(t, events, 1)
-	event, ok := events[0].(*pullrequest.PullRequestStatusChanged)
-	require.True(t, ok, "Expected PullRequestStatusChanged event")
+	event, ok := events[0].(*pullrequest.StatusChanged)
+	require.True(t, ok, "Expected StatusChanged event")
 	assert.Equal(t, pr.Identifier(), event.PullRequestID)
 	assert.Equal(t, pullrequest.StatusOpen, event.OldStatus)
 	assert.Equal(t, pullrequest.StatusMerged, event.NewStatus)
@@ -483,9 +483,9 @@ func TestPullRequest_MultipleEvents_CollectedInOrder(t *testing.T) {
 	// Assert
 	require.Len(t, events, 3)
 	_, ok1 := events[0].(*pullrequest.NewPullRequestDetected)
-	_, ok2 := events[1].(*pullrequest.PullRequestActivityDetected)
-	_, ok3 := events[2].(*pullrequest.PullRequestStatusChanged)
+	_, ok2 := events[1].(*pullrequest.ActivityDetected)
+	_, ok3 := events[2].(*pullrequest.StatusChanged)
 	assert.True(t, ok1, "First event should be NewPullRequestDetected")
-	assert.True(t, ok2, "Second event should be PullRequestActivityDetected")
-	assert.True(t, ok3, "Third event should be PullRequestStatusChanged")
+	assert.True(t, ok2, "Second event should be ActivityDetected")
+	assert.True(t, ok3, "Third event should be StatusChanged")
 }

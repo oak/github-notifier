@@ -5,6 +5,8 @@ import (
 )
 
 // PullRequestRepository is the port for fetching pull requests from external sources
+//
+//nolint:revive // keeping full name for clarity in this context
 type PullRequestRepository interface {
 	// FetchRequestedReviews fetches PRs where the user is requested to review
 	FetchRequestedReviews() ([]*PullRequest, error)

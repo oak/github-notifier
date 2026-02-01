@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/rs/zerolog/log"
 )
 
 // InMemoryEventBus is a simple in-memory event dispatcher

@@ -4,9 +4,10 @@ import (
 	"fmt"
 
 	"github.com/gen2brain/beeep"
+	"github.com/rs/zerolog/log"
+
 	"github.com/oak3/github-notifier/assets"
 	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/rs/zerolog/log"
 )
 
 // Adapter implements the NotificationPort interface

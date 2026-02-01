@@ -21,7 +21,7 @@ linters:
     - goimports
     - misspell
     - revive
-    - exportloopref  # Catches loop variable capture bugs
+    - copyloopvar  # Replaces deprecated exportloopref (Go 1.22+)
 
 linters-settings:
   errcheck:

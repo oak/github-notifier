@@ -21,7 +21,7 @@ type PullRequestDTO struct {
 type GraphQLResponse struct {
 	Data struct {
 		Search struct {
-			Nodes []PullRequestDTO `json:"nodes"`
+			Nodes    []PullRequestDTO `json:"nodes"`
 			PageInfo struct {
 				EndCursor   string `json:"endCursor"`
 				HasNextPage bool   `json:"hasNextPage"`

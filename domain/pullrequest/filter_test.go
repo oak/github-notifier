@@ -73,59 +73,59 @@ func TestPRFilter_FilterDrafts_OnlyRegular(t *testing.T) {
 
 func TestPRFilter_FilterDrafts_TableDriven(t *testing.T) {
 	tests := []struct {
-		name           string
-		includeDrafts  bool
-		regularCount   int
-		draftCount     int
-		expectedCount  int
+		name             string
+		includeDrafts    bool
+		regularCount     int
+		draftCount       int
+		expectedCount    int
 		shouldHaveDrafts bool
 	}{
 		{
-			name:           "include drafts with mixed PRs",
-			includeDrafts:  true,
-			regularCount:   2,
-			draftCount:     3,
-			expectedCount:  5,
+			name:             "include drafts with mixed PRs",
+			includeDrafts:    true,
+			regularCount:     2,
+			draftCount:       3,
+			expectedCount:    5,
 			shouldHaveDrafts: true,
 		},
 		{
-			name:           "exclude drafts with mixed PRs",
-			includeDrafts:  false,
-			regularCount:   2,
-			draftCount:     3,
-			expectedCount:  2,
+			name:             "exclude drafts with mixed PRs",
+			includeDrafts:    false,
+			regularCount:     2,
+			draftCount:       3,
+			expectedCount:    2,
 			shouldHaveDrafts: false,
 		},
 		{
-			name:           "include drafts with only regular PRs",
-			includeDrafts:  true,
-			regularCount:   5,
-			draftCount:     0,
-			expectedCount:  5,
+			name:             "include drafts with only regular PRs",
+			includeDrafts:    true,
+			regularCount:     5,
+			draftCount:       0,
+			expectedCount:    5,
 			shouldHaveDrafts: false,
 		},
 		{
-			name:           "exclude drafts with only regular PRs",
-			includeDrafts:  false,
-			regularCount:   5,
-			draftCount:     0,
-			expectedCount:  5,
+			name:             "exclude drafts with only regular PRs",
+			includeDrafts:    false,
+			regularCount:     5,
+			draftCount:       0,
+			expectedCount:    5,
 			shouldHaveDrafts: false,
 		},
 		{
-			name:           "include drafts with only draft PRs",
-			includeDrafts:  true,
-			regularCount:   0,
-			draftCount:     5,
-			expectedCount:  5,
+			name:             "include drafts with only draft PRs",
+			includeDrafts:    true,
+			regularCount:     0,
+			draftCount:       5,
+			expectedCount:    5,
 			shouldHaveDrafts: true,
 		},
 		{
-			name:           "exclude drafts with only draft PRs",
-			includeDrafts:  false,
-			regularCount:   0,
-			draftCount:     5,
-			expectedCount:  0,
+			name:             "exclude drafts with only draft PRs",
+			includeDrafts:    false,
+			regularCount:     0,
+			draftCount:       5,
+			expectedCount:    0,
 			shouldHaveDrafts: false,
 		},
 	}

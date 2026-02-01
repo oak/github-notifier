@@ -197,7 +197,7 @@ func CreateTestPRsWithActivities(count int, activitiesPerPR int, activityAge tim
 	now := time.Now()
 
 	for i := 0; i < count; i++ {
-		pr := NewTestPullRequest(i+1)
+		pr := NewTestPullRequest(i + 1)
 
 		// Add activities
 		activities := make([]*pullrequest.Activity, 0, activitiesPerPR)

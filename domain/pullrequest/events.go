@@ -32,16 +32,16 @@ func (e NewPullRequestDetected) OccurredAt() time.Time {
 	return e.occurredAt
 }
 
-// PullRequestReviewRequested is raised when a PR review is requested
-type PullRequestReviewRequested struct {
+// ReviewRequested is raised when a PR review is requested
+type ReviewRequested struct {
 	PullRequestID PRIdentifier
 	Repository    RepositoryInfo
 	occurredAt    time.Time
 }
 
-// NewPullRequestReviewRequested creates a new event
-func NewPullRequestReviewRequested(pr *PullRequest) PullRequestReviewRequested {
-	return PullRequestReviewRequested{
+// NewReviewRequested creates a new event
+func NewReviewRequested(pr *PullRequest) ReviewRequested {
+	return ReviewRequested{
 		PullRequestID: pr.Identifier(),
 		Repository:    pr.Repository(),
 		occurredAt:    time.Now(),
@@ -49,21 +49,21 @@ func NewPullRequestReviewRequested(pr *PullRequest) PullRequestReviewRequested {
 }
 
 // OccurredAt returns when the event occurred
-func (e PullRequestReviewRequested) OccurredAt() time.Time {
+func (e ReviewRequested) OccurredAt() time.Time {
 	return e.occurredAt
 }
 
-// PullRequestStatusChanged is raised when a PR status changes
-type PullRequestStatusChanged struct {
+// StatusChanged is raised when a PR status changes
+type StatusChanged struct {
 	PullRequestID PRIdentifier
 	OldStatus     PRStatus
 	NewStatus     PRStatus
 	occurredAt    time.Time
 }
 
-// NewPullRequestStatusChanged creates a new event
-func NewPullRequestStatusChanged(pr *PullRequest, oldStatus, newStatus PRStatus) PullRequestStatusChanged {
-	return PullRequestStatusChanged{
+// NewStatusChanged creates a new event
+func NewStatusChanged(pr *PullRequest, oldStatus, newStatus PRStatus) StatusChanged {
+	return StatusChanged{
 		PullRequestID: pr.Identifier(),
 		OldStatus:     oldStatus,
 		NewStatus:     newStatus,
@@ -72,12 +72,12 @@ func NewPullRequestStatusChanged(pr *PullRequest, oldStatus, newStatus PRStatus)
 }
 
 // OccurredAt returns when the event occurred
-func (e PullRequestStatusChanged) OccurredAt() time.Time {
+func (e StatusChanged) OccurredAt() time.Time {
 	return e.occurredAt
 }
 
-// PullRequestActivityDetected is raised when new activity is detected on a PR
-type PullRequestActivityDetected struct {
+// ActivityDetected is raised when new activity is detected on a PR
+type ActivityDetected struct {
 	PullRequestID PRIdentifier
 	Repository    RepositoryInfo
 	Activities    []*Activity
@@ -85,9 +85,9 @@ type PullRequestActivityDetected struct {
 	occurredAt    time.Time
 }
 
-// NewPullRequestActivityDetected creates a new event
-func NewPullRequestActivityDetected(pr *PullRequest) PullRequestActivityDetected {
-	return PullRequestActivityDetected{
+// NewActivityDetected creates a new event
+func NewActivityDetected(pr *PullRequest) ActivityDetected {
+	return ActivityDetected{
 		PullRequestID: pr.Identifier(),
 		Repository:    pr.Repository(),
 		Activities:    pr.Activities(),
@@ -97,20 +97,20 @@ func NewPullRequestActivityDetected(pr *PullRequest) PullRequestActivityDetected
 }
 
 // OccurredAt returns when the event occurred
-func (e PullRequestActivityDetected) OccurredAt() time.Time {
+func (e ActivityDetected) OccurredAt() time.Time {
 	return e.occurredAt
 }
 
-// PullRequestClosed is raised when a PR is closed
-type PullRequestClosed struct {
+// Closed is raised when a PR is closed
+type Closed struct {
 	PullRequestID PRIdentifier
 	Repository    RepositoryInfo
 	occurredAt    time.Time
 }
 
-// NewPullRequestClosed creates a new event
-func NewPullRequestClosed(pr *PullRequest) PullRequestClosed {
-	return PullRequestClosed{
+// NewClosed creates a new event
+func NewClosed(pr *PullRequest) Closed {
+	return Closed{
 		PullRequestID: pr.Identifier(),
 		Repository:    pr.Repository(),
 		occurredAt:    time.Now(),
@@ -118,20 +118,20 @@ func NewPullRequestClosed(pr *PullRequest) PullRequestClosed {
 }
 
 // OccurredAt returns when the event occurred
-func (e PullRequestClosed) OccurredAt() time.Time {
+func (e Closed) OccurredAt() time.Time {
 	return e.occurredAt
 }
 
-// PullRequestMerged is raised when a PR is merged
-type PullRequestMerged struct {
+// Merged is raised when a PR is merged
+type Merged struct {
 	PullRequestID PRIdentifier
 	Repository    RepositoryInfo
 	occurredAt    time.Time
 }
 
-// NewPullRequestMerged creates a new event
-func NewPullRequestMerged(pr *PullRequest) PullRequestMerged {
-	return PullRequestMerged{
+// NewMerged creates a new event
+func NewMerged(pr *PullRequest) Merged {
+	return Merged{
 		PullRequestID: pr.Identifier(),
 		Repository:    pr.Repository(),
 		occurredAt:    time.Now(),
@@ -139,6 +139,6 @@ func NewPullRequestMerged(pr *PullRequest) PullRequestMerged {
 }
 
 // OccurredAt returns when the event occurred
-func (e PullRequestMerged) OccurredAt() time.Time {
+func (e Merged) OccurredAt() time.Time {
 	return e.occurredAt
 }

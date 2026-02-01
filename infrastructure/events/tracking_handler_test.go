@@ -5,11 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/oak3/github-notifier/domain/pullrequest"
 	"github.com/oak3/github-notifier/infrastructure/events"
 	"github.com/oak3/github-notifier/internal/mocks"
 	"github.com/oak3/github-notifier/internal/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 func TestTrackingHandler_HandleNewPRDetected_Success(t *testing.T) {
@@ -44,7 +45,7 @@ func TestTrackingHandler_HandleActivityDetected_Success(t *testing.T) {
 	)
 	pr.AddActivities([]*pullrequest.Activity{activity})
 
-	event := pullrequest.NewPullRequestActivityDetected(pr)
+	event := pullrequest.NewActivityDetected(pr)
 
 	// Act
 	err := handler.Handle(context.Background(), &event)
@@ -118,7 +119,7 @@ func TestTrackingHandler_HandleMultipleActivities(t *testing.T) {
 	)
 	pr.AddActivities([]*pullrequest.Activity{activity1, activity2})
 
-	event := pullrequest.NewPullRequestActivityDetected(pr)
+	event := pullrequest.NewActivityDetected(pr)
 
 	// Act
 	err := handler.Handle(context.Background(), &event)
@@ -145,7 +146,7 @@ func TestTrackingHandler_HandleMixedEvents(t *testing.T) {
 	pr2.AddActivities([]*pullrequest.Activity{activity})
 
 	newPREvent := pullrequest.NewNewPullRequestDetected(pr1)
-	activityEvent := pullrequest.NewPullRequestActivityDetected(pr2)
+	activityEvent := pullrequest.NewActivityDetected(pr2)
 
 	// Act
 	err1 := handler.Handle(context.Background(), &newPREvent)
@@ -164,7 +165,7 @@ func TestTrackingHandler_HandlePRMerged(t *testing.T) {
 	handler := events.NewTrackingEventHandler(trackingService)
 
 	pr := testutil.NewTestPullRequest(1)
-	event := pullrequest.NewPullRequestMerged(pr)
+	event := pullrequest.NewMerged(pr)
 
 	// Act
 	err := handler.Handle(context.Background(), &event)
@@ -180,7 +181,7 @@ func TestTrackingHandler_HandlePRClosed(t *testing.T) {
 	handler := events.NewTrackingEventHandler(trackingService)
 
 	pr := testutil.NewTestPullRequest(1)
-	event := pullrequest.NewPullRequestClosed(pr)
+	event := pullrequest.NewClosed(pr)
 
 	// Act
 	err := handler.Handle(context.Background(), &event)
@@ -196,7 +197,7 @@ func TestTrackingHandler_HandleStatusChanged(t *testing.T) {
 	handler := events.NewTrackingEventHandler(trackingService)
 
 	pr := testutil.NewTestPullRequest(1)
-	event := pullrequest.NewPullRequestStatusChanged(pr, pullrequest.StatusOpen, pullrequest.StatusMerged)
+	event := pullrequest.NewStatusChanged(pr, pullrequest.StatusOpen, pullrequest.StatusMerged)
 
 	// Act
 	err := handler.Handle(context.Background(), &event)

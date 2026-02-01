@@ -3,8 +3,9 @@ package testutil
 import (
 	"testing"
 
-	"github.com/oak3/github-notifier/domain/pullrequest"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
 // AssertPREquals verifies two PRs are equal

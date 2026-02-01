@@ -10,10 +10,11 @@ import (
 	"time"
 
 	"github.com/getlantern/systray"
+	"github.com/rs/zerolog/log"
+
 	"github.com/oak3/github-notifier/assets"
 	"github.com/oak3/github-notifier/config"
 	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/rs/zerolog/log"
 )
 
 // MenuAdapter adapts the systray menu to the MenuPort interface
@@ -252,7 +253,7 @@ func (m *MenuAdapter) buildPRSection(prs []*pullrequest.PullRequest, parentMenuI
 		parentMenuItem[i].Parent.SetTitle(repoTitle + "   ")
 
 		for j, pr := range repoPRs {
-			pr := pr // Capture loop variable to avoid closure bug
+
 			menuItem := parentMenuItem[i].Children[j]
 
 			prTitle := m.formatPRTitle(pr)
@@ -419,9 +420,9 @@ func (m *MenuAdapter) formatTimeAgo(t time.Time) string {
 
 	if weeks > 0 {
 		return fmt.Sprintf("%d weeks ago", weeks)
-	} else if days >= 2 {
-		return fmt.Sprintf("%d days ago", int(days))
-	} else {
-		return fmt.Sprintf("%d hours ago", int(hours))
 	}
+	if days >= 2 {
+		return fmt.Sprintf("%d days ago", int(days))
+	}
+	return fmt.Sprintf("%d hours ago", int(hours))
 }

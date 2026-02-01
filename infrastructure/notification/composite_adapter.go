@@ -1,9 +1,10 @@
 package notification
 
 import (
+	"github.com/rs/zerolog/log"
+
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/rs/zerolog/log"
 )
 
 // CompositeAdapter implements port.NotificationPort by delegating to multiple adapters

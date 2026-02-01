@@ -4,13 +4,14 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/oak3/github-notifier/domain/pullrequest"
 	"github.com/oak3/github-notifier/infrastructure/events"
 	"github.com/oak3/github-notifier/internal/mocks"
 	"github.com/oak3/github-notifier/internal/testutil"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 func TestEventBus_Subscribe_AddsHandler(t *testing.T) {
@@ -125,11 +126,11 @@ func TestEventBus_Publish_DifferentEventTypes(t *testing.T) {
 
 	pr := testutil.NewTestPullRequest(1)
 	newPREvent := pullrequest.NewNewPullRequestDetected(pr)
-	activityEvent := pullrequest.NewPullRequestActivityDetected(pr)
+	activityEvent := pullrequest.NewActivityDetected(pr)
 
 	// Subscribe different handlers to different events
 	bus.Subscribe("NewPullRequestDetected", mockHandler1)
-	bus.Subscribe("PullRequestActivityDetected", mockHandler2)
+	bus.Subscribe("ActivityDetected", mockHandler2)
 
 	// Mock expectations
 	mockHandler1.On("Handle", mock.Anything, &newPREvent).Return(nil)
@@ -142,7 +143,7 @@ func TestEventBus_Publish_DifferentEventTypes(t *testing.T) {
 	mockHandler1.AssertExpectations(t)
 	mockHandler2.AssertNotCalled(t, "Handle") // Handler2 should NOT be called for NewPullRequestDetected
 
-	// Now publish PullRequestActivityDetected
+	// Now publish ActivityDetected
 	mockHandler2.On("Handle", mock.Anything, &activityEvent).Return(nil)
 
 	err = bus.Publish(&activityEvent)

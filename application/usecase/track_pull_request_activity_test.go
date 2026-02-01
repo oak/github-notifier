@@ -125,7 +125,7 @@ func TestTrackActivity_NewActivity_EmitsEvents(t *testing.T) {
 	mockSeenRepo.On("UnmarkAsSeen", pr2.Identifier()).Return(nil)
 
 	// Events should be published
-	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.PullRequestActivityDetected")).Return(nil).Twice()
+	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil).Twice()
 
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
@@ -201,7 +201,7 @@ func TestTrackActivity_MarkUnseenError_ContinuesProcessing(t *testing.T) {
 	mockSeenRepo.On("UnmarkAsSeen", pr2.Identifier()).Return(nil)
 
 	// Events should still be published even if marking fails
-	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.PullRequestActivityDetected")).Return(nil).Twice()
+	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil).Twice()
 
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
@@ -243,8 +243,8 @@ func TestTrackActivity_PublishEventError_ContinuesProcessing(t *testing.T) {
 	mockSeenRepo.On("UnmarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Twice()
 
 	// First event fails, second succeeds
-	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.PullRequestActivityDetected")).Return(errors.New("event bus error")).Once()
-	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.PullRequestActivityDetected")).Return(nil).Once()
+	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(errors.New("event bus error")).Once()
+	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil).Once()
 
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 

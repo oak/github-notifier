@@ -6,9 +6,10 @@ import (
 
 	"github.com/nikoksr/notify"
 	"github.com/nikoksr/notify/service/slack"
+	"github.com/rs/zerolog/log"
+
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/rs/zerolog/log"
 )
 
 // Adapter implements port.NotificationPort using Slack
