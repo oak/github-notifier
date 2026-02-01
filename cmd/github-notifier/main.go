@@ -194,18 +194,18 @@ func (app *App) onReady() {
 
 func (app *App) onExit() {
 	log.Info().Msg("Shutting down")
-	
+
 	// Cancel context to stop goroutines
 	app.cancel()
-	
+
 	// Stop ticker
 	if app.checkTicker != nil {
 		app.checkTicker.Stop()
 	}
-	
+
 	// Shutdown menu adapter
 	app.menuAdapter.Shutdown()
-	
+
 	// Wait for all goroutines to complete with timeout
 	log.Info().Msg("Waiting for background tasks to complete")
 	done := make(chan struct{})
@@ -213,10 +213,11 @@ func (app *App) onExit() {
 		app.wg.Wait()
 		close(done)
 	}()
-	
+
 	select {
 	case <-done:
 		log.Info().Msg("Shutdown complete")
 	case <-time.After(5 * time.Second):
 		log.Warn().Msg("Shutdown timeout - forcing exit")
+	}
 }

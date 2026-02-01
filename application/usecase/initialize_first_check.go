@@ -43,7 +43,7 @@ func (uc *InitializeFirstCheckUseCase) Execute(ctx context.Context) (bool, error
 		return false, nil
 	}
 
-	log.Println("First run detected - marking all existing PRs as already seen")
+	log.Info().Msg("First run detected - marking all existing PRs as already seen")
 
 	// Fetch all PRs
 	requestedReviewPRs, err := uc.prRepo.FetchRequestedReviews()

@@ -54,7 +54,7 @@ func TestTrackActivity_NoPRsDueForCheck(t *testing.T) {
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
 	// Act
-	err := uc.Execute(prs, now.Add(-1*time.Hour))
+	err := uc.Execute(context.Background(), prs, now.Add(-1*time.Hour))
 
 	// Assert
 	require.NoError(t, err)
@@ -81,7 +81,7 @@ func TestTrackActivity_NoNewActivity(t *testing.T) {
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
 	// Act
-	err := uc.Execute(prs, lastCheckTime)
+	err := uc.Execute(context.Background(), prs, lastCheckTime)
 
 	// Assert
 	require.NoError(t, err)
@@ -130,7 +130,7 @@ func TestTrackActivity_NewActivity_EmitsEvents(t *testing.T) {
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
 	// Act
-	err := uc.Execute(prs, lastCheckTime)
+	err := uc.Execute(context.Background(), prs, lastCheckTime)
 
 	// Assert
 	require.NoError(t, err)
@@ -159,7 +159,7 @@ func TestTrackActivity_EnrichError(t *testing.T) {
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
 	// Act
-	err := uc.Execute(prs, lastCheckTime)
+	err := uc.Execute(context.Background(), prs, lastCheckTime)
 
 	// Assert
 	assert.Error(t, err)
@@ -206,7 +206,7 @@ func TestTrackActivity_MarkUnseenError_ContinuesProcessing(t *testing.T) {
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
 	// Act
-	err := uc.Execute(prs, lastCheckTime)
+	err := uc.Execute(context.Background(), prs, lastCheckTime)
 
 	// Assert
 	require.NoError(t, err) // Use case doesn't return error on marking failure
@@ -249,7 +249,7 @@ func TestTrackActivity_PublishEventError_ContinuesProcessing(t *testing.T) {
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
 	// Act
-	err := uc.Execute(prs, lastCheckTime)
+	err := uc.Execute(context.Background(), prs, lastCheckTime)
 
 	// Assert
 	require.NoError(t, err) // Use case doesn't return error on event failure
@@ -281,7 +281,7 @@ func TestTrackActivity_TwoTierScheduling(t *testing.T) {
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
 	// Act - First execution
-	err := uc.Execute(prs, lastCheckTime)
+	err := uc.Execute(context.Background(), prs, lastCheckTime)
 
 	// Assert
 	require.NoError(t, err)
@@ -293,7 +293,7 @@ func TestTrackActivity_TwoTierScheduling(t *testing.T) {
 		return len(prsToCheck) == 1 && prsToCheck[0].Number() == 1
 	}), lastCheckTime).Return(nil).Once()
 
-	err = uc.Execute(prs, lastCheckTime)
+	err = uc.Execute(context.Background(), prs, lastCheckTime)
 
 	// Assert
 	require.NoError(t, err)

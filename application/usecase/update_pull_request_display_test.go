@@ -128,7 +128,7 @@ func TestUpdateDisplay_SinglePR(t *testing.T) {
 	uc := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
 
 	// Act
-	err := uc.Execute(prs, []*pullrequest.PullRequest{})
+	err := uc.Execute(context.Background(), prs, []*pullrequest.PullRequest{})
 
 	// Assert
 	require.NoError(t, err)
@@ -151,7 +151,7 @@ func TestUpdateDisplay_PreservesOriginalSlice(t *testing.T) {
 	uc := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
 
 	// Act
-	err := uc.Execute(originalOrder, []*pullrequest.PullRequest{})
+	err := uc.Execute(context.Background(), originalOrder, []*pullrequest.PullRequest{})
 
 	// Assert
 	require.NoError(t, err)
