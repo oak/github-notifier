@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -45,7 +46,7 @@ type PRCheckResult struct {
 
 // Execute fetches PRs and detects new ones
 // Returns the fetched PRs for use by other use cases (activity tracking, display)
-func (uc *CheckNewPullRequestsUseCase) Execute() (*PRCheckResult, error) {
+func (uc *CheckNewPullRequestsUseCase) Execute(ctx context.Context) (*PRCheckResult, error) {
 	// Fetch PRs from both sources
 	requestedReviewPRs, err := uc.prRepo.FetchRequestedReviews()
 	if err != nil {

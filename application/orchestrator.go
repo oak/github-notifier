@@ -1,6 +1,7 @@
 package application
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -39,11 +40,11 @@ func NewPullRequestOrchestrator(
 
 // ExecuteInitialCheck runs the initial check on application startup
 // Returns true if this was the first run ever
-func (o *PullRequestOrchestrator) ExecuteInitialCheck() error {
+func (o *PullRequestOrchestrator) ExecuteInitialCheck(ctx context.Context) error {
 	log.Println("Performing initial PR check...")
 
 	// Try first-run initialization
-	wasFirstRun, err := o.initializeUseCase.Execute()
+	wasFirstRun, err := o.initializeUseCase.Execute(ctx)
 	if err != nil {
 		return err
 	}
@@ -55,13 +56,13 @@ func (o *PullRequestOrchestrator) ExecuteInitialCheck() error {
 
 	// Not first run - execute regular check
 	log.Println("Existing state detected - checking for updates")
-	return o.ExecuteRegularCheck()
+	return o.ExecuteRegularCheck(ctx)
 }
 
 // ExecuteRegularCheck runs a regular periodic check for PR updates
-func (o *PullRequestOrchestrator) ExecuteRegularCheck() error {
+func (o *PullRequestOrchestrator) ExecuteRegularCheck(ctx context.Context) error {
 	// Step 1: Fetch and check for new PRs (emits events)
-	result, err := o.checkNewPRsUseCase.Execute()
+	result, err := o.checkNewPRsUseCase.Execute(ctx)
 	if err != nil {
 		log.Printf("Error checking for new PRs: %v", err)
 		return err
@@ -72,7 +73,7 @@ func (o *PullRequestOrchestrator) ExecuteRegularCheck() error {
 		allPRs := append([]*pullrequest.PullRequest{}, result.RequestedReviewPRs...)
 		allPRs = append(allPRs, result.UserCreatedPRs...)
 
-		if err := o.trackActivityUseCase.Execute(allPRs, o.lastCheckTime); err != nil {
+		if err := o.trackActivityUseCase.Execute(ctx, allPRs, o.lastCheckTime); err != nil {
 			log.Printf("Error tracking activity: %v", err)
 			// Don't return error - continue with display update
 		}
@@ -81,7 +82,7 @@ func (o *PullRequestOrchestrator) ExecuteRegularCheck() error {
 	}
 
 	// Step 3: Update display (after all events are emitted and state is updated)
-	if err := o.updateDisplayUseCase.Execute(result.RequestedReviewPRs, result.UserCreatedPRs); err != nil {
+	if err := o.updateDisplayUseCase.Execute(ctx, result.RequestedReviewPRs, result.UserCreatedPRs); err != nil {
 		log.Printf("Error updating display: %v", err)
 		return err
 	}

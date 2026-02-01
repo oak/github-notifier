@@ -1,6 +1,7 @@
 package usecase_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func TestCheckNewPRs_NoNewPRs(t *testing.T) {
 	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
 
 	// Act
-	result, err := uc.Execute()
+	result, err := uc.Execute(context.Background())
 
 	// Assert
 	require.NoError(t, err)
@@ -79,7 +80,7 @@ func TestCheckNewPRs_TrulyNewPRs_EmitsEvents(t *testing.T) {
 	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
 
 	// Act
-	result, err := uc.Execute()
+	result, err := uc.Execute(context.Background())
 
 	// Assert
 	require.NoError(t, err)
@@ -128,7 +129,7 @@ func TestCheckNewPRs_PRsWithActivity(t *testing.T) {
 	// No events should be published for PRs with activity
 
 	// Act
-	result, err := uc.Execute()
+	result, err := uc.Execute(context.Background())
 
 	// Assert
 	require.NoError(t, err)
@@ -185,7 +186,7 @@ func TestCheckNewPRs_MixedNewAndActivity(t *testing.T) {
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.NewPullRequestDetected")).Return(nil).Twice()
 
 	// Act
-	result, err := uc.Execute()
+	result, err := uc.Execute(context.Background())
 
 	// Assert
 	require.NoError(t, err)
@@ -212,7 +213,7 @@ func TestCheckNewPRs_FetchRequestedReviewsError(t *testing.T) {
 	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
 
 	// Act
-	result, err := uc.Execute()
+	result, err := uc.Execute(context.Background())
 
 	// Assert
 	assert.Error(t, err)
@@ -240,7 +241,7 @@ func TestCheckNewPRs_FetchUserCreatedError(t *testing.T) {
 	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
 
 	// Act
-	result, err := uc.Execute()
+	result, err := uc.Execute(context.Background())
 
 	// Assert
 	assert.Error(t, err)
@@ -273,7 +274,7 @@ func TestCheckNewPRs_FiltersDrafts(t *testing.T) {
 	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
 
 	// Act
-	result, err := uc.Execute()
+	result, err := uc.Execute(context.Background())
 
 	// Assert
 	require.NoError(t, err)
@@ -309,7 +310,7 @@ func TestCheckNewPRs_PublishEventError_ContinuesProcessing(t *testing.T) {
 	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
 
 	// Act
-	result, err := uc.Execute()
+	result, err := uc.Execute(context.Background())
 
 	// Assert
 	require.NoError(t, err) // Use case doesn't return error on event publish failure

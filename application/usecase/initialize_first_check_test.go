@@ -1,6 +1,7 @@
 package usecase_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -40,7 +41,7 @@ func TestInitializeFirstCheck_FirstRunEver(t *testing.T) {
 	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
 
 	// Act
-	isFirstRun, err := uc.Execute()
+	isFirstRun, err := uc.Execute(context.Background())
 
 	// Assert
 	require.NoError(t, err)
@@ -65,7 +66,7 @@ func TestInitializeFirstCheck_NotFirstRun(t *testing.T) {
 	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
 
 	// Act
-	isFirstRun, err := uc.Execute()
+	isFirstRun, err := uc.Execute(context.Background())
 
 	// Assert
 	require.NoError(t, err)
@@ -93,7 +94,7 @@ func TestInitializeFirstCheck_FetchRequestedReviewsError(t *testing.T) {
 	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
 
 	// Act
-	isFirstRun, err := uc.Execute()
+	isFirstRun, err := uc.Execute(context.Background())
 
 	// Assert
 	assert.Error(t, err)
@@ -123,7 +124,7 @@ func TestInitializeFirstCheck_FetchUserCreatedError(t *testing.T) {
 	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
 
 	// Act
-	isFirstRun, err := uc.Execute()
+	isFirstRun, err := uc.Execute(context.Background())
 
 	// Assert
 	assert.Error(t, err)
@@ -157,7 +158,7 @@ func TestInitializeFirstCheck_IncludeDrafts(t *testing.T) {
 	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
 
 	// Act
-	isFirstRun, err := uc.Execute()
+	isFirstRun, err := uc.Execute(context.Background())
 
 	// Assert
 	require.NoError(t, err)
@@ -184,7 +185,7 @@ func TestInitializeFirstCheck_NoPRs(t *testing.T) {
 	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
 
 	// Act
-	isFirstRun, err := uc.Execute()
+	isFirstRun, err := uc.Execute(context.Background())
 
 	// Assert
 	require.NoError(t, err)

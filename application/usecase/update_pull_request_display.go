@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"sort"
 
 	"github.com/oak3/github-notifier/application/port"
@@ -26,8 +27,7 @@ func NewUpdatePullRequestDisplayUseCase(
 
 // Execute updates the UI display with the given PRs
 // PRs are sorted by creation date (oldest first) before display
-func (uc *UpdatePullRequestDisplayUseCase) Execute(
-	requestedReviewPRs []*pullrequest.PullRequest,
+func (uc *UpdatePullRequestDisplayUseCase) Execute(ctx context.Context, requestedReviewPRs []*pullrequest.PullRequest,
 	userCreatedPRs []*pullrequest.PullRequest,
 ) error {
 	// Sort PRs by creation date (oldest first)

@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -35,6 +36,7 @@ func NewTrackPullRequestActivityUseCase(
 // Execute checks for new activity on PRs using two-tier scheduling
 // Only checks PRs that are due based on the scheduling strategy
 func (uc *TrackPullRequestActivityUseCase) Execute(
+	ctx context.Context,
 	prs []*pullrequest.PullRequest,
 	lastCheckTime time.Time,
 ) error {

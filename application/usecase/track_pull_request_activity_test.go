@@ -1,6 +1,7 @@
 package usecase_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -25,7 +26,7 @@ func TestTrackActivity_EmptyPRList(t *testing.T) {
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
 
 	// Act
-	err := uc.Execute([]*pullrequest.PullRequest{}, time.Now())
+	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{}, time.Now())
 
 	// Assert
 	require.NoError(t, err)

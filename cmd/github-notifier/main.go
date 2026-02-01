@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"sync"
 	"time"
@@ -137,7 +138,8 @@ func (app *App) onReady() {
 	app.menuAdapter.Setup()
 
 	// Initial check
-	if err := app.orchestrator.ExecuteInitialCheck(); err != nil {
+	ctx := context.Background()
+	if err := app.orchestrator.ExecuteInitialCheck(ctx); err != nil {
 		log.Printf("Error during initial check: %v", err)
 	}
 
@@ -148,7 +150,8 @@ func (app *App) onReady() {
 		defer app.wg.Done()
 		for range app.checkTicker.C {
 			log.Println("Checking for PR updates...")
-			if err := app.orchestrator.ExecuteRegularCheck(); err != nil {
+			ctx := context.Background()
+			if err := app.orchestrator.ExecuteRegularCheck(ctx); err != nil {
 				log.Printf("Error checking PRs: %v", err)
 			}
 		}

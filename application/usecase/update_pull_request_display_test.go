@@ -1,6 +1,7 @@
 package usecase_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -45,7 +46,7 @@ func TestUpdateDisplay_SortsByCreatedDate(t *testing.T) {
 	uc := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
 
 	// Act
-	err := uc.Execute(requestedPRs, userPRs)
+	err := uc.Execute(context.Background(), requestedPRs, userPRs)
 
 	// Assert
 	require.NoError(t, err)
@@ -65,7 +66,7 @@ func TestUpdateDisplay_EmptyPRs(t *testing.T) {
 	uc := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
 
 	// Act
-	err := uc.Execute(emptyPRs, emptyPRs)
+	err := uc.Execute(context.Background(), emptyPRs, emptyPRs)
 
 	// Assert
 	require.NoError(t, err)
@@ -106,7 +107,7 @@ func TestUpdateDisplay_BothRequestedAndUserPRs(t *testing.T) {
 	uc := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
 
 	// Act
-	err := uc.Execute(requestedPRs, userPRs)
+	err := uc.Execute(context.Background(), requestedPRs, userPRs)
 
 	// Assert
 	require.NoError(t, err)

@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"log"
 
 	"github.com/oak3/github-notifier/application/port"
@@ -33,7 +34,7 @@ func NewInitializeFirstCheckUseCase(
 
 // Execute runs the first-run initialization
 // Returns true if this was the first run (tracking service was empty)
-func (uc *InitializeFirstCheckUseCase) Execute() (bool, error) {
+func (uc *InitializeFirstCheckUseCase) Execute(ctx context.Context) (bool, error) {
 	// Check if this is truly the first run ever
 	isFirstRunEver := uc.trackingService.IsEmpty()
 

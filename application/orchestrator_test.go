@@ -50,7 +50,7 @@ func TestOrchestrator_ExecuteInitialCheck_FirstRun(t *testing.T) {
 	)
 
 	// Act
-	err := orchestrator.ExecuteInitialCheck()
+	err := orchestrator.ExecuteInitialCheck(context.Background())
 
 	// Assert
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestOrchestrator_ExecuteInitialCheck_NotFirstRun(t *testing.T) {
 	)
 
 	// Act
-	err := orchestrator.ExecuteInitialCheck()
+	err := orchestrator.ExecuteInitialCheck(context.Background())
 
 	// Assert
 	require.NoError(t, err)
@@ -137,7 +137,7 @@ func TestOrchestrator_ExecuteRegularCheck_WithoutActivityTracking(t *testing.T) 
 	)
 
 	// Act
-	err := orchestrator.ExecuteRegularCheck()
+	err := orchestrator.ExecuteRegularCheck(context.Background())
 
 	// Assert
 	require.NoError(t, err)
@@ -182,7 +182,7 @@ func TestOrchestrator_ExecuteRegularCheck_WithActivityTracking(t *testing.T) {
 	)
 
 	// Act
-	err := orchestrator.ExecuteRegularCheck()
+	err := orchestrator.ExecuteRegularCheck(context.Background())
 
 	// Assert
 	require.NoError(t, err)
@@ -220,7 +220,7 @@ func TestOrchestrator_ExecuteRegularCheck_CheckNewPRsError(t *testing.T) {
 	)
 
 	// Act
-	err := orchestrator.ExecuteRegularCheck()
+	err := orchestrator.ExecuteRegularCheck(context.Background())
 
 	// Assert
 	assert.Error(t, err)
@@ -266,7 +266,7 @@ func TestOrchestrator_ExecuteRegularCheck_ActivityTrackingError_ContinuesWithDis
 	)
 
 	// Act
-	err := orchestrator.ExecuteRegularCheck()
+	err := orchestrator.ExecuteRegularCheck(context.Background())
 
 	// Assert
 	require.NoError(t, err) // Orchestrator doesn't fail on activity tracking error
