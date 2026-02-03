@@ -16,6 +16,7 @@ type PullRequest struct {
 	activities        []*Activity
 	lastActivityAt    time.Time
 	lastActivityCheck time.Time // When we last checked for activities
+	headCommitSHA     string    // Latest commit SHA (head)
 	events            []Event   // Domain events pending publication
 }
 
@@ -240,6 +241,26 @@ func (pr *PullRequest) UpdateLastActivityCheck() {
 // LastActivityCheck returns when we last checked for activities
 func (pr *PullRequest) LastActivityCheck() time.Time {
 	return pr.lastActivityCheck
+}
+
+// HeadCommitSHA returns the current head commit SHA
+func (pr *PullRequest) HeadCommitSHA() string {
+	return pr.headCommitSHA
+}
+
+// HeadCommitChanged checks if the head commit SHA has changed
+// Returns false if this is the first time seeing this PR (empty SHA)
+func (pr *PullRequest) HeadCommitChanged(newHeadSHA string) bool {
+	if pr.headCommitSHA == "" {
+		// First time seeing this PR - initialize but don't notify
+		return false
+	}
+	return pr.headCommitSHA != newHeadSHA
+}
+
+// UpdateHeadCommitSHA updates the stored head commit SHA
+func (pr *PullRequest) UpdateHeadCommitSHA(sha string) {
+	pr.headCommitSHA = sha
 }
 
 // CollectEvents returns all pending domain events and clears the internal event list

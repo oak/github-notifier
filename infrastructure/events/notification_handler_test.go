@@ -75,7 +75,8 @@ func TestNotificationHandler_HandleActivityDetected_Success(t *testing.T) {
 	event := pullrequest.NewActivityDetected(pr)
 
 	// Mock expectations
-	mockNotificationPort.On("NotifyNewPullRequests", "New activity on PR", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
+	// Since we have a comment activity, the title should be "New comment on PR"
+	mockNotificationPort.On("NotifyNewPullRequests", "New comment on PR", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
 		return len(prs) == 1 && prs[0] == pr
 	})).Return(nil)
 
@@ -105,7 +106,8 @@ func TestNotificationHandler_HandleActivityDetected_NotificationError(t *testing
 	expectedErr := errors.New("notification failed")
 
 	// Mock expectations
-	mockNotificationPort.On("NotifyNewPullRequests", "New activity on PR", mock.AnythingOfType("[]*pullrequest.PullRequest")).Return(expectedErr)
+	// Since we have a comment activity, the title should be "New comment on PR"
+	mockNotificationPort.On("NotifyNewPullRequests", "New comment on PR", mock.AnythingOfType("[]*pullrequest.PullRequest")).Return(expectedErr)
 
 	// Act
 	err := handler.Handle(context.Background(), &event)
@@ -157,7 +159,8 @@ func TestNotificationHandler_HandleMultipleActivities(t *testing.T) {
 	event := pullrequest.NewActivityDetected(pr)
 
 	// Mock expectations
-	mockNotificationPort.On("NotifyNewPullRequests", "New activity on PR", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
+	// Since we have a review activity, the title should be "New review on PR"
+	mockNotificationPort.On("NotifyNewPullRequests", "New review on PR", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
 		// Should send the PR with both activities
 		return len(prs) == 1 && prs[0] == pr && len(prs[0].Activities()) == 2
 	})).Return(nil)

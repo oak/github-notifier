@@ -19,6 +19,7 @@ const (
 	ActivityTypeReview   ActivityType = "review"
 	ActivityTypeCommit   ActivityType = "commit"
 	ActivityTypeReaction ActivityType = "reaction"
+	ActivityTypePush     ActivityType = "push"
 )
 
 // NewActivity creates a new activity

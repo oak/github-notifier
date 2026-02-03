@@ -55,6 +55,7 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 	}
 
 	// Enrich PRs with activities since last check
+	// This also updates the head commit SHA and creates push activities if head changed
 	if err := uc.prRepo.EnrichWithActivities(prsToCheck, lastCheckTime); err != nil {
 		log.Error().Err(err).Msg("Error enriching PRs with activities")
 		return err

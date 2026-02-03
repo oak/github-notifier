@@ -70,14 +70,51 @@ func (h *NotificationEventHandler) handlePRActivityDetected(event *pullrequest.A
 		event.Repository.NameWithOwner(),
 		len(event.Activities))
 
+	// Determine notification title based on activity types
+	title := h.getNotificationTitle(event.Activities)
+
 	// Send notification with the PR from the event
 	prs := []*pullrequest.PullRequest{event.PullRequest}
-	if err := h.notificationPort.NotifyNewPullRequests("New activity on PR", prs); err != nil {
+	if err := h.notificationPort.NotifyNewPullRequests(title, prs); err != nil {
 		log.Error().Msgf("Error sending notification for PR activity: %v", err)
 		return err
 	}
 
 	return nil
+}
+
+// getNotificationTitle determines the appropriate notification title based on activity types
+// Priority: push > review > comment > other
+func (h *NotificationEventHandler) getNotificationTitle(activities []*pullrequest.Activity) string {
+	hasPush := false
+	hasReview := false
+	hasComment := false
+
+	// Scan all activities to determine priority
+	for _, activity := range activities {
+		switch activity.Type() {
+		case pullrequest.ActivityTypePush:
+			hasPush = true
+		case pullrequest.ActivityTypeReview:
+			hasReview = true
+		case pullrequest.ActivityTypeComment:
+			hasComment = true
+		}
+	}
+
+	// Return based on priority
+	if hasPush {
+		return "New commits pushed to PR"
+	}
+	if hasReview {
+		return "New review on PR"
+	}
+	if hasComment {
+		return "New comment on PR"
+	}
+
+	// Default fallback
+	return "New activity on PR"
 }
 
 // handlePRMerged sends a notification when a PR is merged
