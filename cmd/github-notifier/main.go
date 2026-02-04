@@ -94,8 +94,14 @@ func main() {
 
 	eventBus.Subscribe("NewPullRequestDetected", notificationHandler)
 	eventBus.Subscribe("PullRequestActivityDetected", notificationHandler)
+	eventBus.Subscribe("ActivityDetected", notificationHandler)
+	eventBus.Subscribe("Merged", notificationHandler)
+	eventBus.Subscribe("Closed", notificationHandler)
 	eventBus.Subscribe("NewPullRequestDetected", trackingHandler)
 	eventBus.Subscribe("PullRequestActivityDetected", trackingHandler)
+	eventBus.Subscribe("ActivityDetected", trackingHandler)
+	eventBus.Subscribe("Merged", trackingHandler)
+	eventBus.Subscribe("Closed", trackingHandler)
 
 	// Initialize use cases
 	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(

@@ -28,7 +28,7 @@ func NewInMemoryEventBus() *InMemoryEventBus {
 // eventType should be the concrete type name (e.g., "NewPullRequestDetected")
 func (bus *InMemoryEventBus) Subscribe(eventType string, handler port.EventHandler) {
 	bus.handlers[eventType] = append(bus.handlers[eventType], handler)
-	log.Info().Msgf("Event handler registered for: %s", eventType)
+	log.Info().Msgf("Event handler registered for: %s by %s", eventType, reflect.TypeOf(handler).Elem().Name())
 }
 
 // Publish dispatches an event to all registered handlers for that event type
