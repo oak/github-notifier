@@ -67,3 +67,8 @@ func (a *Adapter) NotifyNewPullRequests(title string, prs []*pullrequest.PullReq
 	log.Info().Msgf("Sent Slack notification: %s with %d PRs", title, len(prs))
 	return nil
 }
+
+// SupportsClickActions returns false for Slack adapter (links are in message)
+func (a *Adapter) SupportsClickActions() bool {
+	return false
+}

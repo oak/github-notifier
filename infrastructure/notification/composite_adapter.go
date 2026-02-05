@@ -38,3 +38,13 @@ func (c *CompositeAdapter) NotifyNewPullRequests(title string, prs []*pullreques
 
 	return firstError
 }
+
+// SupportsClickActions returns true if any adapter supports click actions
+func (c *CompositeAdapter) SupportsClickActions() bool {
+	for _, adapter := range c.adapters {
+		if adapter.SupportsClickActions() {
+			return true
+		}
+	}
+	return false
+}

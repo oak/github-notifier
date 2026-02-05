@@ -49,6 +49,11 @@ func (a *Adapter) NotifyNewPullRequests(title string, prs []*pullrequest.PullReq
 	return nil
 }
 
+// SupportsClickActions returns false for the generic desktop adapter
+func (a *Adapter) SupportsClickActions() bool {
+	return false
+}
+
 // selectIcon selects the appropriate icon based on system theme
 func (a *Adapter) selectIcon() []byte {
 	theme := a.themeProvider.GetSystemTheme()

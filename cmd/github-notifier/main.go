@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/oak3/github-notifier/infrastructure/github"
 	"github.com/oak3/github-notifier/infrastructure/notification"
 	"github.com/oak3/github-notifier/infrastructure/notification/desktop"
+	"github.com/oak3/github-notifier/infrastructure/notification/macos"
 	"github.com/oak3/github-notifier/infrastructure/notification/slack"
 	"github.com/oak3/github-notifier/infrastructure/persistence/memory"
 	"github.com/oak3/github-notifier/infrastructure/ui"
@@ -55,9 +57,23 @@ func main() {
 	trackingService := pullrequest.NewTrackingService(seenRepo)
 	themeProvider := ui.NewSystemThemeProvider()
 
-	// Setup notification adapters (desktop + optional Slack)
+	// Setup notification adapters (OS-specific desktop + optional Slack)
 	var notificationAdapter port.NotificationPort
-	desktopAdapter := desktop.NewAdapter(themeProvider)
+	var desktopAdapter port.NotificationPort
+
+	// Use OS-specific adapter for better native support
+	switch runtime.GOOS {
+	case "darwin":
+		log.Info().Msg("Using macOS native notifications with click action support")
+		desktopAdapter = macos.NewAdapter(themeProvider)
+	default:
+		log.Info().Msgf("Using generic desktop notifications for %s", runtime.GOOS)
+		desktopAdapter = desktop.NewAdapter(themeProvider)
+	}
+
+	if desktopAdapter.SupportsClickActions() {
+		log.Info().Msg("Click actions enabled - clicking notifications will open PRs")
+	}
 
 	if cfg.SlackOAuthToken != "" {
 		log.Info().Msg("Slack OAuth token detected, enabling Slack notifications")
