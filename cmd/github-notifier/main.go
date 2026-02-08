@@ -21,6 +21,7 @@ import (
 	"github.com/oak3/github-notifier/infrastructure/github"
 	"github.com/oak3/github-notifier/infrastructure/notification"
 	"github.com/oak3/github-notifier/infrastructure/notification/desktop"
+	"github.com/oak3/github-notifier/infrastructure/notification/linux"
 	"github.com/oak3/github-notifier/infrastructure/notification/macos"
 	"github.com/oak3/github-notifier/infrastructure/notification/slack"
 	"github.com/oak3/github-notifier/infrastructure/persistence/memory"
@@ -66,6 +67,9 @@ func main() {
 	case "darwin":
 		log.Info().Msg("Using macOS native notifications with click action support")
 		desktopAdapter = macos.NewAdapter(themeProvider)
+	case "linux":
+		log.Info().Msg("Using Linux native notifications with click action support")
+		desktopAdapter = linux.NewAdapter(themeProvider)
 	default:
 		log.Info().Msgf("Using generic desktop notifications for %s", runtime.GOOS)
 		desktopAdapter = desktop.NewAdapter(themeProvider)

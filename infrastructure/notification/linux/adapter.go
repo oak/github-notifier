@@ -1,0 +1,180 @@
+package linux
+
+import (
+	"fmt"
+
+	"github.com/esiqveland/notify"
+	"github.com/godbus/dbus/v5"
+	"github.com/rs/zerolog/log"
+
+	"github.com/oak3/github-notifier/domain/pullrequest"
+)
+
+// Adapter implements the NotificationPort interface for Linux using D-Bus
+type Adapter struct {
+	themeProvider ThemeProvider
+	conn          *dbus.Conn
+	notifier      notify.Notifier
+}
+
+// ThemeProvider provides the current system theme
+type ThemeProvider interface {
+	GetSystemTheme() string
+}
+
+// NewAdapter creates a new Linux notification adapter using D-Bus
+func NewAdapter(themeProvider ThemeProvider) *Adapter {
+	// Connect to session bus
+	conn, err := dbus.SessionBus()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to connect to D-Bus session bus, notifications may not work")
+		return &Adapter{
+			themeProvider: themeProvider,
+		}
+	}
+
+	notifier, err := notify.New(conn)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create D-Bus notifier, notifications may not work")
+		return &Adapter{
+			themeProvider: themeProvider,
+			conn:          conn,
+		}
+	}
+
+	return &Adapter{
+		themeProvider: themeProvider,
+		conn:          conn,
+		notifier:      notifier,
+	}
+}
+
+// NotifyNewPullRequests sends a notification about new pull requests with click action
+func (a *Adapter) NotifyNewPullRequests(title string, prs []*pullrequest.PullRequest) error {
+	if len(prs) == 0 {
+		return nil
+	}
+
+	if a.notifier == nil {
+		log.Warn().Msg("D-Bus notifier not initialized, skipping notification")
+		return nil
+	}
+
+	message := fmt.Sprintf("%s: %d", title, len(prs))
+	prList := ""
+	for _, pr := range prs {
+		prList += fmt.Sprintf("\n%s #%d", pr.RepositoryName(), pr.Number())
+	}
+
+	// For single PR, open it on click. For multiple PRs, open the first one
+	var urlToOpen string
+	if len(prs) == 1 {
+		urlToOpen = prs[0].URL()
+	} else if len(prs) > 1 {
+		// For multiple PRs, could open first one or a GitHub search
+		urlToOpen = prs[0].URL()
+		prList += "\n\nClick to open first PR"
+	}
+
+	notification := notify.Notification{
+		AppName:       "GitHub Notifier",
+		Summary:       "GitHub Notifier",
+		Body:          message + prList,
+		ExpireTimeout: 5000, // 5 seconds
+	}
+
+	// Add default action (triggered on click)
+	if urlToOpen != "" {
+		notification.Actions = []notify.Action{
+			{
+				Key:   "default",
+				Label: "Open PR",
+			},
+		}
+
+		// Set up action handler in a goroutine to listen for clicks
+		go a.handleNotificationActions(urlToOpen)
+	}
+
+	// Send notification
+	_, err := a.notifier.SendNotification(notification)
+	if err != nil {
+		log.Error().Err(err).Msg("Error sending Linux notification")
+		return err
+	}
+
+	return nil
+}
+
+// handleNotificationActions listens for notification action signals and opens URLs
+func (a *Adapter) handleNotificationActions(url string) {
+	// Listen for action invoked signals
+	// This is a simplified version - in production you'd want to match specific notification IDs
+	// and handle cleanup properly
+	signals := make(chan *dbus.Signal, 10)
+	a.conn.Signal(signals)
+
+	// Match both ActionInvoked (for action buttons) and ActivationToken (for notification body clicks)
+	a.conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0,
+		"type='signal',interface='org.freedesktop.Notifications',member='ActionInvoked'")
+	a.conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0,
+		"type='signal',interface='org.freedesktop.Notifications',member='ActivationToken'")
+
+	// Listen for the action - either button click or notification body click
+	sig := <-signals
+
+	// Handle ActivationToken (notification body clicked) - common on KDE/KWin
+	if sig.Name == "org.freedesktop.Notifications.ActivationToken" {
+		log.Debug().Str("signal", sig.Name).Msg("Notification clicked, opening URL")
+		if err := a.openURL(url); err != nil {
+			log.Error().Err(err).Msg("Failed to open PR URL")
+		}
+		return
+	}
+
+	// Handle ActionInvoked (action button clicked)
+	if sig.Name == "org.freedesktop.Notifications.ActionInvoked" && len(sig.Body) >= 2 {
+		actionKey, ok := sig.Body[1].(string)
+		if ok && actionKey == "default" {
+			log.Debug().Str("action", actionKey).Msg("Notification action invoked, opening URL")
+			if err := a.openURL(url); err != nil {
+				log.Error().Err(err).Msg("Failed to open PR URL")
+			}
+		}
+	}
+}
+
+// openURL opens a URL in the default browser
+func (a *Adapter) openURL(url string) error {
+	// Use xdg-open on Linux to open URLs in the default browser
+	conn, err := dbus.SessionBus()
+	if err != nil {
+		return fmt.Errorf("failed to connect to session bus: %w", err)
+	}
+
+	obj := conn.Object("org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop")
+	call := obj.Call("org.freedesktop.portal.OpenURI.OpenURI", 0, "", url, map[string]dbus.Variant{})
+
+	if call.Err != nil {
+		// Fallback to xdg-open if portal doesn't work
+		log.Debug().Msg("Portal failed, attempting xdg-open fallback")
+		// This would require exec.Command, but keeping D-Bus for now
+		return call.Err
+	}
+
+	log.Info().Str("url", url).Msg("Opened PR URL")
+	return nil
+}
+
+// SupportsClickActions returns true for Linux adapter
+func (a *Adapter) SupportsClickActions() bool {
+	return a.notifier != nil
+}
+
+// Close cleans up the D-Bus connection
+func (a *Adapter) Close() error {
+	if a.conn != nil {
+		return a.conn.Close()
+	}
+	return nil
+}
