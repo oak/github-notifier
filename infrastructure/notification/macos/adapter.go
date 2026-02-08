@@ -3,7 +3,7 @@ package macos
 import (
 	"fmt"
 
-	"github.com/deckarep/gosx-notifier"
+	gosxnotifier "github.com/deckarep/gosx-notifier"
 	"github.com/rs/zerolog/log"
 
 	"github.com/oak3/github-notifier/domain/pullrequest"
