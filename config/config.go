@@ -12,10 +12,10 @@ type Config struct {
 	CheckInterval           int // in minutes
 	MaxNumberOfRepos        int
 	MaxNumberOfPRs          int
-	EnableActivityTracking  bool // Enable checking for comments/reviews/commits (increases API usage)
-	RecentPRThresholdHours  int  // PRs created within this are "recent" and checked every minute
-	StalePRCheckIntervalMin int  // Check stale PRs every N minutes
-	IncludeDraftPRs         bool // Include draft PRs where user participated (default: true)
+	EnableActivityTracking  bool   // Enable checking for comments/reviews/commits (increases API usage)
+	RecentPRThresholdHours  int    // PRs created within this are "recent" and checked every minute
+	StalePRCheckIntervalMin int    // Check stale PRs every N minutes
+	IncludeDraftPRs         bool   // Include draft PRs where user participated (default: true)
 	MacOSNotificationSender string // macOS notification sender bundle ID (optional)
 }
 
