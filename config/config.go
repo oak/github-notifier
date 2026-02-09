@@ -16,6 +16,7 @@ type Config struct {
 	RecentPRThresholdHours  int  // PRs created within this are "recent" and checked every minute
 	StalePRCheckIntervalMin int  // Check stale PRs every N minutes
 	IncludeDraftPRs         bool // Include draft PRs where user participated (default: true)
+	MacOSNotificationSender string // macOS notification sender bundle ID (optional)
 }
 
 // LoadConfig loads configuration from environment variables
@@ -30,6 +31,7 @@ func LoadConfig() *Config {
 		RecentPRThresholdHours:  getEnvInt("RECENT_PR_THRESHOLD_HOURS", 72),
 		StalePRCheckIntervalMin: getEnvInt("STALE_PR_CHECK_INTERVAL", 15),
 		IncludeDraftPRs:         getEnv("INCLUDE_DRAFT_PRS", "true") == "true",
+		MacOSNotificationSender: getEnv("MACOS_NOTIFICATION_SENDER", ""),
 	}
 }
 

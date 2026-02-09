@@ -12,6 +12,7 @@ import (
 // Adapter implements the NotificationPort interface for macOS
 type Adapter struct {
 	themeProvider ThemeProvider
+	sender        string
 }
 
 // ThemeProvider provides the current system theme
@@ -20,9 +21,10 @@ type ThemeProvider interface {
 }
 
 // NewAdapter creates a new macOS notification adapter
-func NewAdapter(themeProvider ThemeProvider) *Adapter {
+func NewAdapter(themeProvider ThemeProvider, sender string) *Adapter {
 	return &Adapter{
 		themeProvider: themeProvider,
+		sender:        sender,
 	}
 }
 
@@ -50,7 +52,9 @@ func (a *Adapter) NotifyNewPullRequests(title string, prs []*pullrequest.PullReq
 
 	note := gosxnotifier.NewNotification(message + prList)
 	note.Title = "GitHub Notifier"
-	note.Sender = "com.apple.Safari" // Makes it look like Safari notification
+	if a.sender != "" {
+		note.Sender = a.sender
+	}
 	note.Sound = gosxnotifier.Default
 
 	// Set up click action to open PR URL when notification is clicked

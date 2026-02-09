@@ -66,7 +66,7 @@ func main() {
 	switch runtime.GOOS {
 	case "darwin":
 		log.Info().Msg("Using macOS native notifications with click action support")
-		desktopAdapter = macos.NewAdapter(themeProvider)
+		desktopAdapter = macos.NewAdapter(themeProvider, cfg.MacOSNotificationSender)
 	case "linux":
 		log.Info().Msg("Using Linux native notifications with click action support")
 		desktopAdapter = linux.NewAdapter(themeProvider)
