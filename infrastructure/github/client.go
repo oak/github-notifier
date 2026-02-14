@@ -13,6 +13,7 @@ const githubAPIURL = "https://api.github.com/graphql"
 // Client handles HTTP communication with GitHub API
 type Client struct {
 	httpClient *http.Client
+	baseURL    string
 }
 
 // NewClient creates a new GitHub API client
@@ -24,6 +25,20 @@ func NewClient(token string) *Client {
 
 	return &Client{
 		httpClient: &http.Client{Transport: transport},
+		baseURL:    githubAPIURL,
+	}
+}
+
+// NewClientWithURL creates a new GitHub API client with a custom base URL (for testing)
+func NewClientWithURL(token string, baseURL string) *Client {
+	transport := &AuthTransport{
+		token: token,
+		next:  http.DefaultTransport,
+	}
+
+	return &Client{
+		httpClient: &http.Client{Transport: transport},
+		baseURL:    baseURL,
 	}
 }
 
@@ -50,7 +65,7 @@ func (c *Client) ExecuteQuery(query string, variables map[string]interface{}) (*
 		return nil, fmt.Errorf("failed to marshal query: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", githubAPIURL, bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", c.baseURL, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -88,7 +103,7 @@ func (c *Client) ExecuteBatchedTimelineQuery(query string) (*BatchedTimelineResp
 		return nil, fmt.Errorf("failed to marshal query: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", githubAPIURL, bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", c.baseURL, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -128,7 +143,7 @@ func (c *Client) FetchAuthenticatedUserLogin() (string, error) {
 		return "", fmt.Errorf("failed to marshal query: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", githubAPIURL, bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", c.baseURL, bytes.NewBuffer(body))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
