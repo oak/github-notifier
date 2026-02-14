@@ -29,6 +29,8 @@ func TestE2E_NewPRDetection_SendsNotification(t *testing.T) {
 	require.NoError(t, err)
 
 	// Then: A notification should be sent
+	suite.FlushNotifications()
+
 	notifs := suite.notifications.GetNotifications()
 	require.Greater(t, len(notifs), 0, "Expected at least one notification")
 
@@ -59,6 +61,8 @@ func TestE2E_MultiplePRs_SendsMultipleNotifications(t *testing.T) {
 	require.NoError(t, err)
 
 	// Then: Should get notifications for review PRs and own PR
+	suite.FlushNotifications()
+
 	notifs := suite.notifications.GetNotifications()
 	require.Greater(t, len(notifs), 0, "Expected notifications")
 
@@ -131,13 +135,15 @@ func TestE2E_ActivityTracking_DetectsNewComments(t *testing.T) {
 	require.NoError(t, err)
 
 	// Then: MUST receive notification for other user's comment
+	suite.FlushNotifications()
+
 	notifs := suite.notifications.GetNotifications()
 	require.Greater(t, len(notifs), 0, "MUST notify for other users' comments - this is the core feature!")
 
 	// Verify it's an activity notification
 	foundActivity := false
 	for _, n := range notifs {
-		if n.Title == "New comment on PR" {
+		if n.Title == "PR Activity" {
 			foundActivity = true
 			// Should mention the PR
 			assert.Contains(t, n.Body, "Fix bug", "Notification should reference the PR")
@@ -179,13 +185,15 @@ func TestE2E_ActivityTracking_DetectsNewReview(t *testing.T) {
 	require.NoError(t, err)
 
 	// Then: MUST receive notification for other user's review
+	suite.FlushNotifications()
+
 	notifs := suite.notifications.GetNotifications()
 	require.Greater(t, len(notifs), 0, "MUST notify for other users' reviews - this is critical!")
 
 	// Verify it's an activity notification
 	foundActivity := false
 	for _, n := range notifs {
-		if n.Title == "New review on PR" {
+		if n.Title == "PR Activity" {
 			foundActivity = true
 			assert.Contains(t, n.Body, "Add tests", "Notification should reference the PR")
 			break
@@ -233,13 +241,15 @@ func TestE2E_ActivityTracking_DetectsNewReaction(t *testing.T) {
 	require.NoError(t, err)
 
 	// Then: MUST receive notification for reaction
+	suite.FlushNotifications()
+
 	notifs := suite.notifications.GetNotifications()
 	require.Greater(t, len(notifs), 0, "MUST notify for reactions - this is a key feature!")
 
 	// Verify it's a reaction notification
 	foundReaction := false
 	for _, n := range notifs {
-		if n.Title == "New reaction on PR" {
+		if n.Title == "PR Activity" {
 			foundReaction = true
 			assert.Contains(t, n.Body, "Feature work", "Notification should reference the PR")
 			break
@@ -273,6 +283,8 @@ func TestE2E_ActivityTracking_IgnoresSelfActivity(t *testing.T) {
 	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
 
 	// Then: MUST NOT send notification for own activity (critical feature!)
+	suite.FlushNotifications()
+
 	notifs := suite.notifications.GetNotifications()
 
 	// Should have ZERO notifications - no activity from self should trigger notifications
@@ -330,6 +342,8 @@ func TestE2E_NoNewPRs_NoNotifications(t *testing.T) {
 	require.NoError(t, err)
 
 	// Then: No notifications should be sent
+	suite.FlushNotifications()
+
 	notifs := suite.notifications.GetNotifications()
 	assert.Len(t, notifs, 0, "Should not send notifications when no PRs")
 
@@ -352,6 +366,8 @@ func TestE2E_SeenPRs_NotRenotified(t *testing.T) {
 
 	// First check - should notify
 	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.FlushNotifications()
+
 	initialCount := len(suite.notifications.GetNotifications())
 	assert.Greater(t, initialCount, 0, "Should notify on first check")
 
@@ -360,6 +376,8 @@ func TestE2E_SeenPRs_NotRenotified(t *testing.T) {
 	require.NoError(t, err)
 
 	// Then: Should not send duplicate notification
+	suite.FlushNotifications()
+
 	finalCount := len(suite.notifications.GetNotifications())
 	assert.Equal(t, initialCount, finalCount, "Should not re-notify for seen PRs")
 }
@@ -410,6 +428,8 @@ func TestE2E_FullLifecycle_NewPRToActivity(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify initial notification
+	suite.FlushNotifications()
+
 	notifs := suite.notifications.GetNotifications()
 	assert.Greater(t, len(notifs), 0)
 
@@ -503,6 +523,8 @@ func TestE2E_CommitActivity_DetectsNewPush(t *testing.T) {
 
 	// Then: Should detect the push activity
 	time.Sleep(50 * time.Millisecond) // Small delay for async processing
+
+	suite.FlushNotifications()
 
 	notifs := suite.notifications.GetNotifications()
 

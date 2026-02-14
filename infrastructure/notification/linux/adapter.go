@@ -2,11 +2,13 @@ package linux
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/esiqveland/notify"
 	"github.com/godbus/dbus/v5"
 	"github.com/rs/zerolog/log"
 
+	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
@@ -49,7 +51,169 @@ func NewAdapter(themeProvider ThemeProvider) *Adapter {
 	}
 }
 
+// NotifyPullRequests sends grouped notifications for pull requests
+func (a *Adapter) NotifyPullRequests(notifications []*port.PRNotificationData) error {
+	if len(notifications) == 0 {
+		return nil
+	}
+
+	if a.notifier == nil {
+		log.Warn().Msg("D-Bus notifier not initialized, skipping notification")
+		return nil
+	}
+
+	// Send one notification per PR
+	for _, prNotif := range notifications {
+		if err := a.sendPRNotification(prNotif); err != nil {
+			log.Error().Err(err).Msg("Error sending PR notification")
+			// Continue sending other notifications even if one fails
+		}
+	}
+
+	return nil
+}
+
+// sendPRNotification sends a single PR notification with all its activities
+func (a *Adapter) sendPRNotification(prNotif *port.PRNotificationData) error {
+	pr := prNotif.PullRequest
+
+	// Build the title
+	title := a.buildNotificationTitle(prNotif)
+
+	// Build the message body
+	body := a.buildNotificationBody(prNotif)
+
+	notification := notify.Notification{
+		AppName:       "GitHub Notifier",
+		Summary:       title,
+		Body:          body,
+		ExpireTimeout: 5000, // 5 seconds
+	}
+
+	// Add click action to open the PR
+	urlToOpen := pr.URL()
+	notification.Actions = []notify.Action{
+		{
+			Key:   "default",
+			Label: "Open PR",
+		},
+	}
+
+	// Set up action handler in a goroutine to listen for clicks
+	go a.handleNotificationActions(urlToOpen)
+
+	// Send notification
+	_, err := a.notifier.SendNotification(notification)
+	if err != nil {
+		log.Error().Err(err).Msg("Error sending Linux notification")
+		return err
+	}
+
+	return nil
+}
+
+// buildNotificationTitle creates the title for a PR notification
+func (a *Adapter) buildNotificationTitle(prNotif *port.PRNotificationData) string {
+	pr := prNotif.PullRequest
+
+	if prNotif.IsNew {
+		return "New PR"
+	}
+
+	return fmt.Sprintf("PR #%d Activity", pr.Number())
+}
+
+// buildNotificationBody creates the body for a PR notification
+func (a *Adapter) buildNotificationBody(prNotif *port.PRNotificationData) string {
+	pr := prNotif.PullRequest
+	var parts []string
+
+	// Add PR info
+	parts = append(parts, fmt.Sprintf("%s #%d", pr.RepositoryName(), pr.Number()))
+	parts = append(parts, pr.Title())
+
+	// Add "NEW" indicator if this is a new PR
+	if prNotif.IsNew {
+		parts = append(parts, "🆕 Needs review")
+	}
+
+	// Add activities
+	if len(prNotif.Activities) > 0 {
+		activityLines := []string{}
+
+		// Sort by priority: push > review > comment > reaction
+		activityOrder := []pullrequest.ActivityType{
+			pullrequest.ActivityTypePush,
+			pullrequest.ActivityTypeReview,
+			pullrequest.ActivityTypeComment,
+			pullrequest.ActivityTypeReaction,
+			pullrequest.ActivityTypeCommit,
+		}
+
+		for _, actType := range activityOrder {
+			for _, activity := range prNotif.Activities {
+				if activity.Type == actType {
+					label := a.getActivityLabel(activity.Type, activity.Count)
+					activityLines = append(activityLines, label)
+				}
+			}
+		}
+
+		if len(activityLines) > 0 {
+			parts = append(parts, "\n"+strings.Join(activityLines, "\n"))
+		}
+	}
+
+	// Add status changes
+	for _, statusChange := range prNotif.StatusChanges {
+		if statusChange.EventType == "merged" {
+			parts = append(parts, "✅ Merged")
+		} else if statusChange.EventType == "closed" {
+			parts = append(parts, "❌ Closed")
+		}
+	}
+
+	return strings.Join(parts, "\n")
+}
+
+// getActivityLabel returns a formatted label for an activity
+func (a *Adapter) getActivityLabel(actType pullrequest.ActivityType, count int) string {
+	switch actType {
+	case pullrequest.ActivityTypePush:
+		if count == 1 {
+			return "📤 1 new commit"
+		}
+		return fmt.Sprintf("📤 %d new commits", count)
+	case pullrequest.ActivityTypeReview:
+		if count == 1 {
+			return "👁 1 new review"
+		}
+		return fmt.Sprintf("👁 %d new reviews", count)
+	case pullrequest.ActivityTypeComment:
+		if count == 1 {
+			return "💬 1 new comment"
+		}
+		return fmt.Sprintf("💬 %d new comments", count)
+	case pullrequest.ActivityTypeReaction:
+		if count == 1 {
+			return "👍 1 new reaction"
+		}
+		return fmt.Sprintf("👍 %d new reactions", count)
+	case pullrequest.ActivityTypeCommit:
+		if count == 1 {
+			return "📝 1 new commit"
+		}
+		return fmt.Sprintf("📝 %d new commits", count)
+	default:
+		if count == 1 {
+			return "• 1 new activity"
+		}
+		return fmt.Sprintf("• %d new activities", count)
+	}
+}
+
 // NotifyNewPullRequests sends a notification about new pull requests with click action
+// DEPRECATED: Use NotifyPullRequests instead
 func (a *Adapter) NotifyNewPullRequests(title string, prs []*pullrequest.PullRequest) error {
 	if len(prs) == 0 {
 		return nil

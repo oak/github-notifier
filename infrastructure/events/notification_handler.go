@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
@@ -13,29 +14,31 @@ import (
 // Implements the EventHandler port
 type NotificationEventHandler struct {
 	notificationPort port.NotificationPort
+	aggregator       *NotificationAggregator
 }
 
 // NewNotificationEventHandler creates a new notification event handler
 func NewNotificationEventHandler(notificationPort port.NotificationPort) *NotificationEventHandler {
-	return &NotificationEventHandler{
+	handler := &NotificationEventHandler{
 		notificationPort: notificationPort,
 	}
+
+	// Create aggregator with 2-second flush interval
+	handler.aggregator = NewNotificationAggregator(2*time.Second, handler.sendGroupedNotifications)
+
+	return handler
 }
 
-// Handle processes domain events and sends appropriate notifications
+// Handle processes domain events and adds them to the aggregator
 func (h *NotificationEventHandler) Handle(ctx context.Context, event pullrequest.Event) error {
-	switch e := event.(type) {
-	case *pullrequest.NewPullRequestDetected:
-		return h.handleNewPRDetected(e)
-
-	case *pullrequest.ActivityDetected:
-		return h.handlePRActivityDetected(e)
-
-	case *pullrequest.Merged:
-		return h.handlePRMerged(e)
-
-	case *pullrequest.Closed:
-		return h.handlePRClosed(e)
+	switch event.(type) {
+	case *pullrequest.NewPullRequestDetected,
+		*pullrequest.ActivityDetected,
+		*pullrequest.Merged,
+		*pullrequest.Closed:
+		// Add event to aggregator for batching
+		h.aggregator.AddEvent(event)
+		return nil
 
 	case *pullrequest.StatusChanged:
 		// Status changes are already handled by specific events (merged, closed)
@@ -47,96 +50,58 @@ func (h *NotificationEventHandler) Handle(ctx context.Context, event pullrequest
 	}
 }
 
-// handleNewPRDetected sends a notification for newly detected PRs
-func (h *NotificationEventHandler) handleNewPRDetected(event *pullrequest.NewPullRequestDetected) error {
-	log.Info().Msgf("Sending notification: New PR detected - %s in %s",
-		event.PullRequestID.URL(),
-		event.Repository.NameWithOwner())
-
-	// Send notification with the PR from the event
-	prs := []*pullrequest.PullRequest{event.PullRequest}
-	if err := h.notificationPort.NotifyNewPullRequests("New PR needing review", prs); err != nil {
-		log.Error().Msgf("Error sending notification for new PR: %v", err)
-		return err
+// sendGroupedNotifications sends the aggregated notifications
+func (h *NotificationEventHandler) sendGroupedNotifications(notifications []*PRNotification) {
+	if len(notifications) == 0 {
+		return
 	}
 
-	return nil
-}
+	log.Info().Msgf("Sending %d grouped PR notification(s)", len(notifications))
 
-// handlePRActivityDetected sends a notification for PR activity
-func (h *NotificationEventHandler) handlePRActivityDetected(event *pullrequest.ActivityDetected) error {
-	log.Info().Msgf("Sending notification: New activity on PR - %s in %s (%d activities)",
-		event.PullRequestID.URL(),
-		event.Repository.NameWithOwner(),
-		len(event.Activities))
-
-	// Determine notification title based on activity types
-	title := h.getNotificationTitle(event.Activities)
-
-	// Send notification with the PR from the event
-	prs := []*pullrequest.PullRequest{event.PullRequest}
-	if err := h.notificationPort.NotifyNewPullRequests(title, prs); err != nil {
-		log.Error().Msgf("Error sending notification for PR activity: %v", err)
-		return err
-	}
-
-	return nil
-}
-
-// getNotificationTitle determines the appropriate notification title based on activity types
-// Priority: push > review > comment > reaction > other
-func (h *NotificationEventHandler) getNotificationTitle(activities []*pullrequest.Activity) string {
-	hasPush := false
-	hasReview := false
-	hasComment := false
-	hasReaction := false
-
-	// Scan all activities to determine priority
-	for _, activity := range activities {
-		switch activity.Type() {
-		case pullrequest.ActivityTypePush:
-			hasPush = true
-		case pullrequest.ActivityTypeReview:
-			hasReview = true
-		case pullrequest.ActivityTypeComment:
-			hasComment = true
-		case pullrequest.ActivityTypeReaction:
-			hasReaction = true
+	// Convert to port notification data
+	portNotifications := make([]*port.PRNotificationData, 0, len(notifications))
+	for _, notification := range notifications {
+		portNotification := &port.PRNotificationData{
+			PullRequest:   notification.PullRequest,
+			IsNew:         notification.IsNew,
+			Activities:    make([]port.ActivityInfo, len(notification.Activities)),
+			StatusChanges: make([]port.StatusChange, len(notification.StatusChanges)),
 		}
+
+		// Convert activities
+		for i, activity := range notification.Activities {
+			portNotification.Activities[i] = port.ActivityInfo{
+				Type:  activity.Type,
+				Count: activity.Count,
+			}
+		}
+
+		// Convert status changes
+		for i, statusChange := range notification.StatusChanges {
+			portNotification.StatusChanges[i] = port.StatusChange{
+				EventType: statusChange.EventType,
+			}
+		}
+
+		portNotifications = append(portNotifications, portNotification)
 	}
 
-	// Return based on priority
-	if hasPush {
-		return "New commits pushed to PR"
+	// Send the grouped notifications
+	if err := h.notificationPort.NotifyPullRequests(portNotifications); err != nil {
+		log.Error().Msgf("Error sending grouped notifications: %v", err)
 	}
-	if hasReview {
-		return "New review on PR"
-	}
-	if hasComment {
-		return "New comment on PR"
-	}
-	if hasReaction {
-		return "New reaction on PR"
-	}
-
-	// Default fallback
-	return "New activity on PR"
 }
 
-// handlePRMerged sends a notification when a PR is merged
-func (h *NotificationEventHandler) handlePRMerged(event *pullrequest.Merged) error {
-	log.Info().Msgf("PR merged: %s in %s",
-		event.PullRequestID.URL(),
-		event.Repository.NameWithOwner())
-	// Could send a notification if desired, but typically merges don't need notifications
-	return nil
+// Stop stops the handler and flushes any pending notifications
+func (h *NotificationEventHandler) Stop() {
+	if h.aggregator != nil {
+		h.aggregator.Stop()
+	}
 }
 
-// handlePRClosed sends a notification when a PR is closed
-func (h *NotificationEventHandler) handlePRClosed(event *pullrequest.Closed) error {
-	log.Info().Msgf("PR closed: %s in %s",
-		event.PullRequestID.URL(),
-		event.Repository.NameWithOwner())
-	// Could send a notification if desired, but typically closes don't need notifications
-	return nil
+// Flush immediately flushes any pending notifications without stopping the handler
+func (h *NotificationEventHandler) Flush() {
+	if h.aggregator != nil {
+		h.aggregator.Flush()
+	}
 }

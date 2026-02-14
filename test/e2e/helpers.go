@@ -1,6 +1,3 @@
-//go:build e2e
-// +build e2e
-
 package e2e
 
 import (
@@ -11,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
@@ -479,7 +477,37 @@ func NewSpyNotificationAdapter() *SpyNotificationAdapter {
 	}
 }
 
+// NotifyPullRequests captures the notification (implements NotificationPort)
+func (s *SpyNotificationAdapter) NotifyPullRequests(notifications []*port.PRNotificationData) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Capture one notification per PR with all its activities
+	for _, prNotif := range notifications {
+		pr := prNotif.PullRequest
+
+		// Build a title based on whether it's new or has activity
+		title := "New PR needing review"
+		if !prNotif.IsNew && len(prNotif.Activities) > 0 {
+			title = "PR Activity"
+		}
+
+		// Build body with PR info and activities
+		body := fmt.Sprintf("%s #%d", pr.Title(), pr.Number())
+
+		s.notifications = append(s.notifications, CapturedNotification{
+			Title: title,
+			Body:  body,
+			URL:   pr.URL(),
+			Time:  time.Now(),
+		})
+	}
+
+	return nil
+}
+
 // NotifyNewPullRequests captures the notification (implements NotificationPort)
+// DEPRECATED: Use NotifyPullRequests instead
 func (s *SpyNotificationAdapter) NotifyNewPullRequests(title string, prs []*pullrequest.PullRequest) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

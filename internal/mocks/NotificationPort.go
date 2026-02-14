@@ -5,6 +5,7 @@ package mocks
 import (
 	mock "github.com/stretchr/testify/mock"
 
+	port "github.com/oak3/github-notifier/application/port"
 	pullrequest "github.com/oak3/github-notifier/domain/pullrequest"
 )
 
@@ -24,6 +25,24 @@ func (_m *NotificationPort) NotifyNewPullRequests(title string, prs []*pullreque
 	var r0 error
 	if rf, ok := ret.Get(0).(func(string, []*pullrequest.PullRequest) error); ok {
 		r0 = rf(title, prs)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// NotifyPullRequests provides a mock function with given fields: notifications
+func (_m *NotificationPort) NotifyPullRequests(notifications []*port.PRNotificationData) error {
+	ret := _m.Called(notifications)
+
+	if len(ret) == 0 {
+		panic("no return value specified for NotifyPullRequests")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func([]*port.PRNotificationData) error); ok {
+		r0 = rf(notifications)
 	} else {
 		r0 = ret.Error(0)
 	}

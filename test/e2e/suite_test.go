@@ -18,13 +18,14 @@ import (
 
 // TestSuite holds the E2E test infrastructure
 type TestSuite struct {
-	ctx             context.Context
-	cancel          context.CancelFunc
-	mockGitHub      *MockGitHubServer
-	orchestrator    *application.PullRequestOrchestrator
-	notifications   *SpyNotificationAdapter
-	menuAdapter     *SpyUIAdapter
-	trackingService *pullrequest.TrackingService
+	ctx                 context.Context
+	cancel              context.CancelFunc
+	mockGitHub          *MockGitHubServer
+	orchestrator        *application.PullRequestOrchestrator
+	notifications       *SpyNotificationAdapter
+	menuAdapter         *SpyUIAdapter
+	trackingService     *pullrequest.TrackingService
+	notificationHandler *events.NotificationEventHandler
 }
 
 // SetupSuite creates a complete test environment
@@ -108,18 +109,23 @@ func SetupSuite(t *testing.T) *TestSuite {
 	)
 
 	return &TestSuite{
-		ctx:             ctx,
-		cancel:          cancel,
-		mockGitHub:      mockGitHub,
-		orchestrator:    orchestrator,
-		notifications:   notifications,
-		menuAdapter:     menuAdapter,
-		trackingService: trackingService,
+		ctx:                 ctx,
+		cancel:              cancel,
+		mockGitHub:          mockGitHub,
+		orchestrator:        orchestrator,
+		notifications:       notifications,
+		menuAdapter:         menuAdapter,
+		trackingService:     trackingService,
+		notificationHandler: notificationHandler,
 	}
 }
 
 // Teardown cleans up the test environment
 func (s *TestSuite) Teardown() {
+	// Flush any pending notifications
+	if s.notificationHandler != nil {
+		s.notificationHandler.Stop()
+	}
 	if s.mockGitHub != nil {
 		s.mockGitHub.Close()
 	}
@@ -155,7 +161,22 @@ func (s *TestSuite) GetLatestNotification() *CapturedNotification {
 	return &notifs[len(notifs)-1]
 }
 
-// ClearNotifications clears all captured notifications
+// ClearNotifications clears all captured notifications and flushes the aggregator
 func (s *TestSuite) ClearNotifications() {
+	// First flush any pending notifications from the aggregator to the spy
+	if s.notificationHandler != nil {
+		s.notificationHandler.Flush()
+	}
+	// Then clear the captured notifications from the spy
 	s.notifications.Clear()
+}
+
+// FlushNotifications immediately flushes any pending notifications
+func (s *TestSuite) FlushNotifications() {
+	if s.notificationHandler != nil {
+		// Manually flush the aggregator
+		s.notificationHandler.Stop()
+		// Recreate it for the next round
+		s.notificationHandler = events.NewNotificationEventHandler(s.notifications)
+	}
 }
