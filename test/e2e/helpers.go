@@ -43,6 +43,7 @@ type MockComment struct {
 	Author    string
 	Body      string
 	CreatedAt time.Time
+	Reactions []MockReaction
 }
 
 // MockReview represents a review
@@ -50,6 +51,14 @@ type MockReview struct {
 	Author    string
 	State     string
 	Body      string
+	CreatedAt time.Time
+	Reactions []MockReaction
+}
+
+// MockReaction represents a reaction emoji
+type MockReaction struct {
+	Content   string // e.g., "THUMBS_UP", "HEART", "LAUGH"
+	User      string // Username who reacted
 	CreatedAt time.Time
 }
 
@@ -211,6 +220,18 @@ func (m *MockGitHubServer) handleBatchedTimelineQuery(w http.ResponseWriter, que
 
 		// Add comments
 		for _, comment := range m.comments[pr.Number] {
+			// Build reactions for this comment
+			var reactionNodes []interface{}
+			for _, reaction := range comment.Reactions {
+				reactionNodes = append(reactionNodes, map[string]interface{}{
+					"content":   reaction.Content,
+					"createdAt": reaction.CreatedAt.Format(time.RFC3339Nano),
+					"user": map[string]string{
+						"login": reaction.User,
+					},
+				})
+			}
+
 			timelineNodes = append(timelineNodes, map[string]interface{}{
 				"__typename": "IssueComment",
 				"createdAt":  comment.CreatedAt.Format(time.RFC3339Nano),
@@ -218,11 +239,26 @@ func (m *MockGitHubServer) handleBatchedTimelineQuery(w http.ResponseWriter, que
 					"login": comment.Author,
 				},
 				"body": comment.Body,
+				"reactions": map[string]interface{}{
+					"nodes": reactionNodes,
+				},
 			})
 		}
 
 		// Add reviews
 		for _, review := range m.reviews[pr.Number] {
+			// Build reactions for this review
+			var reactionNodes []interface{}
+			for _, reaction := range review.Reactions {
+				reactionNodes = append(reactionNodes, map[string]interface{}{
+					"content":   reaction.Content,
+					"createdAt": reaction.CreatedAt.Format(time.RFC3339Nano),
+					"user": map[string]string{
+						"login": reaction.User,
+					},
+				})
+			}
+
 			timelineNodes = append(timelineNodes, map[string]interface{}{
 				"__typename": "PullRequestReview",
 				"createdAt":  review.CreatedAt.Format(time.RFC3339Nano),
@@ -231,6 +267,9 @@ func (m *MockGitHubServer) handleBatchedTimelineQuery(w http.ResponseWriter, que
 				},
 				"body":  review.Body,
 				"state": review.State,
+				"reactions": map[string]interface{}{
+					"nodes": reactionNodes,
+				},
 			})
 		}
 
@@ -317,6 +356,44 @@ func (m *MockGitHubServer) AddReview(prNumber int, review MockReview) {
 	}
 
 	m.reviews[prNumber] = append(m.reviews[prNumber], review)
+}
+
+// AddReactionToComment adds a reaction to an existing comment
+func (m *MockGitHubServer) AddReactionToComment(prNumber int, commentIndex int, reaction MockReaction) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if reaction.CreatedAt.IsZero() {
+		reaction.CreatedAt = time.Now()
+	}
+
+	comments := m.comments[prNumber]
+	if commentIndex >= 0 && commentIndex < len(comments) {
+		// Must update the struct in place
+		comment := comments[commentIndex]
+		comment.Reactions = append(comment.Reactions, reaction)
+		comments[commentIndex] = comment
+		m.comments[prNumber] = comments
+	}
+}
+
+// AddReactionToReview adds a reaction to an existing review
+func (m *MockGitHubServer) AddReactionToReview(prNumber int, reviewIndex int, reaction MockReaction) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if reaction.CreatedAt.IsZero() {
+		reaction.CreatedAt = time.Now()
+	}
+
+	reviews := m.reviews[prNumber]
+	if reviewIndex >= 0 && reviewIndex < len(reviews) {
+		// Must update the struct in place
+		review := reviews[reviewIndex]
+		review.Reactions = append(review.Reactions, reaction)
+		reviews[reviewIndex] = review
+		m.reviews[prNumber] = reviews
+	}
 }
 
 // AddCommit adds a commit to a PR

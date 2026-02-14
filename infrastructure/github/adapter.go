@@ -438,5 +438,51 @@ func (a *Adapter) parseTimelineItem(data map[string]interface{}) *TimelineItemDT
 		}
 	}
 
+	// Parse reactions
+	if reactions, ok := data["reactions"].(map[string]interface{}); ok {
+		dto.Reactions = &struct {
+			Nodes []struct {
+				Content   string    `json:"content"`
+				CreatedAt time.Time `json:"createdAt"`
+				User      *struct {
+					Login string `json:"login"`
+				} `json:"user"`
+			} `json:"nodes"`
+		}{}
+
+		if nodes, ok := reactions["nodes"].([]interface{}); ok {
+			for _, nodeData := range nodes {
+				if nodeMap, ok := nodeData.(map[string]interface{}); ok {
+					reaction := struct {
+						Content   string    `json:"content"`
+						CreatedAt time.Time `json:"createdAt"`
+						User      *struct {
+							Login string `json:"login"`
+						} `json:"user"`
+					}{}
+
+					if content, ok := nodeMap["content"].(string); ok {
+						reaction.Content = content
+					}
+					if createdAt, ok := nodeMap["createdAt"].(string); ok {
+						if t, err := time.Parse(time.RFC3339Nano, createdAt); err == nil {
+							reaction.CreatedAt = t
+						}
+					}
+					if user, ok := nodeMap["user"].(map[string]interface{}); ok {
+						reaction.User = &struct {
+							Login string `json:"login"`
+						}{}
+						if login, ok := user["login"].(string); ok {
+							reaction.User.Login = login
+						}
+					}
+
+					dto.Reactions.Nodes = append(dto.Reactions.Nodes, reaction)
+				}
+			}
+		}
+	}
+
 	return dto
 }

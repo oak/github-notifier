@@ -194,6 +194,60 @@ func TestE2E_ActivityTracking_DetectsNewReview(t *testing.T) {
 	assert.True(t, foundActivity, "Should send activity notification for reviews")
 }
 
+func TestE2E_ActivityTracking_DetectsNewReaction(t *testing.T) {
+	// Given: A tracked PR with a comment
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "Feature work",
+		Number: 321,
+		Author: "alice",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// Add initial comment (in the past so it's already "seen")
+	suite.mockGitHub.AddComment(321, MockComment{
+		Author:    "bob",
+		Body:      "Great work!",
+		CreatedAt: time.Now().Add(-2 * time.Hour), // Old comment
+	})
+
+	// Regular check to start tracking
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.ClearNotifications()
+
+	// Small delay to ensure clear timestamp separation
+	time.Sleep(500 * time.Millisecond)
+
+	// When: A reaction is added to the first comment (index 0) AFTER the last check
+	suite.mockGitHub.AddReactionToComment(321, 0, MockReaction{
+		Content: "THUMBS_UP",
+		User:    "charlie",
+		// CreatedAt will default to time.Now() in AddReactionToComment
+	})
+
+	// Regular check
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+
+	// Then: MUST receive notification for reaction
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify for reactions - this is a key feature!")
+
+	// Verify it's a reaction notification
+	foundReaction := false
+	for _, n := range notifs {
+		if n.Title == "New reaction on PR" {
+			foundReaction = true
+			assert.Contains(t, n.Body, "Feature work", "Notification should reference the PR")
+			break
+		}
+	}
+	assert.True(t, foundReaction, "Should send reaction notification")
+}
+
 func TestE2E_ActivityTracking_IgnoresSelfActivity(t *testing.T) {
 	// Given: A tracked PR
 	suite := SetupSuite(t)

@@ -127,7 +127,11 @@ func (m *Mapper) ToActivityList(pr *pullrequest.PullRequest, dtos []TimelineItem
 	var activities []*pullrequest.Activity
 
 	for _, dto := range dtos {
-		// Skip items older than since time
+		// Check for reactions on this timeline item (even if the item itself is old)
+		reactionActivities := m.ToReactionActivities(pr, dto, since, authenticatedUser)
+		activities = append(activities, reactionActivities...)
+
+		// Skip items older than since time for regular activities
 		if dto.CreatedAt.Before(since) {
 			continue
 		}
@@ -140,10 +144,6 @@ func (m *Mapper) ToActivityList(pr *pullrequest.PullRequest, dtos []TimelineItem
 			}
 			activities = append(activities, activity)
 		}
-
-		// Also extract reactions from this timeline item
-		reactionActivities := m.ToReactionActivities(pr, dto, since, authenticatedUser)
-		activities = append(activities, reactionActivities...)
 	}
 
 	return activities

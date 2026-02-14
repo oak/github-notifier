@@ -84,11 +84,12 @@ func (h *NotificationEventHandler) handlePRActivityDetected(event *pullrequest.A
 }
 
 // getNotificationTitle determines the appropriate notification title based on activity types
-// Priority: push > review > comment > other
+// Priority: push > review > comment > reaction > other
 func (h *NotificationEventHandler) getNotificationTitle(activities []*pullrequest.Activity) string {
 	hasPush := false
 	hasReview := false
 	hasComment := false
+	hasReaction := false
 
 	// Scan all activities to determine priority
 	for _, activity := range activities {
@@ -99,6 +100,8 @@ func (h *NotificationEventHandler) getNotificationTitle(activities []*pullreques
 			hasReview = true
 		case pullrequest.ActivityTypeComment:
 			hasComment = true
+		case pullrequest.ActivityTypeReaction:
+			hasReaction = true
 		}
 	}
 
@@ -111,6 +114,9 @@ func (h *NotificationEventHandler) getNotificationTitle(activities []*pullreques
 	}
 	if hasComment {
 		return "New comment on PR"
+	}
+	if hasReaction {
+		return "New reaction on PR"
 	}
 
 	// Default fallback
