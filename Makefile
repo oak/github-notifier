@@ -42,6 +42,15 @@ test-integration:
 	@echo "Running integration tests..."
 	@go test -v -tags=integration ./test/integration/... || echo "No integration tests found"
 
+## test-e2e: Run end-to-end tests
+test-e2e:
+	@echo "Running E2E tests..."
+	@go test -v -tags=e2e ./test/e2e/...
+
+## test-all: Run all test types (unit, integration, e2e)
+test-all: test test-e2e
+	@echo "All tests completed!"
+
 ## lint: Run golangci-lint
 lint:
 	@echo "Running linter..."

@@ -36,6 +36,26 @@ func NewAdapter(token string) *Adapter {
 	}
 }
 
+// NewAdapterWithURL creates a new GitHub adapter with a custom base URL (for testing)
+func NewAdapterWithURL(baseURL string) *Adapter {
+	client := NewClientWithURL("test-token", baseURL)
+
+	// Fetch authenticated user login
+	authenticatedUser, err := client.FetchAuthenticatedUserLogin()
+	if err != nil {
+		log.Warn().Msgf("Warning: Failed to fetch authenticated user login: %v. Activity filtering will be disabled.", err)
+		authenticatedUser = "" // Empty string = no filtering
+	} else {
+		log.Info().Msgf("Authenticated as: %s", authenticatedUser)
+	}
+
+	return &Adapter{
+		client:            client,
+		mapper:            NewMapper(),
+		authenticatedUser: authenticatedUser,
+	}
+}
+
 // FetchRequestedReviews fetches PRs where the user is requested to review or has reviewed
 // Note: GitHub search doesn't support OR operator, so we fetch both separately and deduplicate
 func (a *Adapter) FetchRequestedReviews() ([]*pullrequest.PullRequest, error) {
