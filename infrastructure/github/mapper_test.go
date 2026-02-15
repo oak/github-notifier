@@ -304,3 +304,126 @@ func createValidDTO(number int, title string) github.PullRequestDTO {
 	dto.Author.Login = "testuser"
 	return dto
 }
+
+// --- Review mapping tests ---
+
+func TestMapper_ToReviews_ValidReviews(t *testing.T) {
+	// Arrange
+	mapper := github.NewMapper()
+	now := time.Now()
+
+	dtos := []github.ReviewDTO{
+		{
+			State:       "APPROVED",
+			SubmittedAt: now,
+		},
+		{
+			State:       "CHANGES_REQUESTED",
+			SubmittedAt: now,
+		},
+	}
+	dtos[0].Author.Login = "joe"
+	dtos[1].Author.Login = "alice"
+
+	// Act
+	reviews := mapper.ToReviews(dtos)
+
+	// Assert
+	assert.Len(t, reviews, 2)
+	assert.Equal(t, pullrequest.ReviewStateApproved, reviews["joe"].State())
+	assert.Equal(t, pullrequest.ReviewStateChangesRequested, reviews["alice"].State())
+}
+
+func TestMapper_ToReviews_UnknownState_Skipped(t *testing.T) {
+	// Arrange
+	mapper := github.NewMapper()
+
+	dto1 := github.ReviewDTO{
+		State:       "APPROVED",
+		SubmittedAt: time.Now(),
+	}
+	dto1.Author.Login = "joe"
+
+	dto2 := github.ReviewDTO{
+		State:       "PENDING",
+		SubmittedAt: time.Now(),
+	}
+	dto2.Author.Login = "bob"
+
+	dtos := []github.ReviewDTO{dto1, dto2}
+
+	// Act
+	reviews := mapper.ToReviews(dtos)
+
+	// Assert
+	assert.Len(t, reviews, 1)
+	assert.NotNil(t, reviews["joe"])
+}
+
+func TestMapper_ToReviews_EmptyAuthor_Skipped(t *testing.T) {
+	// Arrange
+	mapper := github.NewMapper()
+
+	dtos := []github.ReviewDTO{
+		{
+			State:       "APPROVED",
+			SubmittedAt: time.Now(),
+		},
+	}
+	// Author.Login is empty by default
+
+	// Act
+	reviews := mapper.ToReviews(dtos)
+
+	// Assert
+	assert.Empty(t, reviews)
+}
+
+func TestMapper_ToReviews_Empty(t *testing.T) {
+	// Arrange
+	mapper := github.NewMapper()
+
+	// Act
+	reviews := mapper.ToReviews(nil)
+
+	// Assert
+	assert.Empty(t, reviews)
+}
+
+func TestMapper_ToDomain_WithReviews(t *testing.T) {
+	// Arrange
+	mapper := github.NewMapper()
+	now := time.Now()
+
+	reviewDTO := github.ReviewDTO{
+		State:       "APPROVED",
+		SubmittedAt: now,
+	}
+	reviewDTO.Author.Login = "joe"
+
+	dto := github.PullRequestDTO{
+		Title:     "Test PR",
+		URL:       "https://github.com/owner/repo/pull/1",
+		Number:    1,
+		CreatedAt: now,
+		IsDraft:   false,
+		LatestReviews: &github.LatestReviewsDTO{
+			Nodes: []github.ReviewDTO{reviewDTO},
+		},
+	}
+	dto.Repository.NameWithOwner = "owner/repo"
+	dto.Author.Login = "testuser"
+
+	// Act
+	pr, err := mapper.ToDomain(dto)
+
+	// Assert
+	require.NoError(t, err)
+	reviews := pr.Reviews()
+	assert.Len(t, reviews, 1)
+	assert.Equal(t, pullrequest.ReviewStateApproved, reviews["joe"].State())
+
+	// SetInitialReviews should not raise events
+	events := pr.CollectEvents()
+	assert.Empty(t, events)
+}

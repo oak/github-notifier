@@ -37,6 +37,7 @@ func (h *NotificationEventHandler) Handle(ctx context.Context, event pullrequest
 	switch event.(type) {
 	case *pullrequest.NewPullRequestDetected,
 		*pullrequest.ActivityDetected,
+		*pullrequest.ReviewStateChanged,
 		*pullrequest.Merged,
 		*pullrequest.Closed:
 		// Add event to aggregator for batching
@@ -69,6 +70,7 @@ func (h *NotificationEventHandler) sendGroupedNotifications(notifications []*PRN
 			IsNew:         notification.IsNew,
 			Activities:    make([]port.ActivityInfo, len(notification.Activities)),
 			StatusChanges: make([]port.StatusChange, len(notification.StatusChanges)),
+			ReviewChanges: make([]port.ReviewChangeInfo, len(notification.ReviewChanges)),
 		}
 
 		// Convert activities
@@ -83,6 +85,14 @@ func (h *NotificationEventHandler) sendGroupedNotifications(notifications []*PRN
 		for i, statusChange := range notification.StatusChanges {
 			portNotification.StatusChanges[i] = port.StatusChange{
 				EventType: statusChange.EventType,
+			}
+		}
+
+		// Convert review changes
+		for i, reviewChange := range notification.ReviewChanges {
+			portNotification.ReviewChanges[i] = port.ReviewChangeInfo{
+				Reviewer: reviewChange.Reviewer,
+				State:    reviewChange.State,
 			}
 		}
 

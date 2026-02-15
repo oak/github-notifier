@@ -8,6 +8,7 @@ type PRNotificationData struct {
 	IsNew         bool
 	Activities    []ActivityInfo
 	StatusChanges []StatusChange
+	ReviewChanges []ReviewChangeInfo
 }
 
 // ActivityInfo holds information about activities
@@ -19,6 +20,12 @@ type ActivityInfo struct {
 // StatusChange holds information about status changes
 type StatusChange struct {
 	EventType pullrequest.StatusChangeType
+}
+
+// ReviewChangeInfo holds information about a review state change
+type ReviewChangeInfo struct {
+	Reviewer string
+	State    pullrequest.ReviewState
 }
 
 // NotificationPort is the port for sending notifications

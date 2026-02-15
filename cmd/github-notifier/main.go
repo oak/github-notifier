@@ -115,10 +115,12 @@ func main() {
 
 	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, notificationHandler)
 	eventBus.Subscribe(pullrequest.EventActivityDetected, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventReviewStateChanged, notificationHandler)
 	eventBus.Subscribe(pullrequest.EventMerged, notificationHandler)
 	eventBus.Subscribe(pullrequest.EventClosed, notificationHandler)
 	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, trackingHandler)
 	eventBus.Subscribe(pullrequest.EventActivityDetected, trackingHandler)
+	eventBus.Subscribe(pullrequest.EventReviewStateChanged, trackingHandler)
 	eventBus.Subscribe(pullrequest.EventMerged, trackingHandler)
 	eventBus.Subscribe(pullrequest.EventClosed, trackingHandler)
 

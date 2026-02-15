@@ -17,12 +17,13 @@ import (
 // MockGitHubServer simulates GitHub GraphQL API for E2E tests
 type MockGitHubServer struct {
 	*httptest.Server
-	mu       sync.RWMutex
-	prs      []MockPR
-	comments map[int][]MockComment
-	reviews  map[int][]MockReview
-	commits  map[int][]MockCommit
-	error    *APIError
+	mu            sync.RWMutex
+	prs           []MockPR
+	comments      map[int][]MockComment
+	reviews       map[int][]MockReview
+	commits       map[int][]MockCommit
+	latestReviews map[int][]MockLatestReview // PR number -> latest reviews (for search response)
+	error         *APIError
 }
 
 // MockPR represents a pull request in the mock server
@@ -36,6 +37,13 @@ type MockPR struct {
 	Repository    string
 	Author        string
 	HeadCommitSHA string
+}
+
+// MockLatestReview represents a review returned in the search query's latestReviews connection
+type MockLatestReview struct {
+	Author      string
+	State       string // APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED
+	SubmittedAt time.Time
 }
 
 // MockComment represents a comment
@@ -78,10 +86,11 @@ type APIError struct {
 // SetupMockGitHubServer creates a new mock GitHub server
 func SetupMockGitHubServer() *MockGitHubServer {
 	mock := &MockGitHubServer{
-		prs:      []MockPR{},
-		comments: make(map[int][]MockComment),
-		reviews:  make(map[int][]MockReview),
-		commits:  make(map[int][]MockCommit),
+		prs:           []MockPR{},
+		comments:      make(map[int][]MockComment),
+		reviews:       make(map[int][]MockReview),
+		commits:       make(map[int][]MockCommit),
+		latestReviews: make(map[int][]MockLatestReview),
 	}
 
 	mock.Server = httptest.NewServer(http.HandlerFunc(mock.handler))
@@ -170,7 +179,7 @@ func (m *MockGitHubServer) handleSearchQuery(w http.ResponseWriter, query string
 	// Build response nodes
 	var nodes []interface{}
 	for _, pr := range filteredPRs {
-		nodes = append(nodes, map[string]interface{}{
+		node := map[string]interface{}{
 			"title":     pr.Title,
 			"url":       pr.URL,
 			"number":    pr.Number,
@@ -182,7 +191,26 @@ func (m *MockGitHubServer) handleSearchQuery(w http.ResponseWriter, query string
 			"author": map[string]string{
 				"login": pr.Author,
 			},
-		})
+		}
+
+		// Add latestReviews if any exist for this PR
+		if latestReviews, ok := m.latestReviews[pr.Number]; ok && len(latestReviews) > 0 {
+			var reviewNodes []interface{}
+			for _, review := range latestReviews {
+				reviewNodes = append(reviewNodes, map[string]interface{}{
+					"author": map[string]string{
+						"login": review.Author,
+					},
+					"state":       review.State,
+					"submittedAt": review.SubmittedAt.Format(time.RFC3339),
+				})
+			}
+			node["latestReviews"] = map[string]interface{}{
+				"nodes": reviewNodes,
+			}
+		}
+
+		nodes = append(nodes, node)
 	}
 
 	response := map[string]interface{}{
@@ -431,6 +459,22 @@ func (m *MockGitHubServer) AddReactionToReview(prNumber int, reviewIndex int, re
 	}
 }
 
+// SetLatestReviews sets the latest reviews for a PR (returned in search query's latestReviews connection).
+// This is separate from AddReview (which is used for timeline/activity tracking).
+// Each call replaces the full set of latest reviews for the PR.
+func (m *MockGitHubServer) SetLatestReviews(prNumber int, reviews []MockLatestReview) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for i := range reviews {
+		if reviews[i].SubmittedAt.IsZero() {
+			reviews[i].SubmittedAt = time.Now()
+		}
+	}
+
+	m.latestReviews[prNumber] = reviews
+}
+
 // AddCommit adds a commit to a PR
 func (m *MockGitHubServer) AddCommit(prNumber int, commit MockCommit) {
 	m.mu.Lock()
@@ -523,14 +567,25 @@ func (s *SpyNotificationAdapter) NotifyPullRequests(notifications []*port.PRNoti
 	for _, prNotif := range notifications {
 		pr := prNotif.PullRequest
 
-		// Build a title based on whether it's new or has activity
+		// Build a title based on the notification type
 		title := "New PR needing review"
-		if !prNotif.IsNew && len(prNotif.Activities) > 0 {
+		if !prNotif.IsNew && len(prNotif.ReviewChanges) > 0 {
+			title = "PR Review"
+		} else if !prNotif.IsNew && len(prNotif.Activities) > 0 {
 			title = "PR Activity"
 		}
 
 		// Build body with PR info and activities
 		body := fmt.Sprintf("%s #%d", pr.Title(), pr.Number())
+
+		// Append review change details to body
+		if len(prNotif.ReviewChanges) > 0 {
+			var reviewParts []string
+			for _, rc := range prNotif.ReviewChanges {
+				reviewParts = append(reviewParts, fmt.Sprintf("%s %s", rc.Reviewer, rc.State))
+			}
+			body += " | " + strings.Join(reviewParts, ", ")
+		}
 
 		s.notifications = append(s.notifications, CapturedNotification{
 			Title: title,

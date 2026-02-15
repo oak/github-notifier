@@ -15,6 +15,21 @@ type PullRequestDTO struct {
 	Author struct {
 		Login string `json:"login"`
 	} `json:"author"`
+	LatestReviews *LatestReviewsDTO `json:"latestReviews,omitempty"`
+}
+
+// LatestReviewsDTO represents the latest reviews connection on a PR
+type LatestReviewsDTO struct {
+	Nodes []ReviewDTO `json:"nodes"`
+}
+
+// ReviewDTO represents a single review from the GitHub API
+type ReviewDTO struct {
+	Author struct {
+		Login string `json:"login"`
+	} `json:"author"`
+	State       string    `json:"state"`
+	SubmittedAt time.Time `json:"submittedAt"`
 }
 
 // GraphQLResponse represents the GitHub GraphQL API response

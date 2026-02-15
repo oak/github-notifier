@@ -386,7 +386,7 @@ func (m *MenuAdapter) groupPRsByRepository(prs []*pullrequest.PullRequest) map[s
 	return grouped
 }
 
-// formatPRTitle returns a formatted PR title with age information and unseen indicator
+// formatPRTitle returns a formatted PR title with age information, unseen indicator, and review states
 func (m *MenuAdapter) formatPRTitle(pr *pullrequest.PullRequest) string {
 	prefix := ""
 	m.clickedPRsMu.RLock()
@@ -395,7 +395,14 @@ func (m *MenuAdapter) formatPRTitle(pr *pullrequest.PullRequest) string {
 	if !clicked {
 		prefix = "* "
 	}
-	return fmt.Sprintf("%s[%s] [#%d] %s", prefix, m.formatTimeAgo(pr.CreatedAt()), pr.Number(), pr.Title())
+
+	reviewSuffix := ""
+	summary := pr.ReviewSummary()
+	if !summary.IsEmpty() {
+		reviewSuffix = " " + summary.FormatForMenu()
+	}
+
+	return fmt.Sprintf("%s[%s] [#%d] %s%s", prefix, m.formatTimeAgo(pr.CreatedAt()), pr.Number(), pr.Title(), reviewSuffix)
 }
 
 // hasUnseenPRs checks if any PRs in the list have not been clicked

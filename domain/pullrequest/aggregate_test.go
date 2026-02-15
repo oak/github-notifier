@@ -558,3 +558,155 @@ func TestPullRequest_RecordHeadCommitUpdate_AlwaysCreatesPushActivity(t *testing
 	require.Len(t, pr.Activities(), 1)
 	assert.Equal(t, pullrequest.ActivityTypePush, pr.Activities()[0].Type())
 }
+
+// --- Review tracking tests ---
+
+func TestPullRequest_AddReview_RaisesReviewStateChangedEvent(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+	reviewer := testutil.NewTestAuthor("joe")
+	review := pullrequest.NewReview(reviewer, pullrequest.ReviewStateApproved, time.Now())
+
+	// Act
+	pr.AddReview(review)
+
+	// Assert
+	events := pr.CollectEvents()
+	require.Len(t, events, 1)
+
+	reviewEvent, ok := events[0].(*pullrequest.ReviewStateChanged)
+	require.True(t, ok, "event should be ReviewStateChanged")
+	assert.Equal(t, "joe", reviewEvent.Reviewer.Login())
+	assert.Equal(t, pullrequest.ReviewStateApproved, reviewEvent.State)
+}
+
+func TestPullRequest_AddReview_SameState_NoEvent(t *testing.T) {
+	// Arrange - set initial review state
+	pr := testutil.NewTestPullRequest(1)
+	initialReviews := map[string]*pullrequest.Review{
+		"joe": pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, time.Now()),
+	}
+	pr.SetInitialReviews(initialReviews)
+
+	// Act - add the same review state again
+	review := pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, time.Now())
+	pr.AddReview(review)
+
+	// Assert - no events should be raised
+	events := pr.CollectEvents()
+	assert.Empty(t, events, "No event should be raised for same review state")
+}
+
+func TestPullRequest_AddReview_StateChange_RaisesEvent(t *testing.T) {
+	// Arrange - set initial review as changes_requested
+	pr := testutil.NewTestPullRequest(1)
+	initialReviews := map[string]*pullrequest.Review{
+		"joe": pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateChangesRequested, time.Now()),
+	}
+	pr.SetInitialReviews(initialReviews)
+
+	// Act - reviewer now approves
+	review := pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, time.Now())
+	pr.AddReview(review)
+
+	// Assert - event should be raised for the state change
+	events := pr.CollectEvents()
+	require.Len(t, events, 1)
+
+	reviewEvent, ok := events[0].(*pullrequest.ReviewStateChanged)
+	require.True(t, ok)
+	assert.Equal(t, "joe", reviewEvent.Reviewer.Login())
+	assert.Equal(t, pullrequest.ReviewStateApproved, reviewEvent.State)
+}
+
+func TestPullRequest_AddReview_NilReview_DoesNothing(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+
+	// Act
+	pr.AddReview(nil)
+
+	// Assert
+	assert.Empty(t, pr.Reviews())
+	assert.Empty(t, pr.CollectEvents())
+}
+
+func TestPullRequest_AddReview_MultipleReviewers(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+
+	// Act - multiple reviewers leave different reviews
+	pr.AddReview(pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, time.Now()))
+	pr.AddReview(pullrequest.NewReview(testutil.NewTestAuthor("alice"), pullrequest.ReviewStateChangesRequested, time.Now()))
+	pr.AddReview(pullrequest.NewReview(testutil.NewTestAuthor("bob"), pullrequest.ReviewStateCommented, time.Now()))
+
+	// Assert
+	reviews := pr.Reviews()
+	assert.Len(t, reviews, 3)
+	assert.Equal(t, pullrequest.ReviewStateApproved, reviews["joe"].State())
+	assert.Equal(t, pullrequest.ReviewStateChangesRequested, reviews["alice"].State())
+	assert.Equal(t, pullrequest.ReviewStateCommented, reviews["bob"].State())
+
+	// 3 events should have been raised (one per new review)
+	events := pr.CollectEvents()
+	assert.Len(t, events, 3)
+}
+
+func TestPullRequest_SetInitialReviews_NoEvents(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+	reviews := map[string]*pullrequest.Review{
+		"joe":   pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, time.Now()),
+		"alice": pullrequest.NewReview(testutil.NewTestAuthor("alice"), pullrequest.ReviewStateChangesRequested, time.Now()),
+	}
+
+	// Act
+	pr.SetInitialReviews(reviews)
+
+	// Assert - no events should be raised for initial state
+	events := pr.CollectEvents()
+	assert.Empty(t, events)
+	assert.Len(t, pr.Reviews(), 2)
+}
+
+func TestPullRequest_ReviewSummary(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+	reviews := map[string]*pullrequest.Review{
+		"Joe":   pullrequest.NewReview(testutil.NewTestAuthor("Joe"), pullrequest.ReviewStateApproved, time.Now()),
+		"Alice": pullrequest.NewReview(testutil.NewTestAuthor("Alice"), pullrequest.ReviewStateChangesRequested, time.Now()),
+	}
+	pr.SetInitialReviews(reviews)
+
+	// Act
+	summary := pr.ReviewSummary()
+
+	// Assert
+	assert.False(t, summary.IsEmpty())
+	assert.Equal(t, "(✅ Joe | ❌ Alice)", summary.FormatForMenu())
+}
+
+func TestPullRequest_ReviewSummary_Empty(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+
+	// Act
+	summary := pr.ReviewSummary()
+
+	// Assert
+	assert.True(t, summary.IsEmpty())
+	assert.Equal(t, "", summary.FormatForMenu())
+}
+
+func TestPullRequest_Reviews_ReturnsCopy(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+	pr.AddReview(pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, time.Now()))
+
+	// Act
+	reviews := pr.Reviews()
+	delete(reviews, "joe")
+
+	// Assert - original should be unchanged
+	assert.Len(t, pr.Reviews(), 1)
+}

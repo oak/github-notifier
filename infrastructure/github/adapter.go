@@ -84,6 +84,13 @@ func (a *Adapter) FetchRequestedReviews() ([]*pullrequest.PullRequest, error) {
 						isDraft
 						author { login }
 						repository { nameWithOwner }
+						latestReviews(first: 20) {
+							nodes {
+								author { login }
+								state
+								submittedAt
+							}
+						}
 					}
 				}
 				pageInfo {
@@ -117,6 +124,13 @@ func (a *Adapter) FetchRequestedReviews() ([]*pullrequest.PullRequest, error) {
 						isDraft
 						author { login }
 						repository { nameWithOwner }
+						latestReviews(first: 20) {
+							nodes {
+								author { login }
+								state
+								submittedAt
+							}
+						}
 					}
 				}
 				pageInfo {
@@ -172,6 +186,13 @@ func (a *Adapter) FetchUserCreated() ([]*pullrequest.PullRequest, error) {
 						isDraft
 						author { login }
 						repository { nameWithOwner }
+						latestReviews(first: 20) {
+							nodes {
+								author { login }
+								state
+								submittedAt
+							}
+						}
 					}
 				}
 				pageInfo {

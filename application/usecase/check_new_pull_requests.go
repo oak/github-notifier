@@ -19,7 +19,8 @@ type CheckNewPullRequestsUseCase struct {
 	prClassifier    *pullrequest.PRClassifier
 	eventPublisher  port.EventPublisher
 	lastCheckTime   time.Time
-	knownPRs        map[string]bool // Tracks all PRs ever encountered by URL, independent of seen repository
+	knownPRs        map[string]bool                           // Tracks all PRs ever encountered by URL, independent of seen repository
+	knownReviews    map[string]map[string]*pullrequest.Review // PR URL -> reviewer login -> review state
 }
 
 // NewCheckNewPullRequestsUseCase creates a new use case
@@ -38,6 +39,7 @@ func NewCheckNewPullRequestsUseCase(
 		eventPublisher:  eventPublisher,
 		lastCheckTime:   time.Now(),
 		knownPRs:        make(map[string]bool),
+		knownReviews:    make(map[string]map[string]*pullrequest.Review),
 	}
 }
 
@@ -66,6 +68,11 @@ func (uc *CheckNewPullRequestsUseCase) Execute(ctx context.Context) (*PRCheckRes
 	// Filter draft PRs if configured
 	requestedReviewPRs = uc.prFilter.FilterDrafts(requestedReviewPRs)
 	userCreatedPRs = uc.prFilter.FilterDrafts(userCreatedPRs)
+
+	// Detect review state changes on all PRs (new and known)
+	// This must happen before processNewPRs to detect review changes on known PRs
+	uc.detectReviewStateChanges(requestedReviewPRs)
+	uc.detectReviewStateChanges(userCreatedPRs)
 
 	// Process requested review PRs
 	if err := uc.processNewPRs(requestedReviewPRs, "requested review"); err != nil {
@@ -135,4 +142,44 @@ func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequ
 	}
 
 	return nil
+}
+
+// detectReviewStateChanges compares current reviews with known reviews for each PR.
+// For known PRs, it restores the previous review state, applies new reviews via AddReview
+// (which raises ReviewStateChanged events when the state actually changes), then collects
+// and publishes any resulting events.
+// For new PRs (first time seen), it just stores the reviews as the baseline.
+func (uc *CheckNewPullRequestsUseCase) detectReviewStateChanges(prs []*pullrequest.PullRequest) {
+	for _, pr := range prs {
+		currentReviews := pr.Reviews()
+		knownReviews, exists := uc.knownReviews[pr.URL()]
+
+		if !exists {
+			// First time seeing this PR — save baseline, no events
+			uc.knownReviews[pr.URL()] = currentReviews
+			continue
+		}
+
+		// Restore known reviews on the fresh PR object (without events)
+		pr.SetInitialReviews(knownReviews)
+
+		// Now apply each current review via AddReview (raises events on state change)
+		for _, review := range currentReviews {
+			pr.AddReview(review)
+		}
+
+		// Collect and publish only ReviewStateChanged events
+		// (other events like ActivityDetected may be pending from test fixtures
+		// or initial state — those are handled by the activity tracking use case)
+		for _, event := range pr.CollectEvents() {
+			if _, ok := event.(*pullrequest.ReviewStateChanged); ok {
+				if err := uc.eventPublisher.Publish(event); err != nil {
+					log.Error().Err(err).Msg("Error publishing review state changed event")
+				}
+			}
+		}
+
+		// Update known reviews to current state
+		uc.knownReviews[pr.URL()] = pr.Reviews()
+	}
 }

@@ -69,6 +69,8 @@ func (a *Adapter) buildSlackMessage(prNotif *port.PRNotificationData) (string, s
 	var title string
 	if prNotif.IsNew {
 		title = fmt.Sprintf("🆕 New PR #%d", pr.Number())
+	} else if len(prNotif.ReviewChanges) > 0 {
+		title = fmt.Sprintf("🔔 PR #%d Review", pr.Number())
 	} else {
 		title = fmt.Sprintf("🔔 PR #%d Activity", pr.Number())
 	}
@@ -123,6 +125,16 @@ func (a *Adapter) buildSlackMessage(prNotif *port.PRNotificationData) (string, s
 				parts = append(parts, "❌ *Closed*")
 			}
 		}
+	}
+
+	// Add review state changes
+	if len(prNotif.ReviewChanges) > 0 {
+		parts = append(parts, "") // Blank line
+		reviewLines := []string{"*Reviews:*"}
+		for _, reviewChange := range prNotif.ReviewChanges {
+			reviewLines = append(reviewLines, fmt.Sprintf("• %s %s %s", reviewChange.State.Emoji(), reviewChange.Reviewer, reviewChange.State.Label()))
+		}
+		parts = append(parts, strings.Join(reviewLines, "\n"))
 	}
 
 	message := strings.Join(parts, "\n")

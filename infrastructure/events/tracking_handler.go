@@ -30,6 +30,9 @@ func (h *TrackingEventHandler) Handle(ctx context.Context, event pullrequest.Eve
 	case *pullrequest.ActivityDetected:
 		return h.handlePRActivityDetected(e)
 
+	case *pullrequest.ReviewStateChanged:
+		return h.handleReviewStateChanged(e)
+
 	case *pullrequest.Merged:
 		return h.handlePRMerged(e)
 
@@ -88,5 +91,14 @@ func (h *TrackingEventHandler) handleStatusChanged(event *pullrequest.StatusChan
 		event.OldStatus,
 		event.NewStatus,
 		event.PullRequestID.URL())
+	return nil
+}
+
+// handleReviewStateChanged handles review state change events
+func (h *TrackingEventHandler) handleReviewStateChanged(event *pullrequest.ReviewStateChanged) error {
+	log.Info().Msgf("Tracking: Review state changed on PR - %s (%s %s)",
+		event.PullRequestID.URL(),
+		event.Reviewer.Login(),
+		event.State.Label())
 	return nil
 }

@@ -1028,3 +1028,301 @@ func TestE2E_IApproveAPR_NoNotification(t *testing.T) {
 	notifs := suite.notifications.GetNotifications()
 	assert.Len(t, notifs, 0, "MUST NOT notify when I approve a PR - it's my own action")
 }
+
+// === Review State Detection E2E Tests (OAK-9) ===
+
+func TestE2E_ReviewStateApproval_SendsReviewNotification(t *testing.T) {
+	// Given: A tracked PR with no reviews initially
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "Feature for review",
+		Number: 1300,
+		Author: "alice",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// First check: detect the PR (no reviews yet)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.ClearNotifications()
+
+	// When: A reviewer approves the PR (latestReviews updated in search response)
+	suite.mockGitHub.SetLatestReviews(1300, []MockLatestReview{
+		{Author: "bob", State: "APPROVED", SubmittedAt: time.Now()},
+	})
+
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	// Then: Should receive a review state notification
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify when a PR is approved")
+
+	foundReview := false
+	for _, n := range notifs {
+		if n.Title == "PR Review" {
+			foundReview = true
+			assert.Contains(t, n.Body, "Feature for review")
+			assert.Contains(t, n.Body, "bob")
+			assert.Contains(t, n.Body, "approved")
+			break
+		}
+	}
+	assert.True(t, foundReview, "Should send PR Review notification for approval")
+}
+
+func TestE2E_ReviewStateChangesRequested_SendsReviewNotification(t *testing.T) {
+	// Given: A tracked PR with no reviews initially
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "Needs rework",
+		Number: 1400,
+		Author: "alice",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// First check: detect the PR
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.ClearNotifications()
+
+	// When: A reviewer requests changes
+	suite.mockGitHub.SetLatestReviews(1400, []MockLatestReview{
+		{Author: "charlie", State: "CHANGES_REQUESTED", SubmittedAt: time.Now()},
+	})
+
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	// Then: Should receive a review notification with changes_requested
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify when changes are requested")
+
+	foundReview := false
+	for _, n := range notifs {
+		if n.Title == "PR Review" {
+			foundReview = true
+			assert.Contains(t, n.Body, "Needs rework")
+			assert.Contains(t, n.Body, "charlie")
+			assert.Contains(t, n.Body, "changes_requested")
+			break
+		}
+	}
+	assert.True(t, foundReview, "Should send PR Review notification for changes requested")
+}
+
+func TestE2E_ReviewStateChange_ChangesRequestedToApproved(t *testing.T) {
+	// Given: A tracked PR that already has a changes_requested review
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "Iterative review",
+		Number: 1500,
+		Author: "alice",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// First check: detect the PR
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.ClearNotifications()
+
+	// Cycle 2: reviewer requests changes
+	suite.mockGitHub.SetLatestReviews(1500, []MockLatestReview{
+		{Author: "bob", State: "CHANGES_REQUESTED", SubmittedAt: time.Now()},
+	})
+
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "Should notify on initial changes_requested")
+	suite.ClearNotifications()
+
+	// Cycle 3: same reviewer now approves (state changed)
+	suite.mockGitHub.SetLatestReviews(1500, []MockLatestReview{
+		{Author: "bob", State: "APPROVED", SubmittedAt: time.Now()},
+	})
+
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	// Then: Should receive a new review notification for the state change
+	notifs = suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify when reviewer changes from changes_requested to approved")
+
+	foundApproval := false
+	for _, n := range notifs {
+		if n.Title == "PR Review" {
+			foundApproval = true
+			assert.Contains(t, n.Body, "bob")
+			assert.Contains(t, n.Body, "approved")
+			break
+		}
+	}
+	assert.True(t, foundApproval, "Should send PR Review notification when reviewer changes to approved")
+}
+
+func TestE2E_SelfReview_NoReviewNotification(t *testing.T) {
+	// Given: A tracked PR where I am a reviewer
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "Someone else's PR",
+		Number: 1600,
+		Author: "colleague",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// First check
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.ClearNotifications()
+
+	// When: I (testuser) submit a review
+	suite.mockGitHub.SetLatestReviews(1600, []MockLatestReview{
+		{Author: "testuser", State: "APPROVED", SubmittedAt: time.Now()},
+	})
+
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	// Then: Should NOT receive a notification for my own review
+	notifs := suite.notifications.GetNotifications()
+	reviewNotifs := 0
+	for _, n := range notifs {
+		if n.Title == "PR Review" {
+			reviewNotifs++
+		}
+	}
+	assert.Equal(t, 0, reviewNotifs, "MUST NOT notify for own review - it's my own action")
+}
+
+func TestE2E_ReviewStateSameState_NoNotification(t *testing.T) {
+	// Given: A tracked PR with an existing approved review
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "Already approved",
+		Number: 1700,
+		Author: "alice",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// First check with review already present
+	suite.mockGitHub.SetLatestReviews(1700, []MockLatestReview{
+		{Author: "bob", State: "APPROVED", SubmittedAt: time.Now()},
+	})
+
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.ClearNotifications()
+
+	// When: Same review state appears again (no change)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	// Then: Should NOT notify (state hasn't changed)
+	notifs := suite.notifications.GetNotifications()
+	reviewNotifs := 0
+	for _, n := range notifs {
+		if n.Title == "PR Review" {
+			reviewNotifs++
+		}
+	}
+	assert.Equal(t, 0, reviewNotifs, "Should NOT notify when review state hasn't changed")
+}
+
+func TestE2E_MultipleReviewers_DetectsAllStateChanges(t *testing.T) {
+	// Given: A tracked PR
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "Multi-reviewer PR",
+		Number: 1800,
+		Author: "alice",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// First check: detect PR
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.ClearNotifications()
+
+	// When: Multiple reviewers submit reviews at once
+	suite.mockGitHub.SetLatestReviews(1800, []MockLatestReview{
+		{Author: "bob", State: "APPROVED", SubmittedAt: time.Now()},
+		{Author: "charlie", State: "CHANGES_REQUESTED", SubmittedAt: time.Now()},
+	})
+
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	// Then: Should receive notification(s) for all review changes
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify for review state changes from multiple reviewers")
+
+	// Find PR Review notification - both reviewers should be mentioned
+	foundReview := false
+	for _, n := range notifs {
+		if n.Title == "PR Review" {
+			foundReview = true
+			assert.Contains(t, n.Body, "bob")
+			assert.Contains(t, n.Body, "charlie")
+			break
+		}
+	}
+	assert.True(t, foundReview, "Should aggregate multiple review changes into a single notification")
+}
+
+func TestE2E_MenuDisplaysReviewStates(t *testing.T) {
+	// Given: A PR with reviews
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "PR with reviews",
+		Number: 1900,
+		Author: "alice",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// Set up reviews
+	suite.mockGitHub.SetLatestReviews(1900, []MockLatestReview{
+		{Author: "bob", State: "APPROVED", SubmittedAt: time.Now()},
+		{Author: "charlie", State: "CHANGES_REQUESTED", SubmittedAt: time.Now()},
+	})
+
+	// When: Check runs and display is updated
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+
+	// Then: PRs in the menu should have review data available
+	prs := suite.menuAdapter.GetPRs()
+	require.Len(t, prs, 1)
+
+	// Verify the PR has review state data
+	reviewSummary := prs[0].ReviewSummary()
+	assert.False(t, reviewSummary.IsEmpty(), "PR should have review summary")
+
+	// Verify menu format includes review state info
+	formatted := reviewSummary.FormatForMenu()
+	assert.NotEmpty(t, formatted, "Review summary should produce formatted output")
+	assert.Contains(t, formatted, "✅", "Should show approval emoji")
+	assert.Contains(t, formatted, "❌", "Should show changes requested emoji")
+}

@@ -40,6 +40,13 @@ func (m *Mapper) ToDomain(dto PullRequestDTO) (*pullrequest.PullRequest, error) 
 		return nil, fmt.Errorf("failed to create pull request: %w", err)
 	}
 
+	// Map reviews if present
+	if dto.LatestReviews != nil {
+		reviews := m.ToReviews(dto.LatestReviews.Nodes)
+		// Set initial reviews without raising events (this is initial state, not a change)
+		pr.SetInitialReviews(reviews)
+	}
+
 	return pr, nil
 }
 
@@ -57,6 +64,33 @@ func (m *Mapper) ToDomainList(dtos []PullRequestDTO) ([]*pullrequest.PullRequest
 	}
 
 	return prs, nil
+}
+
+// ToReviews converts a list of ReviewDTOs to a map of reviewer login -> latest Review.
+// GitHub's latestReviews connection returns the most recent review per reviewer,
+// so we map each one directly.
+func (m *Mapper) ToReviews(dtos []ReviewDTO) map[string]*pullrequest.Review {
+	reviews := make(map[string]*pullrequest.Review)
+
+	for _, dto := range dtos {
+		if dto.Author.Login == "" {
+			continue
+		}
+
+		state, ok := pullrequest.ReviewStateFromString(dto.State)
+		if !ok {
+			continue
+		}
+
+		author, err := pullrequest.NewAuthor(dto.Author.Login)
+		if err != nil {
+			continue
+		}
+
+		reviews[dto.Author.Login] = pullrequest.NewReview(author, state, dto.SubmittedAt)
+	}
+
+	return reviews
 }
 
 // ToActivity converts a single timeline item DTO to a domain activity

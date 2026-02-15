@@ -83,6 +83,10 @@ func (a *Adapter) buildNotificationTitle(prNotif *port.PRNotificationData) strin
 		return fmt.Sprintf("New PR #%d", pr.Number())
 	}
 
+	if len(prNotif.ReviewChanges) > 0 {
+		return fmt.Sprintf("PR #%d Review", pr.Number())
+	}
+
 	return fmt.Sprintf("PR #%d Activity", pr.Number())
 }
 
@@ -134,6 +138,11 @@ func (a *Adapter) buildNotificationMessage(prNotif *port.PRNotificationData) str
 		} else if statusChange.EventType == pullrequest.StatusChangeClosed {
 			parts = append(parts, "❌ Closed")
 		}
+	}
+
+	// Add review state changes
+	for _, reviewChange := range prNotif.ReviewChanges {
+		parts = append(parts, fmt.Sprintf("%s %s %s", reviewChange.State.Emoji(), reviewChange.Reviewer, reviewChange.State.Label()))
 	}
 
 	return strings.Join(parts, "\n")

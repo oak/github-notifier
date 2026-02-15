@@ -14,6 +14,7 @@ const (
 	EventMerged                 = "Merged"
 	EventClosed                 = "Closed"
 	EventStatusChanged          = "StatusChanged"
+	EventReviewStateChanged     = "ReviewStateChanged"
 )
 
 // StatusChangeType represents the type of status change
@@ -136,5 +137,32 @@ func NewMerged(pr *PullRequest) Merged {
 
 // OccurredAt returns when the event occurred
 func (e Merged) OccurredAt() time.Time {
+	return e.occurredAt
+}
+
+// ReviewStateChanged is raised when a reviewer's review state changes on a PR
+type ReviewStateChanged struct {
+	PullRequestID PRIdentifier
+	Repository    RepositoryInfo
+	Reviewer      Author
+	State         ReviewState
+	PullRequest   *PullRequest // Full PR for notification purposes
+	occurredAt    time.Time
+}
+
+// NewReviewStateChanged creates a new event
+func NewReviewStateChanged(pr *PullRequest, reviewer Author, state ReviewState) ReviewStateChanged {
+	return ReviewStateChanged{
+		PullRequestID: pr.Identifier(),
+		Repository:    pr.Repository(),
+		Reviewer:      reviewer,
+		State:         state,
+		PullRequest:   pr,
+		occurredAt:    time.Now(),
+	}
+}
+
+// OccurredAt returns when the event occurred
+func (e ReviewStateChanged) OccurredAt() time.Time {
 	return e.occurredAt
 }

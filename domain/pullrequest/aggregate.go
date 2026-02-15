@@ -15,9 +15,10 @@ type PullRequest struct {
 	isDraft           bool
 	activities        []*Activity
 	lastActivityAt    time.Time
-	lastActivityCheck time.Time // When we last checked for activities
-	headCommitSHA     string    // Latest commit SHA (head)
-	events            []Event   // Domain events pending publication
+	lastActivityCheck time.Time          // When we last checked for activities
+	headCommitSHA     string             // Latest commit SHA (head)
+	reviews           map[string]*Review // reviewer login -> latest review
+	events            []Event            // Domain events pending publication
 }
 
 // NewPullRequest creates a new pull request with validation
@@ -54,6 +55,7 @@ func NewPullRequest(
 		activities:        make([]*Activity, 0),
 		lastActivityAt:    createdAt,
 		lastActivityCheck: time.Time{}, // Zero value - will be checked immediately on first run
+		reviews:           make(map[string]*Review),
 		events:            make([]Event, 0),
 	}, nil
 }
@@ -299,4 +301,48 @@ func (pr *PullRequest) raiseEvent(event Event) {
 func (pr *PullRequest) MarkAsNewlyDetected() {
 	event := NewNewPullRequestDetected(pr)
 	pr.raiseEvent(&event)
+}
+
+// AddReview adds or updates a review for a specific reviewer.
+// If the reviewer already has a review with the same state, this is a no-op.
+// If the state changed, it raises a ReviewStateChanged event.
+func (pr *PullRequest) AddReview(review *Review) {
+	if review == nil {
+		return
+	}
+
+	login := review.Reviewer().Login()
+	existing, exists := pr.reviews[login]
+
+	if exists && existing.State() == review.State() {
+		// Same state — no change, no event
+		return
+	}
+
+	// Update or add the review
+	pr.reviews[login] = review
+
+	// Raise domain event for state change
+	event := NewReviewStateChanged(pr, review.Reviewer(), review.State())
+	pr.raiseEvent(&event)
+}
+
+// SetInitialReviews sets reviews without raising events.
+// Used to restore known state from a previous fetch cycle.
+func (pr *PullRequest) SetInitialReviews(reviews map[string]*Review) {
+	pr.reviews = reviews
+}
+
+// Reviews returns the current reviews map (copy)
+func (pr *PullRequest) Reviews() map[string]*Review {
+	result := make(map[string]*Review, len(pr.reviews))
+	for k, v := range pr.reviews {
+		result[k] = v
+	}
+	return result
+}
+
+// ReviewSummary returns a ReviewSummary for display purposes
+func (pr *PullRequest) ReviewSummary() *ReviewSummary {
+	return NewReviewSummary(pr.reviews)
 }

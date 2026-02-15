@@ -13,6 +13,7 @@ type PRNotification struct {
 	IsNew         bool
 	Activities    []ActivityInfo
 	StatusChanges []StatusChange
+	ReviewChanges []ReviewChange
 }
 
 // ActivityInfo holds information about a specific activity
@@ -24,6 +25,12 @@ type ActivityInfo struct {
 // StatusChange holds information about status changes
 type StatusChange struct {
 	EventType pullrequest.StatusChangeType
+}
+
+// ReviewChange holds information about a review state change
+type ReviewChange struct {
+	Reviewer string
+	State    pullrequest.ReviewState
 }
 
 // NotificationAggregator batches notifications and groups them by PR
@@ -60,6 +67,8 @@ func (a *NotificationAggregator) AddEvent(event pullrequest.Event) {
 		a.addNewPREvent(e)
 	case *pullrequest.ActivityDetected:
 		a.addActivityEvent(e)
+	case *pullrequest.ReviewStateChanged:
+		a.addReviewStateChangedEvent(e)
 	case *pullrequest.Merged:
 		a.addMergedEvent(e)
 	case *pullrequest.Closed:
@@ -123,6 +132,32 @@ func (a *NotificationAggregator) addActivityEvent(event *pullrequest.ActivityDet
 			Count: 1,
 		})
 	}
+}
+
+// addReviewStateChangedEvent adds a review state change to the existing PR notification.
+// Filters out self-authored reviews — not notification-worthy.
+func (a *NotificationAggregator) addReviewStateChangedEvent(event *pullrequest.ReviewStateChanged) {
+	// Filter out self-authored review state changes
+	if a.authenticatedUser != "" && event.Reviewer.Login() == a.authenticatedUser {
+		return
+	}
+
+	url := event.PullRequestID.URL()
+
+	notification, exists := a.pendingEvents[url]
+	if !exists {
+		notification = &PRNotification{
+			PullRequest:   event.PullRequest,
+			Activities:    []ActivityInfo{},
+			ReviewChanges: []ReviewChange{},
+		}
+		a.pendingEvents[url] = notification
+	}
+
+	notification.ReviewChanges = append(notification.ReviewChanges, ReviewChange{
+		Reviewer: event.Reviewer.Login(),
+		State:    event.State,
+	})
 }
 
 // addMergedEvent adds a merged status change
