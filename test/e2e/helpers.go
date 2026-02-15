@@ -223,7 +223,9 @@ func (m *MockGitHubServer) handleBatchedTimelineQuery(w http.ResponseWriter, que
 	for _, match := range matches {
 		if len(match) == 3 {
 			num := 0
-			fmt.Sscanf(match[2], "%d", &num)
+			if _, err := fmt.Sscanf(match[2], "%d", &num); err != nil {
+				continue
+			}
 			mappings = append(mappings, aliasMapping{alias: match[1], number: num})
 		}
 	}
