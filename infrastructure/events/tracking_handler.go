@@ -57,9 +57,10 @@ func (h *TrackingEventHandler) handleNewPRDetected(event *pullrequest.NewPullReq
 func (h *TrackingEventHandler) handlePRActivityDetected(event *pullrequest.ActivityDetected) error {
 	// When activity is detected, the PR should remain unseen to show asterisks
 	// This handler could implement additional activity tracking logic
-	log.Info().Msgf("Tracking: Activity detected on PR - %s (%d activities)",
+	log.Info().Msgf("Tracking: Activity detected on PR - %s (%s by %s)",
 		event.PullRequestID.URL(),
-		len(event.Activities))
+		event.Activity.Type(),
+		event.Activity.Author().Login())
 	return nil
 }
 

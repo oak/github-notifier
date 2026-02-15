@@ -56,6 +56,13 @@ func NewAdapterWithURL(baseURL string) *Adapter {
 	}
 }
 
+// AuthenticatedUser returns the GitHub login of the authenticated user.
+// Used by the application layer (e.g. notification handler, use case) to filter
+// self-authored activities when deciding what to notify about.
+func (a *Adapter) AuthenticatedUser() string {
+	return a.authenticatedUser
+}
+
 // FetchRequestedReviews fetches PRs where the user is requested to review or has reviewed
 // Note: GitHub search doesn't support OR operator, so we fetch both separately and deduplicate
 func (a *Adapter) FetchRequestedReviews() ([]*pullrequest.PullRequest, error) {
@@ -345,7 +352,7 @@ func (a *Adapter) fetchBatchedTimelines(prs []*pullrequest.PullRequest, since ti
 			if prData, ok := repoData["pullRequest"].(map[string]interface{}); ok {
 				// Delegate head commit change detection to the domain aggregate
 				if headRefOid, ok := prData["headRefOid"].(string); ok {
-					info.pr.RecordHeadCommitUpdate(headRefOid, a.authenticatedUser)
+					info.pr.RecordHeadCommitUpdate(headRefOid)
 				}
 
 				if timelineData, ok := prData["timelineItems"].(map[string]interface{}); ok {
@@ -361,8 +368,8 @@ func (a *Adapter) fetchBatchedTimelines(prs []*pullrequest.PullRequest, since ti
 							}
 						}
 
-						// Map to domain activities, filtering out activities by authenticated user
-						activities := a.mapper.ToActivityList(info.pr, dtos, since, a.authenticatedUser)
+						// Map to domain activities
+						activities := a.mapper.ToActivityList(info.pr, dtos, since)
 						result[info.pr.URL()] = activities
 					}
 				}

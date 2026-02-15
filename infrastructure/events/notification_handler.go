@@ -17,14 +17,17 @@ type NotificationEventHandler struct {
 	aggregator       *NotificationAggregator
 }
 
-// NewNotificationEventHandler creates a new notification event handler
-func NewNotificationEventHandler(notificationPort port.NotificationPort) *NotificationEventHandler {
+// NewNotificationEventHandler creates a new notification event handler.
+// authenticatedUser is the GitHub login of the current user; activities authored by
+// this user are filtered out at the notification level (the domain records all facts,
+// but we only notify about others' activity).
+func NewNotificationEventHandler(notificationPort port.NotificationPort, authenticatedUser string) *NotificationEventHandler {
 	handler := &NotificationEventHandler{
 		notificationPort: notificationPort,
 	}
 
 	// Create aggregator with 2-second flush interval
-	handler.aggregator = NewNotificationAggregator(2*time.Second, handler.sendGroupedNotifications)
+	handler.aggregator = NewNotificationAggregator(2*time.Second, handler.sendGroupedNotifications, authenticatedUser)
 
 	return handler
 }

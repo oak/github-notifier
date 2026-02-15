@@ -76,17 +76,17 @@ func (e StatusChanged) OccurredAt() time.Time {
 type ActivityDetected struct {
 	PullRequestID PRIdentifier
 	Repository    RepositoryInfo
-	Activities    []*Activity
+	Activity      *Activity
 	PullRequest   *PullRequest // Full PR for notification purposes
 	occurredAt    time.Time
 }
 
-// NewActivityDetected creates a new event
-func NewActivityDetected(pr *PullRequest) ActivityDetected {
+// NewActivityDetected creates a new event for a single activity
+func NewActivityDetected(pr *PullRequest, activity *Activity) ActivityDetected {
 	return ActivityDetected{
 		PullRequestID: pr.Identifier(),
 		Repository:    pr.Repository(),
-		Activities:    pr.Activities(),
+		Activity:      activity,
 		PullRequest:   pr,
 		occurredAt:    time.Now(),
 	}

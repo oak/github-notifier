@@ -109,7 +109,7 @@ func main() {
 	eventBus := events.NewInMemoryEventBus()
 
 	// Register event handlers
-	notificationHandler := events.NewNotificationEventHandler(notificationAdapter)
+	notificationHandler := events.NewNotificationEventHandler(notificationAdapter, githubAdapter.AuthenticatedUser())
 	trackingHandler := events.NewTrackingEventHandler(trackingService)
 
 	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, notificationHandler)
@@ -142,6 +142,7 @@ func main() {
 		activityScheduler,
 		trackingService,
 		eventBus,
+		githubAdapter.AuthenticatedUser(),
 	)
 
 	updateDisplayUseCase := usecase.NewUpdatePullRequestDisplayUseCase(

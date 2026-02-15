@@ -28,21 +28,25 @@ type StatusChange struct {
 
 // NotificationAggregator batches notifications and groups them by PR
 type NotificationAggregator struct {
-	mu            sync.Mutex
-	pendingEvents map[string]*PRNotification // Key: PR URL
-	flushInterval time.Duration
-	onFlush       func(notifications []*PRNotification)
-	flushTimer    *time.Timer
-	stopCh        chan struct{}
+	mu                sync.Mutex
+	pendingEvents     map[string]*PRNotification // Key: PR URL
+	flushInterval     time.Duration
+	onFlush           func(notifications []*PRNotification)
+	flushTimer        *time.Timer
+	stopCh            chan struct{}
+	authenticatedUser string // GitHub login — used to filter self-authored activities
 }
 
-// NewNotificationAggregator creates a new notification aggregator
-func NewNotificationAggregator(flushInterval time.Duration, onFlush func(notifications []*PRNotification)) *NotificationAggregator {
+// NewNotificationAggregator creates a new notification aggregator.
+// authenticatedUser is the GitHub login of the current user; activities authored by
+// this user are filtered out (they are domain facts, but not worth notifying about).
+func NewNotificationAggregator(flushInterval time.Duration, onFlush func(notifications []*PRNotification), authenticatedUser string) *NotificationAggregator {
 	return &NotificationAggregator{
-		pendingEvents: make(map[string]*PRNotification),
-		flushInterval: flushInterval,
-		onFlush:       onFlush,
-		stopCh:        make(chan struct{}),
+		pendingEvents:     make(map[string]*PRNotification),
+		flushInterval:     flushInterval,
+		onFlush:           onFlush,
+		stopCh:            make(chan struct{}),
+		authenticatedUser: authenticatedUser,
 	}
 }
 
@@ -82,8 +86,15 @@ func (a *NotificationAggregator) addNewPREvent(event *pullrequest.NewPullRequest
 	notification.IsNew = true
 }
 
-// addActivityEvent adds activity to the existing PR notification
+// addActivityEvent adds activity to the existing PR notification.
+// Filters out activities authored by the authenticated user — those are domain facts
+// recorded by the aggregate, but not worth notifying the user about.
 func (a *NotificationAggregator) addActivityEvent(event *pullrequest.ActivityDetected) {
+	// Filter out self-authored activities — not notification-worthy
+	if a.authenticatedUser != "" && event.Activity.Author().Login() == a.authenticatedUser {
+		return
+	}
+
 	url := event.PullRequestID.URL()
 
 	notification, exists := a.pendingEvents[url]
@@ -95,29 +106,22 @@ func (a *NotificationAggregator) addActivityEvent(event *pullrequest.ActivityDet
 		a.pendingEvents[url] = notification
 	}
 
-	// Group activities by type and count them
-	activityCounts := make(map[pullrequest.ActivityType]int)
-	for _, activity := range event.Activities {
-		activityCounts[activity.Type()]++
-	}
+	activityType := event.Activity.Type()
 
-	// Convert to activity info list
-	for activityType, count := range activityCounts {
-		// Check if this activity type already exists
-		found := false
-		for i, existing := range notification.Activities {
-			if existing.Type == activityType {
-				notification.Activities[i].Count += count
-				found = true
-				break
-			}
+	// Check if this activity type already exists
+	found := false
+	for i, existing := range notification.Activities {
+		if existing.Type == activityType {
+			notification.Activities[i].Count++
+			found = true
+			break
 		}
-		if !found {
-			notification.Activities = append(notification.Activities, ActivityInfo{
-				Type:  activityType,
-				Count: count,
-			})
-		}
+	}
+	if !found {
+		notification.Activities = append(notification.Activities, ActivityInfo{
+			Type:  activityType,
+			Count: 1,
+		})
 	}
 }
 

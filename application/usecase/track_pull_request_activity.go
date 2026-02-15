@@ -13,26 +13,31 @@ import (
 // TrackPullRequestActivityUseCase handles checking for new activity on PRs
 // Uses a two-tier scheduling strategy to optimize API calls
 type TrackPullRequestActivityUseCase struct {
-	prRepo          pullrequest.PullRequestRepository
-	scheduler       *pullrequest.ActivityCheckScheduler
-	trackingService *pullrequest.TrackingService
-	eventPublisher  port.EventPublisher
-	knownHeadSHAs   map[string]string // PR URL → last known head commit SHA
+	prRepo            pullrequest.PullRequestRepository
+	scheduler         *pullrequest.ActivityCheckScheduler
+	trackingService   *pullrequest.TrackingService
+	eventPublisher    port.EventPublisher
+	knownHeadSHAs     map[string]string // PR URL → last known head commit SHA
+	authenticatedUser string            // GitHub login — used to filter self-activity for unseen marking
 }
 
-// NewTrackPullRequestActivityUseCase creates a new use case
+// NewTrackPullRequestActivityUseCase creates a new use case.
+// authenticatedUser is the GitHub login of the current user; self-authored activities
+// are not considered "new activity" for the purposes of marking PRs as unseen.
 func NewTrackPullRequestActivityUseCase(
 	prRepo pullrequest.PullRequestRepository,
 	scheduler *pullrequest.ActivityCheckScheduler,
 	trackingService *pullrequest.TrackingService,
 	eventPublisher port.EventPublisher,
+	authenticatedUser string,
 ) *TrackPullRequestActivityUseCase {
 	return &TrackPullRequestActivityUseCase{
-		prRepo:          prRepo,
-		scheduler:       scheduler,
-		trackingService: trackingService,
-		eventPublisher:  eventPublisher,
-		knownHeadSHAs:   make(map[string]string),
+		prRepo:            prRepo,
+		scheduler:         scheduler,
+		trackingService:   trackingService,
+		eventPublisher:    eventPublisher,
+		knownHeadSHAs:     make(map[string]string),
+		authenticatedUser: authenticatedUser,
 	}
 }
 
@@ -81,10 +86,22 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 	// Mark these PRs as checked in the scheduler
 	uc.scheduler.MarkChecked(prsToCheck)
 
-	// Find PRs with new activity and emit events
+	// Collect and publish all domain events from enrichment.
+	// ActivityDetected events are raised by the aggregate when activities are added.
+	// The notification handler filters out self-authored activities.
+	for _, pr := range prsToCheck {
+		for _, event := range pr.CollectEvents() {
+			if err := uc.eventPublisher.Publish(event); err != nil {
+				log.Error().Err(err).Msg("Error publishing activity event")
+			}
+		}
+	}
+
+	// Find PRs with new activity by others (filter out self-authored activities)
+	// to decide which PRs should be marked unseen (asterisks in UI)
 	var prsWithNewActivity []*pullrequest.PullRequest
 	for _, pr := range prsToCheck {
-		if pr.HasActivitiesSince(lastCheckTime) {
+		if uc.hasActivityByOthers(pr, lastCheckTime) {
 			prsWithNewActivity = append(prsWithNewActivity, pr)
 		}
 	}
@@ -96,22 +113,24 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 
 	log.Info().Msgf("Found %d PRs with new activity", len(prsWithNewActivity))
 
-	// Mark PRs with new activity as unseen (to show asterisks and trigger notifications)
+	// Mark PRs with new activity as unseen (to show asterisks)
 	for _, pr := range prsWithNewActivity {
 		if err := uc.trackingService.MarkPullRequestAsUnseen(pr); err != nil {
 			log.Error().Err(err).Msg("Error marking PR as unseen")
 		}
-
-		// Record activity (raises domain event)
-		pr.RecordNewActivity()
-
-		// Collect and publish events from the aggregate
-		for _, event := range pr.CollectEvents() {
-			if err := uc.eventPublisher.Publish(event); err != nil {
-				log.Error().Err(err).Msg("Error publishing activity event")
-			}
-		}
 	}
 
 	return nil
+}
+
+// hasActivityByOthers returns true if the PR has any activities since lastCheckTime
+// that were NOT authored by the authenticated user. Self-authored activities are
+// domain facts but should not trigger unseen marking or notifications.
+func (uc *TrackPullRequestActivityUseCase) hasActivityByOthers(pr *pullrequest.PullRequest, since time.Time) bool {
+	for _, activity := range pr.ActivitiesSince(since) {
+		if uc.authenticatedUser == "" || activity.Author().Login() != uc.authenticatedUser {
+			return true
+		}
+	}
+	return false
 }

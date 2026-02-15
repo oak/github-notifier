@@ -122,13 +122,15 @@ func (m *Mapper) ToActivity(pr *pullrequest.PullRequest, dto TimelineItemDTO) *p
 	return nil
 }
 
-// ToActivityList converts timeline item DTOs to domain activities, filtering by time and authenticated user
-func (m *Mapper) ToActivityList(pr *pullrequest.PullRequest, dtos []TimelineItemDTO, since time.Time, authenticatedUser string) []*pullrequest.Activity {
+// ToActivityList converts timeline item DTOs to domain activities, filtering by time.
+// All activities are recorded as domain facts; notification filtering (e.g. suppressing
+// self-authored activities) is handled by the notification event handler.
+func (m *Mapper) ToActivityList(pr *pullrequest.PullRequest, dtos []TimelineItemDTO, since time.Time) []*pullrequest.Activity {
 	var activities []*pullrequest.Activity
 
 	for _, dto := range dtos {
 		// Check for reactions on this timeline item (even if the item itself is old)
-		reactionActivities := m.ToReactionActivities(pr, dto, since, authenticatedUser)
+		reactionActivities := m.ToReactionActivities(pr, dto, since)
 		activities = append(activities, reactionActivities...)
 
 		// Skip items older than since time for regular activities
@@ -138,10 +140,6 @@ func (m *Mapper) ToActivityList(pr *pullrequest.PullRequest, dtos []TimelineItem
 
 		activity := m.ToActivity(pr, dto)
 		if activity != nil {
-			// Filter out activities created by the authenticated user
-			if authenticatedUser != "" && activity.Author().Login() == authenticatedUser {
-				continue // Skip this activity - it's from @me
-			}
 			activities = append(activities, activity)
 		}
 	}
@@ -149,8 +147,10 @@ func (m *Mapper) ToActivityList(pr *pullrequest.PullRequest, dtos []TimelineItem
 	return activities
 }
 
-// ToReactionActivities extracts reaction activities from a timeline item (comment or review)
-func (m *Mapper) ToReactionActivities(pr *pullrequest.PullRequest, dto TimelineItemDTO, since time.Time, authenticatedUser string) []*pullrequest.Activity {
+// ToReactionActivities extracts reaction activities from a timeline item (comment or review).
+// All reactions are recorded as domain facts; notification filtering (e.g. suppressing
+// self-reactions) is handled by the notification event handler.
+func (m *Mapper) ToReactionActivities(pr *pullrequest.PullRequest, dto TimelineItemDTO, since time.Time) []*pullrequest.Activity {
 	var activities []*pullrequest.Activity
 
 	// Only process reactions for comments and reviews
@@ -172,11 +172,6 @@ func (m *Mapper) ToReactionActivities(pr *pullrequest.PullRequest, dto TimelineI
 
 		// Skip if no user info
 		if reaction.User == nil {
-			continue
-		}
-
-		// Filter out reactions by authenticated user
-		if authenticatedUser != "" && reaction.User.Login == authenticatedUser {
 			continue
 		}
 

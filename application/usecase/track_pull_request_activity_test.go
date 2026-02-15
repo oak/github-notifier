@@ -23,7 +23,7 @@ func TestTrackActivity_EmptyPRList(t *testing.T) {
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
-	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher, "")
 
 	// Act
 	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{}, time.Now())
@@ -51,7 +51,7 @@ func TestTrackActivity_NoPRsDueForCheck(t *testing.T) {
 	// Mark them as already checked
 	scheduler.MarkChecked(prs)
 
-	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher, "")
 
 	// Act
 	err := uc.Execute(context.Background(), prs, now.Add(-1*time.Hour))
@@ -78,7 +78,7 @@ func TestTrackActivity_NoNewActivity(t *testing.T) {
 	// Mock expectations
 	mockPRRepo.On("EnrichWithActivities", prs, lastCheckTime).Return(nil)
 
-	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher, "")
 
 	// Act
 	err := uc.Execute(context.Background(), prs, lastCheckTime)
@@ -127,7 +127,7 @@ func TestTrackActivity_NewActivity_EmitsEvents(t *testing.T) {
 	// Events should be published
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil).Twice()
 
-	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher, "")
 
 	// Act
 	err := uc.Execute(context.Background(), prs, lastCheckTime)
@@ -156,7 +156,7 @@ func TestTrackActivity_EnrichError(t *testing.T) {
 	// Mock expectations
 	mockPRRepo.On("EnrichWithActivities", prs, lastCheckTime).Return(expectedErr)
 
-	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher, "")
 
 	// Act
 	err := uc.Execute(context.Background(), prs, lastCheckTime)
@@ -203,7 +203,7 @@ func TestTrackActivity_MarkUnseenError_ContinuesProcessing(t *testing.T) {
 	// Events should still be published even if marking fails
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil).Twice()
 
-	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher, "")
 
 	// Act
 	err := uc.Execute(context.Background(), prs, lastCheckTime)
@@ -246,7 +246,7 @@ func TestTrackActivity_PublishEventError_ContinuesProcessing(t *testing.T) {
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(errors.New("event bus error")).Once()
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil).Once()
 
-	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher, "")
 
 	// Act
 	err := uc.Execute(context.Background(), prs, lastCheckTime)
@@ -278,7 +278,7 @@ func TestTrackActivity_TwoTierScheduling(t *testing.T) {
 	// Mock: Both PRs should be enriched on first call
 	mockPRRepo.On("EnrichWithActivities", prs, lastCheckTime).Return(nil).Once()
 
-	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher, "")
 
 	// Act - First execution
 	err := uc.Execute(context.Background(), prs, lastCheckTime)

@@ -360,14 +360,13 @@ func TestPullRequest_MarkAsNewlyDetected_RaisesEvent(t *testing.T) {
 	assert.Equal(t, pr, event.PullRequest)
 }
 
-func TestPullRequest_RecordNewActivity_RaisesEvent(t *testing.T) {
+func TestPullRequest_AddActivity_RaisesActivityDetectedEvent(t *testing.T) {
 	// Arrange
 	pr := testutil.NewTestPullRequest(1)
 	activity := testutil.NewTestActivity(pullrequest.ActivityTypeComment, time.Now())
-	pr.AddActivity(activity)
 
 	// Act
-	pr.RecordNewActivity()
+	pr.AddActivity(activity)
 	events := pr.CollectEvents()
 
 	// Assert
@@ -376,20 +375,20 @@ func TestPullRequest_RecordNewActivity_RaisesEvent(t *testing.T) {
 	require.True(t, ok, "Expected ActivityDetected event")
 	assert.Equal(t, pr.Identifier(), event.PullRequestID)
 	assert.Equal(t, pr.Repository(), event.Repository)
-	assert.Len(t, event.Activities, 1)
+	assert.Equal(t, activity, event.Activity)
 	assert.Equal(t, pr, event.PullRequest)
 }
 
-func TestPullRequest_RecordNewActivity_NoActivities_NoEvent(t *testing.T) {
+func TestPullRequest_AddActivity_Nil_NoEvent(t *testing.T) {
 	// Arrange
 	pr := testutil.NewTestPullRequest(1)
 
 	// Act
-	pr.RecordNewActivity()
+	pr.AddActivity(nil)
 	events := pr.CollectEvents()
 
 	// Assert
-	assert.Len(t, events, 0, "Should not raise event when there are no activities")
+	assert.Len(t, events, 0, "Should not raise event for nil activity")
 }
 
 func TestPullRequest_Close_RaisesStatusChangedEvent(t *testing.T) {
@@ -472,21 +471,20 @@ func TestPullRequest_MultipleEvents_CollectedInOrder(t *testing.T) {
 	// Arrange
 	pr := testutil.NewTestPullRequest(1)
 	activity := testutil.NewTestActivity(pullrequest.ActivityTypeComment, time.Now())
-	pr.AddActivity(activity)
 
-	// Act
+	// Act — AddActivity raises ActivityDetected automatically
+	pr.AddActivity(activity)
 	pr.MarkAsNewlyDetected()
-	pr.RecordNewActivity()
 	pr.Close()
 	events := pr.CollectEvents()
 
 	// Assert
 	require.Len(t, events, 3)
-	_, ok1 := events[0].(*pullrequest.NewPullRequestDetected)
-	_, ok2 := events[1].(*pullrequest.ActivityDetected)
+	_, ok1 := events[0].(*pullrequest.ActivityDetected)
+	_, ok2 := events[1].(*pullrequest.NewPullRequestDetected)
 	_, ok3 := events[2].(*pullrequest.StatusChanged)
-	assert.True(t, ok1, "First event should be NewPullRequestDetected")
-	assert.True(t, ok2, "Second event should be ActivityDetected")
+	assert.True(t, ok1, "First event should be ActivityDetected")
+	assert.True(t, ok2, "Second event should be NewPullRequestDetected")
 	assert.True(t, ok3, "Third event should be StatusChanged")
 }
 
@@ -495,7 +493,7 @@ func TestPullRequest_RecordHeadCommitUpdate_FirstTime_InitializesWithoutActivity
 	pr := testutil.NewTestPullRequest(1)
 
 	// Act
-	pr.RecordHeadCommitUpdate("abc123", "")
+	pr.RecordHeadCommitUpdate("abc123")
 
 	// Assert
 	assert.Equal(t, "abc123", pr.HeadCommitSHA())
@@ -509,7 +507,7 @@ func TestPullRequest_RecordHeadCommitUpdate_SameSHA_NoActivity(t *testing.T) {
 	pr.SetInitialHeadCommitSHA("abc123")
 
 	// Act
-	pr.RecordHeadCommitUpdate("abc123", "")
+	pr.RecordHeadCommitUpdate("abc123")
 
 	// Assert
 	assert.Empty(t, pr.Activities(), "Same SHA should not create push activity")
@@ -522,7 +520,7 @@ func TestPullRequest_RecordHeadCommitUpdate_Changed_CreatesPushActivity(t *testi
 	pr.SetInitialHeadCommitSHA("abc123")
 
 	// Act
-	pr.RecordHeadCommitUpdate("def456", "testuser")
+	pr.RecordHeadCommitUpdate("def456")
 
 	// Assert
 	assert.Equal(t, "def456", pr.HeadCommitSHA())
@@ -532,27 +530,29 @@ func TestPullRequest_RecordHeadCommitUpdate_Changed_CreatesPushActivity(t *testi
 	assert.Equal(t, "alice", pr.Activities()[0].Author().Login())
 }
 
-func TestPullRequest_RecordHeadCommitUpdate_SelfPush_NoActivity(t *testing.T) {
+func TestPullRequest_RecordHeadCommitUpdate_SelfPush_CreatesActivity(t *testing.T) {
 	// Arrange - PR author is the authenticated user
+	// The aggregate records all domain facts. Notification filtering is done downstream.
 	pr := testutil.NewTestPullRequest(1, testutil.WithAuthor("testuser"))
 	pr.SetInitialHeadCommitSHA("abc123")
 
 	// Act
-	pr.RecordHeadCommitUpdate("def456", "testuser")
+	pr.RecordHeadCommitUpdate("def456")
 
-	// Assert
-	assert.Equal(t, "def456", pr.HeadCommitSHA(), "SHA should still be updated")
-	assert.Empty(t, pr.Activities(), "Self-push should NOT create activity")
-	assert.Empty(t, pr.CollectEvents(), "Self-push should NOT raise events")
+	// Assert - activity IS created (it's a domain fact)
+	assert.Equal(t, "def456", pr.HeadCommitSHA())
+	require.Len(t, pr.Activities(), 1)
+	assert.Equal(t, pullrequest.ActivityTypePush, pr.Activities()[0].Type())
+	assert.Equal(t, "testuser", pr.Activities()[0].Author().Login())
 }
 
-func TestPullRequest_RecordHeadCommitUpdate_NoAuthenticatedUser_CreatesPushActivity(t *testing.T) {
-	// Arrange - no authenticated user means no filtering
+func TestPullRequest_RecordHeadCommitUpdate_AlwaysCreatesPushActivity(t *testing.T) {
+	// Arrange - the aggregate always records pushes as domain facts
 	pr := testutil.NewTestPullRequest(1, testutil.WithAuthor("alice"))
 	pr.SetInitialHeadCommitSHA("abc123")
 
 	// Act
-	pr.RecordHeadCommitUpdate("def456", "")
+	pr.RecordHeadCommitUpdate("def456")
 
 	// Assert
 	require.Len(t, pr.Activities(), 1)

@@ -29,7 +29,7 @@ func TestOrchestrator_ExecuteInitialCheck_FirstRun(t *testing.T) {
 	// Create use cases
 	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
 	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
-	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
+	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher, "")
 	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
 
 	prs := testutil.CreateTestPRs(2, 0)
@@ -73,7 +73,7 @@ func TestOrchestrator_ExecuteInitialCheck_NotFirstRun(t *testing.T) {
 
 	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
 	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
-	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
+	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher, "")
 	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
 
 	prs := testutil.CreateTestPRs(2, 0)
@@ -117,7 +117,7 @@ func TestOrchestrator_ExecuteRegularCheck_WithoutActivityTracking(t *testing.T) 
 
 	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
 	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
-	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
+	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher, "")
 	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
 
 	prs := testutil.CreateTestPRs(2, 0)
@@ -161,7 +161,7 @@ func TestOrchestrator_ExecuteRegularCheck_WithActivityTracking(t *testing.T) {
 
 	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
 	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
-	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
+	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher, "")
 	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
 
 	prs := testutil.CreateTestPRs(2, 0)
@@ -204,7 +204,7 @@ func TestOrchestrator_ExecuteRegularCheck_CheckNewPRsError(t *testing.T) {
 
 	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
 	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
-	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
+	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher, "")
 	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
 
 	expectedErr := errors.New("github api error")
@@ -244,7 +244,7 @@ func TestOrchestrator_ExecuteRegularCheck_ActivityTrackingError_ContinuesWithDis
 
 	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
 	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, prClassifier, mockEventPublisher)
-	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher)
+	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, scheduler, trackingService, mockEventPublisher, "")
 	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
 
 	prs := testutil.CreateTestPRs(2, 0)

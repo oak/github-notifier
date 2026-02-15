@@ -43,9 +43,8 @@ func TestTrackingHandler_HandleActivityDetected_Success(t *testing.T) {
 		time.Now(),
 		testutil.WithActivityPR(pr.URL(), pr.Number()),
 	)
-	pr.AddActivities([]*pullrequest.Activity{activity})
 
-	event := pullrequest.NewActivityDetected(pr)
+	event := pullrequest.NewActivityDetected(pr, activity)
 
 	// Act
 	err := handler.Handle(context.Background(), &event)
@@ -117,12 +116,14 @@ func TestTrackingHandler_HandleMultipleActivities(t *testing.T) {
 		time.Now(),
 		testutil.WithActivityPR(pr.URL(), pr.Number()),
 	)
-	pr.AddActivities([]*pullrequest.Activity{activity1, activity2})
 
-	event := pullrequest.NewActivityDetected(pr)
+	event1 := pullrequest.NewActivityDetected(pr, activity1)
+	event2 := pullrequest.NewActivityDetected(pr, activity2)
 
 	// Act
-	err := handler.Handle(context.Background(), &event)
+	err := handler.Handle(context.Background(), &event1)
+	require.NoError(t, err)
+	err = handler.Handle(context.Background(), &event2)
 
 	// Assert
 	require.NoError(t, err)
@@ -143,10 +144,9 @@ func TestTrackingHandler_HandleMixedEvents(t *testing.T) {
 		time.Now(),
 		testutil.WithActivityPR(pr2.URL(), pr2.Number()),
 	)
-	pr2.AddActivities([]*pullrequest.Activity{activity})
 
 	newPREvent := pullrequest.NewNewPullRequestDetected(pr1)
-	activityEvent := pullrequest.NewActivityDetected(pr2)
+	activityEvent := pullrequest.NewActivityDetected(pr2, activity)
 
 	// Act
 	err1 := handler.Handle(context.Background(), &newPREvent)

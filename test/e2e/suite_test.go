@@ -49,7 +49,7 @@ func SetupSuite(t *testing.T) *TestSuite {
 	eventBus := events.NewInMemoryEventBus()
 
 	// Register event handlers
-	notificationHandler := events.NewNotificationEventHandler(notifications)
+	notificationHandler := events.NewNotificationEventHandler(notifications, githubAdapter.AuthenticatedUser())
 	trackingHandler := events.NewTrackingEventHandler(trackingService)
 
 	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, notificationHandler)
@@ -90,6 +90,7 @@ func SetupSuite(t *testing.T) *TestSuite {
 		activityScheduler,
 		trackingService,
 		eventBus,
+		githubAdapter.AuthenticatedUser(),
 	)
 
 	updateDisplayUseCase := usecase.NewUpdatePullRequestDisplayUseCase(

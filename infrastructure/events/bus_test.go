@@ -3,6 +3,7 @@ package events_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -126,7 +127,8 @@ func TestEventBus_Publish_DifferentEventTypes(t *testing.T) {
 
 	pr := testutil.NewTestPullRequest(1)
 	newPREvent := pullrequest.NewNewPullRequestDetected(pr)
-	activityEvent := pullrequest.NewActivityDetected(pr)
+	activity := testutil.NewTestActivity(pullrequest.ActivityTypeComment, time.Now())
+	activityEvent := pullrequest.NewActivityDetected(pr, activity)
 
 	// Subscribe different handlers to different events
 	bus.Subscribe(pullrequest.EventNewPullRequestDetected, mockHandler1)

@@ -153,8 +153,9 @@ func (pr *PullRequest) Equals(other *PullRequest) bool {
 	return pr.identifier.Equals(other.identifier)
 }
 
-// AddActivity adds a new activity to the PR (through the aggregate)
-// This maintains the aggregate's consistency boundary
+// AddActivity adds a new activity to the PR and raises an ActivityDetected event.
+// This maintains the aggregate's consistency boundary and follows the same pattern
+// as Close/Merge which raise StatusChanged events.
 func (pr *PullRequest) AddActivity(activity *Activity) {
 	if activity == nil {
 		return
@@ -166,6 +167,10 @@ func (pr *PullRequest) AddActivity(activity *Activity) {
 	if activity.CreatedAt().After(pr.lastActivityAt) {
 		pr.lastActivityAt = activity.CreatedAt()
 	}
+
+	// Raise domain event — activity is a domain fact
+	event := NewActivityDetected(pr, activity)
+	pr.raiseEvent(&event)
 }
 
 // AddActivities adds multiple activities at once
@@ -250,12 +255,13 @@ func (pr *PullRequest) SetInitialHeadCommitSHA(sha string) {
 }
 
 // RecordHeadCommitUpdate detects if the head commit has changed and, if so,
-// creates a push activity and raises an ActivityDetected event.
-// Self-pushes (where the PR author matches authenticatedUser) are ignored.
-// First-time initialization (empty current SHA) records the SHA without notifying.
-func (pr *PullRequest) RecordHeadCommitUpdate(newHeadSHA, authenticatedUser string) {
+// creates a push activity on the aggregate (which raises an ActivityDetected event).
+// The aggregate records all domain facts; notification filtering (e.g. suppressing
+// self-pushes) is handled by the notification event handler.
+// First-time initialization (empty current SHA) records the SHA without creating activity.
+func (pr *PullRequest) RecordHeadCommitUpdate(newHeadSHA string) {
 	if pr.headCommitSHA == "" {
-		// First time seeing this PR - initialize but don't notify
+		// First time seeing this PR - initialize but don't create activity
 		pr.headCommitSHA = newHeadSHA
 		return
 	}
@@ -266,12 +272,7 @@ func (pr *PullRequest) RecordHeadCommitUpdate(newHeadSHA, authenticatedUser stri
 
 	pr.headCommitSHA = newHeadSHA
 
-	// Filter out self-pushes: the PR author typically pushes to their own branch
-	if authenticatedUser != "" && pr.author.Login() == authenticatedUser {
-		return
-	}
-
-	// Create a push activity within the aggregate
+	// Create a push activity within the aggregate — this is a domain fact
 	pushActivity := NewActivity(
 		pr.identifier,
 		ActivityTypePush,
@@ -298,12 +299,4 @@ func (pr *PullRequest) raiseEvent(event Event) {
 func (pr *PullRequest) MarkAsNewlyDetected() {
 	event := NewNewPullRequestDetected(pr)
 	pr.raiseEvent(&event)
-}
-
-// RecordNewActivity records that new activity has been detected and raises an event
-func (pr *PullRequest) RecordNewActivity() {
-	if len(pr.activities) > 0 {
-		event := NewActivityDetected(pr)
-		pr.raiseEvent(&event)
-	}
 }

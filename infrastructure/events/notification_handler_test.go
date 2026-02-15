@@ -18,7 +18,7 @@ import (
 func TestNotificationHandler_HandleNewPRDetected_Success(t *testing.T) {
 	// Arrange
 	mockNotificationPort := mocks.NewNotificationPort(t)
-	handler := events.NewNotificationEventHandler(mockNotificationPort)
+	handler := events.NewNotificationEventHandler(mockNotificationPort, "")
 	defer handler.Stop()
 
 	pr := testutil.NewTestPullRequest(1)
@@ -47,7 +47,7 @@ func TestNotificationHandler_HandleNewPRDetected_Success(t *testing.T) {
 func TestNotificationHandler_HandleActivityDetected_Success(t *testing.T) {
 	// Arrange
 	mockNotificationPort := mocks.NewNotificationPort(t)
-	handler := events.NewNotificationEventHandler(mockNotificationPort)
+	handler := events.NewNotificationEventHandler(mockNotificationPort, "")
 	defer handler.Stop()
 
 	pr := testutil.NewTestPullRequest(1)
@@ -56,9 +56,8 @@ func TestNotificationHandler_HandleActivityDetected_Success(t *testing.T) {
 		time.Now(),
 		testutil.WithActivityPR(pr.URL(), pr.Number()),
 	)
-	pr.AddActivities([]*pullrequest.Activity{activity})
 
-	event := pullrequest.NewActivityDetected(pr)
+	event := pullrequest.NewActivityDetected(pr, activity)
 
 	// Mock expectations - should group activities
 	mockNotificationPort.On("NotifyPullRequests", mock.MatchedBy(func(notifications []*port.PRNotificationData) bool {
@@ -87,7 +86,7 @@ func TestNotificationHandler_HandleActivityDetected_Success(t *testing.T) {
 func TestNotificationHandler_HandleMultipleEvents_GroupedBySamePR(t *testing.T) {
 	// Arrange
 	mockNotificationPort := mocks.NewNotificationPort(t)
-	handler := events.NewNotificationEventHandler(mockNotificationPort)
+	handler := events.NewNotificationEventHandler(mockNotificationPort, "")
 	defer handler.Stop()
 
 	pr := testutil.NewTestPullRequest(1)
@@ -101,8 +100,7 @@ func TestNotificationHandler_HandleMultipleEvents_GroupedBySamePR(t *testing.T) 
 		time.Now(),
 		testutil.WithActivityPR(pr.URL(), pr.Number()),
 	)
-	pr.AddActivities([]*pullrequest.Activity{activity})
-	activityEvent := pullrequest.NewActivityDetected(pr)
+	activityEvent := pullrequest.NewActivityDetected(pr, activity)
 
 	// Mock expectations - should group into ONE notification
 	mockNotificationPort.On("NotifyPullRequests", mock.MatchedBy(func(notifications []*port.PRNotificationData) bool {
@@ -134,12 +132,12 @@ func TestNotificationHandler_HandleMultipleEvents_GroupedBySamePR(t *testing.T) 
 func TestNotificationHandler_HandleMultipleActivitiesSamePR(t *testing.T) {
 	// Arrange
 	mockNotificationPort := mocks.NewNotificationPort(t)
-	handler := events.NewNotificationEventHandler(mockNotificationPort)
+	handler := events.NewNotificationEventHandler(mockNotificationPort, "")
 	defer handler.Stop()
 
 	pr := testutil.NewTestPullRequest(1)
 
-	// Add multiple activities
+	// Create two separate activity events (each AddActivity raises its own event)
 	comment := testutil.NewTestActivity(
 		pullrequest.ActivityTypeComment,
 		time.Now(),
@@ -150,9 +148,9 @@ func TestNotificationHandler_HandleMultipleActivitiesSamePR(t *testing.T) {
 		time.Now(),
 		testutil.WithActivityPR(pr.URL(), pr.Number()),
 	)
-	pr.AddActivities([]*pullrequest.Activity{comment, review})
 
-	event := pullrequest.NewActivityDetected(pr)
+	commentEvent := pullrequest.NewActivityDetected(pr, comment)
+	reviewEvent := pullrequest.NewActivityDetected(pr, review)
 
 	// Mock expectations - should group activities by type
 	mockNotificationPort.On("NotifyPullRequests", mock.MatchedBy(func(notifications []*port.PRNotificationData) bool {
@@ -178,8 +176,11 @@ func TestNotificationHandler_HandleMultipleActivitiesSamePR(t *testing.T) {
 		return hasComment && hasReview
 	})).Return(nil)
 
-	// Act
-	err := handler.Handle(context.Background(), &event)
+	// Act - send two separate activity events (as the aggregate would)
+	err := handler.Handle(context.Background(), &commentEvent)
+	require.NoError(t, err)
+
+	err = handler.Handle(context.Background(), &reviewEvent)
 	require.NoError(t, err)
 
 	// Wait for aggregator to flush
@@ -192,7 +193,7 @@ func TestNotificationHandler_HandleMultipleActivitiesSamePR(t *testing.T) {
 func TestNotificationHandler_HandleMultiplePRs_SeparateNotifications(t *testing.T) {
 	// Arrange
 	mockNotificationPort := mocks.NewNotificationPort(t)
-	handler := events.NewNotificationEventHandler(mockNotificationPort)
+	handler := events.NewNotificationEventHandler(mockNotificationPort, "")
 	defer handler.Stop()
 
 	pr1 := testutil.NewTestPullRequest(1, testutil.WithURL("https://github.com/owner/repo/pull/1"))
@@ -231,7 +232,7 @@ func TestNotificationHandler_HandleMultiplePRs_SeparateNotifications(t *testing.
 func TestNotificationHandler_HandleUnknownEvent_Ignored(t *testing.T) {
 	// Arrange
 	mockNotificationPort := mocks.NewNotificationPort(t)
-	handler := events.NewNotificationEventHandler(mockNotificationPort)
+	handler := events.NewNotificationEventHandler(mockNotificationPort, "")
 	defer handler.Stop()
 
 	// Create a mock event type (not a real event, just for testing)
@@ -256,7 +257,7 @@ func TestNotificationHandler_HandleUnknownEvent_Ignored(t *testing.T) {
 func TestNotificationHandler_HandlePRMerged_Success(t *testing.T) {
 	// Arrange
 	mockNotificationPort := mocks.NewNotificationPort(t)
-	handler := events.NewNotificationEventHandler(mockNotificationPort)
+	handler := events.NewNotificationEventHandler(mockNotificationPort, "")
 	defer handler.Stop()
 
 	pr := testutil.NewTestPullRequest(1)
@@ -274,7 +275,7 @@ func TestNotificationHandler_HandlePRMerged_Success(t *testing.T) {
 func TestNotificationHandler_HandlePRClosed_Success(t *testing.T) {
 	// Arrange
 	mockNotificationPort := mocks.NewNotificationPort(t)
-	handler := events.NewNotificationEventHandler(mockNotificationPort)
+	handler := events.NewNotificationEventHandler(mockNotificationPort, "")
 	defer handler.Stop()
 
 	pr := testutil.NewTestPullRequest(1)
@@ -291,7 +292,7 @@ func TestNotificationHandler_HandlePRClosed_Success(t *testing.T) {
 func TestNotificationHandler_HandleStatusChanged_Success(t *testing.T) {
 	// Arrange
 	mockNotificationPort := mocks.NewNotificationPort(t)
-	handler := events.NewNotificationEventHandler(mockNotificationPort)
+	handler := events.NewNotificationEventHandler(mockNotificationPort, "")
 	defer handler.Stop()
 
 	pr := testutil.NewTestPullRequest(1)
@@ -308,7 +309,7 @@ func TestNotificationHandler_HandleStatusChanged_Success(t *testing.T) {
 func TestNotificationHandler_ImmediateFlush_OnStop(t *testing.T) {
 	// Arrange
 	mockNotificationPort := mocks.NewNotificationPort(t)
-	handler := events.NewNotificationEventHandler(mockNotificationPort)
+	handler := events.NewNotificationEventHandler(mockNotificationPort, "")
 
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewNewPullRequestDetected(pr)
