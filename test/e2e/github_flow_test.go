@@ -4,6 +4,7 @@
 package e2e
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -531,7 +532,7 @@ func TestE2E_CommitActivity_DetectsNewPush(t *testing.T) {
 	// Look for activity notification
 	_ = false
 	for _, n := range notifs {
-		if n.Title == "PR Activity" && (containsInMiddle(n.Body, "WIP Feature") || containsInMiddle(n.Body, "888")) {
+		if n.Title == "PR Activity" && (strings.Contains(n.Body, "WIP Feature") || strings.Contains(n.Body, "888")) {
 			_ = true
 			break
 		}

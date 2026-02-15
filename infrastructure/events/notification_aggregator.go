@@ -23,7 +23,7 @@ type ActivityInfo struct {
 
 // StatusChange holds information about status changes
 type StatusChange struct {
-	EventType string // "merged" or "closed"
+	EventType pullrequest.StatusChangeType
 }
 
 // NotificationAggregator batches notifications and groups them by PR
@@ -132,7 +132,7 @@ func (a *NotificationAggregator) addMergedEvent(event *pullrequest.Merged) {
 	}
 
 	notification.StatusChanges = append(notification.StatusChanges, StatusChange{
-		EventType: "merged",
+		EventType: pullrequest.StatusChangeMerged,
 	})
 }
 
@@ -147,7 +147,7 @@ func (a *NotificationAggregator) addClosedEvent(event *pullrequest.Closed) {
 	}
 
 	notification.StatusChanges = append(notification.StatusChanges, StatusChange{
-		EventType: "closed",
+		EventType: pullrequest.StatusChangeClosed,
 	})
 }
 

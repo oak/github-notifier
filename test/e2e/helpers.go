@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"time"
 
@@ -111,19 +112,19 @@ func (m *MockGitHubServer) handler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// Handle viewer login query
-	if containsString(request.Query, "viewer") && containsString(request.Query, "login") {
+	if strings.Contains(request.Query, "viewer") && strings.Contains(request.Query, "login") {
 		m.handleViewerQuery(w)
 		return
 	}
 
 	// Handle batched timeline query (contains aliases like pr0:)
-	if containsString(request.Query, "repository(owner:") {
+	if strings.Contains(request.Query, "repository(owner:") {
 		m.handleBatchedTimelineQuery(w, request.Query)
 		return
 	}
 
 	// Handle search queries
-	if containsString(request.Query, "search") {
+	if strings.Contains(request.Query, "search") {
 		m.handleSearchQuery(w, request.Query)
 		return
 	}
@@ -149,14 +150,14 @@ func (m *MockGitHubServer) handleSearchQuery(w http.ResponseWriter, query string
 	var filteredPRs []MockPR
 
 	// Filter PRs based on query type
-	if containsString(query, "review-requested:@me") || containsString(query, "reviewed-by:@me") {
+	if strings.Contains(query, "review-requested:@me") || strings.Contains(query, "reviewed-by:@me") {
 		// Return PRs where user is requested to review
 		for _, pr := range m.prs {
 			if pr.State == "open" && pr.Author != "testuser" {
 				filteredPRs = append(filteredPRs, pr)
 			}
 		}
-	} else if containsString(query, "author:@me") {
+	} else if strings.Contains(query, "author:@me") {
 		// Return PRs created by user
 		for _, pr := range m.prs {
 			if pr.State == "open" && pr.Author == "testuser" {
@@ -506,25 +507,6 @@ func (s *SpyNotificationAdapter) NotifyPullRequests(notifications []*port.PRNoti
 	return nil
 }
 
-// NotifyNewPullRequests captures the notification (implements NotificationPort)
-// DEPRECATED: Use NotifyPullRequests instead
-func (s *SpyNotificationAdapter) NotifyNewPullRequests(title string, prs []*pullrequest.PullRequest) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Capture notification for each PR
-	for _, pr := range prs {
-		s.notifications = append(s.notifications, CapturedNotification{
-			Title: title,
-			Body:  pr.Title() + " #" + string(rune('0'+pr.Number())),
-			URL:   pr.URL(),
-			Time:  time.Now(),
-		})
-	}
-
-	return nil
-}
-
 // SupportsClickActions returns true
 func (s *SpyNotificationAdapter) SupportsClickActions() bool {
 	return true
@@ -583,18 +565,4 @@ func (s *SpyUIAdapter) GetUpdateCount() int {
 	defer s.mu.Unlock()
 
 	return s.updates
-}
-
-// Helper function to check if a string contains a substring
-func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsInMiddle(s, substr)))
-}
-
-func containsInMiddle(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

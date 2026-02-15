@@ -129,9 +129,9 @@ func (a *Adapter) buildNotificationMessage(prNotif *port.PRNotificationData) str
 
 	// Add status changes
 	for _, statusChange := range prNotif.StatusChanges {
-		if statusChange.EventType == "merged" {
+		if statusChange.EventType == pullrequest.StatusChangeMerged {
 			parts = append(parts, "✅ Merged")
-		} else if statusChange.EventType == "closed" {
+		} else if statusChange.EventType == pullrequest.StatusChangeClosed {
 			parts = append(parts, "❌ Closed")
 		}
 	}
@@ -173,49 +173,6 @@ func (a *Adapter) getActivityLabel(actType pullrequest.ActivityType, count int) 
 		}
 		return fmt.Sprintf("• %d new activities", count)
 	}
-}
-
-// NotifyNewPullRequests sends a notification about new pull requests with click action
-// DEPRECATED: Use NotifyPullRequests instead
-func (a *Adapter) NotifyNewPullRequests(title string, prs []*pullrequest.PullRequest) error {
-	if len(prs) == 0 {
-		return nil
-	}
-
-	message := fmt.Sprintf("%s: %d", title, len(prs))
-	prList := ""
-	for _, pr := range prs {
-		prList += fmt.Sprintf("\n%s #%d", pr.RepositoryName(), pr.Number())
-	}
-
-	// For single PR, open it on click. For multiple PRs, open the first one
-	var urlToOpen string
-	if len(prs) == 1 {
-		urlToOpen = prs[0].URL()
-	} else if len(prs) > 1 {
-		// For multiple PRs, could open first one or a GitHub search
-		urlToOpen = prs[0].URL()
-		prList += "\n\nClick to open first PR"
-	}
-
-	note := gosxnotifier.NewNotification(message + prList)
-	note.Title = "GitHub Notifier"
-	if a.sender != "" {
-		note.Sender = a.sender
-	}
-	note.Sound = gosxnotifier.Default
-
-	// Set up click action to open PR URL when notification is clicked
-	if urlToOpen != "" {
-		note.Link = urlToOpen
-	}
-
-	if err := note.Push(); err != nil {
-		log.Error().Err(err).Msg("Error sending macOS notification")
-		return err
-	}
-
-	return nil
 }
 
 // SupportsClickActions returns true for macOS adapter

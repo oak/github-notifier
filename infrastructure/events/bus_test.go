@@ -20,7 +20,7 @@ func TestEventBus_Subscribe_AddsHandler(t *testing.T) {
 	mockHandler := mocks.NewEventHandler(t)
 
 	// Act
-	bus.Subscribe("NewPullRequestDetected", mockHandler)
+	bus.Subscribe(pullrequest.EventNewPullRequestDetected, mockHandler)
 
 	// Assert - handler is registered (verified by publish test)
 	assert.NotNil(t, bus)
@@ -34,7 +34,7 @@ func TestEventBus_Publish_CallsHandler(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewNewPullRequestDetected(pr)
 
-	bus.Subscribe("NewPullRequestDetected", mockHandler)
+	bus.Subscribe(pullrequest.EventNewPullRequestDetected, mockHandler)
 
 	// Mock expectations
 	mockHandler.On("Handle", mock.Anything, &event).Return(nil)
@@ -71,9 +71,9 @@ func TestEventBus_Publish_MultipleHandlers(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewNewPullRequestDetected(pr)
 
-	bus.Subscribe("NewPullRequestDetected", mockHandler1)
-	bus.Subscribe("NewPullRequestDetected", mockHandler2)
-	bus.Subscribe("NewPullRequestDetected", mockHandler3)
+	bus.Subscribe(pullrequest.EventNewPullRequestDetected, mockHandler1)
+	bus.Subscribe(pullrequest.EventNewPullRequestDetected, mockHandler2)
+	bus.Subscribe(pullrequest.EventNewPullRequestDetected, mockHandler3)
 
 	// Mock expectations - all handlers should be called
 	mockHandler1.On("Handle", mock.Anything, &event).Return(nil)
@@ -99,8 +99,8 @@ func TestEventBus_Publish_HandlerError_ReturnsFirstError(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewNewPullRequestDetected(pr)
 
-	bus.Subscribe("NewPullRequestDetected", mockHandler1)
-	bus.Subscribe("NewPullRequestDetected", mockHandler2)
+	bus.Subscribe(pullrequest.EventNewPullRequestDetected, mockHandler1)
+	bus.Subscribe(pullrequest.EventNewPullRequestDetected, mockHandler2)
 
 	expectedErr := errors.New("handler failed")
 
@@ -129,8 +129,8 @@ func TestEventBus_Publish_DifferentEventTypes(t *testing.T) {
 	activityEvent := pullrequest.NewActivityDetected(pr)
 
 	// Subscribe different handlers to different events
-	bus.Subscribe("NewPullRequestDetected", mockHandler1)
-	bus.Subscribe("ActivityDetected", mockHandler2)
+	bus.Subscribe(pullrequest.EventNewPullRequestDetected, mockHandler1)
+	bus.Subscribe(pullrequest.EventActivityDetected, mockHandler2)
 
 	// Mock expectations
 	mockHandler1.On("Handle", mock.Anything, &newPREvent).Return(nil)
@@ -161,8 +161,8 @@ func TestEventBus_Subscribe_SameHandlerMultipleTimes(t *testing.T) {
 	event := pullrequest.NewNewPullRequestDetected(pr)
 
 	// Subscribe the same handler twice
-	bus.Subscribe("NewPullRequestDetected", mockHandler)
-	bus.Subscribe("NewPullRequestDetected", mockHandler)
+	bus.Subscribe(pullrequest.EventNewPullRequestDetected, mockHandler)
+	bus.Subscribe(pullrequest.EventNewPullRequestDetected, mockHandler)
 
 	// Mock expectations - handler should be called twice (once per subscription)
 	mockHandler.On("Handle", mock.Anything, &event).Return(nil).Twice()
@@ -184,8 +184,8 @@ func TestEventBus_Publish_AllHandlersFail(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewNewPullRequestDetected(pr)
 
-	bus.Subscribe("NewPullRequestDetected", mockHandler1)
-	bus.Subscribe("NewPullRequestDetected", mockHandler2)
+	bus.Subscribe(pullrequest.EventNewPullRequestDetected, mockHandler1)
+	bus.Subscribe(pullrequest.EventNewPullRequestDetected, mockHandler2)
 
 	err1 := errors.New("handler 1 failed")
 	err2 := errors.New("handler 2 failed")

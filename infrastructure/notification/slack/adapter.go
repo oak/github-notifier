@@ -117,9 +117,9 @@ func (a *Adapter) buildSlackMessage(prNotif *port.PRNotificationData) (string, s
 	// Add status changes
 	if len(prNotif.StatusChanges) > 0 {
 		for _, statusChange := range prNotif.StatusChanges {
-			if statusChange.EventType == "merged" {
+			if statusChange.EventType == pullrequest.StatusChangeMerged {
 				parts = append(parts, "✅ *Merged*")
-			} else if statusChange.EventType == "closed" {
+			} else if statusChange.EventType == pullrequest.StatusChangeClosed {
 				parts = append(parts, "❌ *Closed*")
 			}
 		}
@@ -163,39 +163,6 @@ func (a *Adapter) getActivityLabel(actType pullrequest.ActivityType, count int) 
 		}
 		return fmt.Sprintf("%d new activities", count)
 	}
-}
-
-// NotifyNewPullRequests sends a Slack message about new pull requests
-// DEPRECATED: Use NotifyPullRequests instead
-func (a *Adapter) NotifyNewPullRequests(title string, prs []*pullrequest.PullRequest) error {
-	if len(prs) == 0 {
-		return nil
-	}
-
-	// Build message with Slack markdown formatting
-	slackTitle := fmt.Sprintf("🔔 *%s*", title)
-	message := fmt.Sprintf("%s (%d)\n\n", slackTitle, len(prs))
-
-	for _, pr := range prs {
-		// Use Repository() method directly from PullRequest
-		repoInfo := pr.Repository()
-		message += fmt.Sprintf("• <%s|%s #%d>: %s\n",
-			pr.URL(),
-			repoInfo.NameWithOwner(),
-			pr.Number(),
-			pr.Title(),
-		)
-	}
-
-	// Send notification
-	ctx := context.Background()
-	if err := a.notifier.Send(ctx, slackTitle, message); err != nil {
-		log.Error().Msgf("Failed to send Slack notification: %v", err)
-		return fmt.Errorf("slack notification failed: %w", err)
-	}
-
-	log.Info().Msgf("Sent Slack notification: %s with %d PRs", title, len(prs))
-	return nil
 }
 
 // SupportsClickActions returns false for Slack adapter (links are in message)

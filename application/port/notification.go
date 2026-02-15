@@ -18,7 +18,7 @@ type ActivityInfo struct {
 
 // StatusChange holds information about status changes
 type StatusChange struct {
-	EventType string // "merged" or "closed"
+	EventType pullrequest.StatusChangeType
 }
 
 // NotificationPort is the port for sending notifications

@@ -106,9 +106,9 @@ func (a *Adapter) buildNotificationMessage(prNotif *port.PRNotificationData) str
 
 	// Add status changes
 	for _, statusChange := range prNotif.StatusChanges {
-		if statusChange.EventType == "merged" {
+		if statusChange.EventType == pullrequest.StatusChangeMerged {
 			parts = append(parts, "Merged")
-		} else if statusChange.EventType == "closed" {
+		} else if statusChange.EventType == pullrequest.StatusChangeClosed {
 			parts = append(parts, "Closed")
 		}
 	}
@@ -150,29 +150,6 @@ func (a *Adapter) getActivityLabel(actType pullrequest.ActivityType, count int) 
 		}
 		return fmt.Sprintf("%d new activities", count)
 	}
-}
-
-// NotifyNewPullRequests sends a notification about new pull requests
-// DEPRECATED: Use NotifyPullRequests instead
-func (a *Adapter) NotifyNewPullRequests(title string, prs []*pullrequest.PullRequest) error {
-	if len(prs) == 0 {
-		return nil
-	}
-
-	message := fmt.Sprintf("%s: %d", title, len(prs))
-	for _, pr := range prs {
-		message += fmt.Sprintf("\n%s #%d", pr.RepositoryName(), pr.Number())
-	}
-
-	iconData := a.selectIcon()
-
-	err := beeep.Notify("GitHub Notifier", message, iconData)
-	if err != nil {
-		log.Error().Msgf("Error sending notification: %v", err)
-		return err
-	}
-
-	return nil
 }
 
 // SupportsClickActions returns false for the generic desktop adapter

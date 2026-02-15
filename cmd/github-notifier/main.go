@@ -112,16 +112,14 @@ func main() {
 	notificationHandler := events.NewNotificationEventHandler(notificationAdapter)
 	trackingHandler := events.NewTrackingEventHandler(trackingService)
 
-	eventBus.Subscribe("NewPullRequestDetected", notificationHandler)
-	eventBus.Subscribe("PullRequestActivityDetected", notificationHandler)
-	eventBus.Subscribe("ActivityDetected", notificationHandler)
-	eventBus.Subscribe("Merged", notificationHandler)
-	eventBus.Subscribe("Closed", notificationHandler)
-	eventBus.Subscribe("NewPullRequestDetected", trackingHandler)
-	eventBus.Subscribe("PullRequestActivityDetected", trackingHandler)
-	eventBus.Subscribe("ActivityDetected", trackingHandler)
-	eventBus.Subscribe("Merged", trackingHandler)
-	eventBus.Subscribe("Closed", trackingHandler)
+	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventActivityDetected, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventMerged, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventClosed, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, trackingHandler)
+	eventBus.Subscribe(pullrequest.EventActivityDetected, trackingHandler)
+	eventBus.Subscribe(pullrequest.EventMerged, trackingHandler)
+	eventBus.Subscribe(pullrequest.EventClosed, trackingHandler)
 
 	// Initialize use cases
 	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(

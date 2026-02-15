@@ -153,11 +153,6 @@ func (pr *PullRequest) Equals(other *PullRequest) bool {
 	return pr.identifier.Equals(other.identifier)
 }
 
-// FormattedIdentifier returns a formatted string like "owner/repo#123"
-func (pr *PullRequest) FormattedIdentifier() string {
-	return pr.repository.NameWithOwner() + "#" + string(rune(pr.identifier.Number()))
-}
-
 // AddActivity adds a new activity to the PR (through the aggregate)
 // This maintains the aggregate's consistency boundary
 func (pr *PullRequest) AddActivity(activity *Activity) {

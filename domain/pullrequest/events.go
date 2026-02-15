@@ -7,6 +7,23 @@ type Event interface {
 	OccurredAt() time.Time
 }
 
+// EventName constants for event type identification (used by event bus subscriptions)
+const (
+	EventNewPullRequestDetected = "NewPullRequestDetected"
+	EventActivityDetected       = "ActivityDetected"
+	EventMerged                 = "Merged"
+	EventClosed                 = "Closed"
+	EventStatusChanged          = "StatusChanged"
+)
+
+// StatusChangeType represents the type of status change
+type StatusChangeType string
+
+const (
+	StatusChangeMerged StatusChangeType = "merged"
+	StatusChangeClosed StatusChangeType = "closed"
+)
+
 // NewPullRequestDetected is raised when a new PR is detected
 type NewPullRequestDetected struct {
 	PullRequestID PRIdentifier
@@ -29,27 +46,6 @@ func NewNewPullRequestDetected(pr *PullRequest) NewPullRequestDetected {
 
 // OccurredAt returns when the event occurred
 func (e NewPullRequestDetected) OccurredAt() time.Time {
-	return e.occurredAt
-}
-
-// ReviewRequested is raised when a PR review is requested
-type ReviewRequested struct {
-	PullRequestID PRIdentifier
-	Repository    RepositoryInfo
-	occurredAt    time.Time
-}
-
-// NewReviewRequested creates a new event
-func NewReviewRequested(pr *PullRequest) ReviewRequested {
-	return ReviewRequested{
-		PullRequestID: pr.Identifier(),
-		Repository:    pr.Repository(),
-		occurredAt:    time.Now(),
-	}
-}
-
-// OccurredAt returns when the event occurred
-func (e ReviewRequested) OccurredAt() time.Time {
 	return e.occurredAt
 }
 

@@ -166,9 +166,9 @@ func (a *Adapter) buildNotificationBody(prNotif *port.PRNotificationData) string
 
 	// Add status changes
 	for _, statusChange := range prNotif.StatusChanges {
-		if statusChange.EventType == "merged" {
+		if statusChange.EventType == pullrequest.StatusChangeMerged {
 			parts = append(parts, "✅ Merged")
-		} else if statusChange.EventType == "closed" {
+		} else if statusChange.EventType == pullrequest.StatusChangeClosed {
 			parts = append(parts, "❌ Closed")
 		}
 	}
@@ -210,64 +210,6 @@ func (a *Adapter) getActivityLabel(actType pullrequest.ActivityType, count int) 
 		}
 		return fmt.Sprintf("• %d new activities", count)
 	}
-}
-
-// NotifyNewPullRequests sends a notification about new pull requests with click action
-// DEPRECATED: Use NotifyPullRequests instead
-func (a *Adapter) NotifyNewPullRequests(title string, prs []*pullrequest.PullRequest) error {
-	if len(prs) == 0 {
-		return nil
-	}
-
-	if a.notifier == nil {
-		log.Warn().Msg("D-Bus notifier not initialized, skipping notification")
-		return nil
-	}
-
-	message := fmt.Sprintf("%s: %d", title, len(prs))
-	prList := ""
-	for _, pr := range prs {
-		prList += fmt.Sprintf("\n%s #%d", pr.RepositoryName(), pr.Number())
-	}
-
-	// For single PR, open it on click. For multiple PRs, open the first one
-	var urlToOpen string
-	if len(prs) == 1 {
-		urlToOpen = prs[0].URL()
-	} else if len(prs) > 1 {
-		// For multiple PRs, could open first one or a GitHub search
-		urlToOpen = prs[0].URL()
-		prList += "\n\nClick to open first PR"
-	}
-
-	notification := notify.Notification{
-		AppName:       "GitHub Notifier",
-		Summary:       "GitHub Notifier",
-		Body:          message + prList,
-		ExpireTimeout: 5000, // 5 seconds
-	}
-
-	// Add default action (triggered on click)
-	if urlToOpen != "" {
-		notification.Actions = []notify.Action{
-			{
-				Key:   "default",
-				Label: "Open PR",
-			},
-		}
-
-		// Set up action handler in a goroutine to listen for clicks
-		go a.handleNotificationActions(urlToOpen)
-	}
-
-	// Send notification
-	_, err := a.notifier.SendNotification(notification)
-	if err != nil {
-		log.Error().Err(err).Msg("Error sending Linux notification")
-		return err
-	}
-
-	return nil
 }
 
 // handleNotificationActions listens for notification action signals and opens URLs
@@ -333,12 +275,4 @@ func (a *Adapter) openURL(url string) error {
 // SupportsClickActions returns true for Linux adapter
 func (a *Adapter) SupportsClickActions() bool {
 	return a.notifier != nil
-}
-
-// Close cleans up the D-Bus connection
-func (a *Adapter) Close() error {
-	if a.conn != nil {
-		return a.conn.Close()
-	}
-	return nil
 }
