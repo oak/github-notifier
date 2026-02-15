@@ -95,7 +95,7 @@ func main() {
 		notificationAdapter = desktopAdapter
 	}
 
-	menuAdapter := ui.NewMenuAdapter(cfg, themeProvider)
+	menuAdapter := ui.NewMenuAdapter(cfg.MaxNumberOfRepos, cfg.MaxNumberOfPRs, themeProvider)
 
 	// Initialize domain services
 	prFilter := pullrequest.NewPRFilter(cfg.IncludeDraftPRs)
@@ -110,6 +110,7 @@ func main() {
 
 	// Register event handlers
 	notificationHandler := events.NewNotificationEventHandler(notificationAdapter, githubAdapter.AuthenticatedUser())
+	// AuthenticatedUser is now part of the PullRequestRepository port interface
 	trackingHandler := events.NewTrackingEventHandler(trackingService)
 
 	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, notificationHandler)

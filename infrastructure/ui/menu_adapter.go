@@ -13,7 +13,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/oak3/github-notifier/assets"
-	"github.com/oak3/github-notifier/config"
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
@@ -52,24 +51,24 @@ type MenuItemPair struct {
 }
 
 // NewMenuAdapter creates a new menu adapter
-func NewMenuAdapter(cfg *config.Config, themeProvider ThemeProvider) *MenuAdapter {
+func NewMenuAdapter(maxNumberOfRepos, maxNumberOfPRs int, themeProvider ThemeProvider) *MenuAdapter {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	requestedPRsMenuItems := make([]MenuItemPair, cfg.MaxNumberOfRepos)
-	for i := 0; i < cfg.MaxNumberOfRepos; i++ {
-		requestedPRsMenuItems[i].Children = make([]*systray.MenuItem, cfg.MaxNumberOfPRs)
+	requestedPRsMenuItems := make([]MenuItemPair, maxNumberOfRepos)
+	for i := 0; i < maxNumberOfRepos; i++ {
+		requestedPRsMenuItems[i].Children = make([]*systray.MenuItem, maxNumberOfPRs)
 	}
 
-	userPRsMenuItems := make([]MenuItemPair, cfg.MaxNumberOfRepos)
-	for i := 0; i < cfg.MaxNumberOfRepos; i++ {
-		userPRsMenuItems[i].Children = make([]*systray.MenuItem, cfg.MaxNumberOfPRs)
+	userPRsMenuItems := make([]MenuItemPair, maxNumberOfRepos)
+	for i := 0; i < maxNumberOfRepos; i++ {
+		userPRsMenuItems[i].Children = make([]*systray.MenuItem, maxNumberOfPRs)
 	}
 
 	return &MenuAdapter{
 		requestedPRsMenuItems: requestedPRsMenuItems,
 		userPRsMenuItems:      userPRsMenuItems,
-		maxNumberOfRepos:      cfg.MaxNumberOfRepos,
-		maxNumberOfPRs:        cfg.MaxNumberOfPRs,
+		maxNumberOfRepos:      maxNumberOfRepos,
+		maxNumberOfPRs:        maxNumberOfPRs,
 		themeProvider:         themeProvider,
 		clickedPRs:            make(map[string]bool),
 		menuItemCancels:       make(map[*systray.MenuItem]context.CancelFunc),

@@ -17,6 +17,10 @@ type PullRequestRepository interface {
 	// EnrichWithActivities populates PRs with their activities since the given time
 	// This modifies the aggregate by calling AddActivity through the proper aggregate methods
 	EnrichWithActivities(prs []*PullRequest, since time.Time) error
+
+	// AuthenticatedUser returns the login of the authenticated user.
+	// Used to filter self-authored activities in notifications and tracking.
+	AuthenticatedUser() string
 }
 
 // SeenRepository is the port for persisting seen pull requests

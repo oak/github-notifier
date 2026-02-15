@@ -56,6 +56,9 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 	scheduleResult := uc.scheduler.DeterminePRsToCheck(prs)
 	prsToCheck := scheduleResult.PRsToCheck
 
+	log.Info().Msgf("Activity scheduler: checking %d/%d PRs (%d recent, %d stale due for check, %d skipped)",
+		len(prsToCheck), len(prs), scheduleResult.RecentCount, scheduleResult.StaleCount, scheduleResult.SkippedCount)
+
 	if len(prsToCheck) == 0 {
 		log.Info().Msgf("Activity tracking: No PRs due for checking")
 		return nil
