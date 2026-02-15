@@ -140,6 +140,12 @@ func main() {
 		eventBus,
 	)
 
+	detectClosedPRsUseCase := usecase.NewDetectClosedPullRequestsUseCase(
+		githubAdapter,
+		trackingService,
+		eventBus,
+	)
+
 	trackActivityUseCase := usecase.NewTrackPullRequestActivityUseCase(
 		githubAdapter,
 		activityScheduler,
@@ -157,6 +163,7 @@ func main() {
 	orchestrator := application.NewPullRequestOrchestrator(
 		initializeUseCase,
 		checkNewPRsUseCase,
+		detectClosedPRsUseCase,
 		trackActivityUseCase,
 		updateDisplayUseCase,
 		cfg.EnableActivityTracking,

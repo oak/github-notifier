@@ -102,6 +102,7 @@ func (e ActivityDetected) OccurredAt() time.Time {
 type Closed struct {
 	PullRequestID PRIdentifier
 	Repository    RepositoryInfo
+	PullRequest   *PullRequest // Full PR for notification purposes
 	occurredAt    time.Time
 }
 
@@ -110,6 +111,7 @@ func NewClosed(pr *PullRequest) Closed {
 	return Closed{
 		PullRequestID: pr.Identifier(),
 		Repository:    pr.Repository(),
+		PullRequest:   pr,
 		occurredAt:    time.Now(),
 	}
 }
@@ -123,6 +125,7 @@ func (e Closed) OccurredAt() time.Time {
 type Merged struct {
 	PullRequestID PRIdentifier
 	Repository    RepositoryInfo
+	PullRequest   *PullRequest // Full PR for notification purposes
 	occurredAt    time.Time
 }
 
@@ -131,6 +134,7 @@ func NewMerged(pr *PullRequest) Merged {
 	return Merged{
 		PullRequestID: pr.Identifier(),
 		Repository:    pr.Repository(),
+		PullRequest:   pr,
 		occurredAt:    time.Now(),
 	}
 }

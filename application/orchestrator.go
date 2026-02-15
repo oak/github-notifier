@@ -15,6 +15,7 @@ import (
 type PullRequestOrchestrator struct {
 	initializeUseCase      *usecase.InitializeFirstCheckUseCase
 	checkNewPRsUseCase     *usecase.CheckNewPullRequestsUseCase
+	detectClosedPRsUseCase *usecase.DetectClosedPullRequestsUseCase
 	trackActivityUseCase   *usecase.TrackPullRequestActivityUseCase
 	updateDisplayUseCase   *usecase.UpdatePullRequestDisplayUseCase
 	enableActivityTracking bool
@@ -25,6 +26,7 @@ type PullRequestOrchestrator struct {
 func NewPullRequestOrchestrator(
 	initializeUseCase *usecase.InitializeFirstCheckUseCase,
 	checkNewPRsUseCase *usecase.CheckNewPullRequestsUseCase,
+	detectClosedPRsUseCase *usecase.DetectClosedPullRequestsUseCase,
 	trackActivityUseCase *usecase.TrackPullRequestActivityUseCase,
 	updateDisplayUseCase *usecase.UpdatePullRequestDisplayUseCase,
 	enableActivityTracking bool,
@@ -32,6 +34,7 @@ func NewPullRequestOrchestrator(
 	return &PullRequestOrchestrator{
 		initializeUseCase:      initializeUseCase,
 		checkNewPRsUseCase:     checkNewPRsUseCase,
+		detectClosedPRsUseCase: detectClosedPRsUseCase,
 		trackActivityUseCase:   trackActivityUseCase,
 		updateDisplayUseCase:   updateDisplayUseCase,
 		enableActivityTracking: enableActivityTracking,
@@ -69,12 +72,22 @@ func (o *PullRequestOrchestrator) ExecuteRegularCheck(ctx context.Context) error
 		return err
 	}
 
-	// Step 2: Track activity if enabled
-	if o.enableActivityTracking {
-		allPRs := append([]*pullrequest.PullRequest{}, result.RequestedReviewPRs...)
-		allPRs = append(allPRs, result.UserCreatedPRs...)
+	// Step 2: Detect merged/closed PRs
+	// Combine all current PRs to compare against tracked state
+	allCurrentPRs := append([]*pullrequest.PullRequest{}, result.RequestedReviewPRs...)
+	allCurrentPRs = append(allCurrentPRs, result.UserCreatedPRs...)
 
-		if err := o.trackActivityUseCase.Execute(ctx, allPRs, o.lastCheckTime); err != nil {
+	if err := o.detectClosedPRsUseCase.Execute(ctx, allCurrentPRs); err != nil {
+		log.Error().Err(err).Msg("Error detecting closed PRs")
+		// Don't return error — continue with other steps
+	}
+
+	// Update tracked PRs for next cycle's comparison
+	o.detectClosedPRsUseCase.TrackPRs(allCurrentPRs)
+
+	// Step 3: Track activity if enabled
+	if o.enableActivityTracking {
+		if err := o.trackActivityUseCase.Execute(ctx, allCurrentPRs, o.lastCheckTime); err != nil {
 			log.Error().Err(err).Msg("Error tracking activity")
 			// Don't return error - continue with display update
 		}
@@ -82,7 +95,7 @@ func (o *PullRequestOrchestrator) ExecuteRegularCheck(ctx context.Context) error
 		log.Debug().Msg("Activity tracking disabled (set ENABLE_ACTIVITY_TRACKING=true to enable)")
 	}
 
-	// Step 3: Update display (after all events are emitted and state is updated)
+	// Step 4: Update display (after all events are emitted and state is updated)
 	if err := o.updateDisplayUseCase.Execute(ctx, result.RequestedReviewPRs, result.UserCreatedPRs); err != nil {
 		log.Error().Err(err).Msg("Error updating display")
 		return err

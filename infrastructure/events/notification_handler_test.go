@@ -263,13 +263,26 @@ func TestNotificationHandler_HandlePRMerged_Success(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewMerged(pr)
 
+	// Mock expectations — merged events now send notifications
+	mockNotificationPort.On("NotifyPullRequests", mock.MatchedBy(func(notifications []*port.PRNotificationData) bool {
+		if len(notifications) != 1 {
+			return false
+		}
+		notif := notifications[0]
+		return notif.PullRequest == pr &&
+			len(notif.StatusChanges) == 1 &&
+			notif.StatusChanges[0].EventType == pullrequest.StatusChangeMerged
+	})).Return(nil)
+
 	// Act
 	err := handler.Handle(context.Background(), &event)
+	require.NoError(t, err)
+
+	// Wait for aggregator to flush
+	time.Sleep(2200 * time.Millisecond)
 
 	// Assert
-	require.NoError(t, err)
-	// Merged events are currently not sent as notifications
-	// (they're added to aggregator but without PR object, so they're skipped)
+	mockNotificationPort.AssertExpectations(t)
 }
 
 func TestNotificationHandler_HandlePRClosed_Success(t *testing.T) {
@@ -281,12 +294,26 @@ func TestNotificationHandler_HandlePRClosed_Success(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewClosed(pr)
 
+	// Mock expectations — closed events now send notifications
+	mockNotificationPort.On("NotifyPullRequests", mock.MatchedBy(func(notifications []*port.PRNotificationData) bool {
+		if len(notifications) != 1 {
+			return false
+		}
+		notif := notifications[0]
+		return notif.PullRequest == pr &&
+			len(notif.StatusChanges) == 1 &&
+			notif.StatusChanges[0].EventType == pullrequest.StatusChangeClosed
+	})).Return(nil)
+
 	// Act
 	err := handler.Handle(context.Background(), &event)
+	require.NoError(t, err)
+
+	// Wait for aggregator to flush
+	time.Sleep(2200 * time.Millisecond)
 
 	// Assert
-	require.NoError(t, err)
-	// Closed events are currently not sent as notifications
+	mockNotificationPort.AssertExpectations(t)
 }
 
 func TestNotificationHandler_HandleStatusChanged_Success(t *testing.T) {

@@ -56,6 +56,12 @@ func (s *TrackingService) MarkPullRequestAsUnseen(pr *PullRequest) error {
 	return s.seenRepo.UnmarkAsSeen(pr.Identifier())
 }
 
+// RemoveSeen removes a PR from the seen repository.
+// Used to clean up merged/closed PRs from local tracking state.
+func (s *TrackingService) RemoveSeen(id PRIdentifier) {
+	_ = s.seenRepo.UnmarkAsSeen(id) //nolint:errcheck // cleanup is best-effort
+}
+
 // IsEmpty returns true if no PRs have been tracked yet
 func (s *TrackingService) IsEmpty() bool {
 	return s.seenRepo.IsEmpty()

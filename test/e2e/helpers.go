@@ -129,6 +129,11 @@ func (m *MockGitHubServer) handler(w http.ResponseWriter, r *http.Request) {
 
 	// Handle batched timeline query (contains aliases like pr0:)
 	if strings.Contains(request.Query, "repository(owner:") {
+		// Check if it's a PR status query (contains "state" but not "timelineItems")
+		if strings.Contains(request.Query, "state") && !strings.Contains(request.Query, "timelineItems") {
+			m.handlePRStatusQuery(w, request.Query)
+			return
+		}
 		m.handleBatchedTimelineQuery(w, request.Query)
 		return
 	}
@@ -370,6 +375,54 @@ func (m *MockGitHubServer) handleBatchedTimelineQuery(w http.ResponseWriter, que
 	_ = json.NewEncoder(w).Encode(response) //nolint:errcheck // Test helper
 }
 
+func (m *MockGitHubServer) handlePRStatusQuery(w http.ResponseWriter, query string) {
+	// Parse PR number from query: pullRequest(number: N)
+	prNumRegex := regexp.MustCompile(`pullRequest\(number:\s*(\d+)\)`)
+	match := prNumRegex.FindStringSubmatch(query)
+	if len(match) < 2 {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck // Test helper
+			"data": map[string]interface{}{},
+		})
+		return
+	}
+
+	var prNumber int
+	if _, err := fmt.Sscanf(match[1], "%d", &prNumber); err != nil {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck // Test helper
+			"data": map[string]interface{}{},
+		})
+		return
+	}
+
+	// Find the PR and return its state
+	state := "OPEN"
+	for _, pr := range m.prs {
+		if pr.Number == prNumber {
+			switch pr.State {
+			case "merged":
+				state = "MERGED"
+			case "closed":
+				state = "CLOSED"
+			default:
+				state = "OPEN"
+			}
+			break
+		}
+	}
+
+	response := map[string]interface{}{
+		"data": map[string]interface{}{
+			"repository": map[string]interface{}{
+				"pullRequest": map[string]interface{}{
+					"state": state,
+				},
+			},
+		},
+	}
+
+	_ = json.NewEncoder(w).Encode(response) //nolint:errcheck // Test helper
+}
+
 // SetupPRs configures the mock server with PRs
 func (m *MockGitHubServer) SetupPRs(prs []MockPR) {
 	m.mu.Lock()
@@ -569,7 +622,16 @@ func (s *SpyNotificationAdapter) NotifyPullRequests(notifications []*port.PRNoti
 
 		// Build a title based on the notification type
 		title := "New PR needing review"
-		if !prNotif.IsNew && len(prNotif.ReviewChanges) > 0 {
+		if len(prNotif.StatusChanges) > 0 {
+			// Status change notifications take priority
+			for _, sc := range prNotif.StatusChanges {
+				if sc.EventType == pullrequest.StatusChangeMerged {
+					title = "PR Merged"
+				} else if sc.EventType == pullrequest.StatusChangeClosed {
+					title = "PR Closed"
+				}
+			}
+		} else if !prNotif.IsNew && len(prNotif.ReviewChanges) > 0 {
 			title = "PR Review"
 		} else if !prNotif.IsNew && len(prNotif.Activities) > 0 {
 			title = "PR Activity"

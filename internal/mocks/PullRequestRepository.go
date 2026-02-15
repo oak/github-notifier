@@ -111,6 +111,34 @@ func (_m *PullRequestRepository) AuthenticatedUser() string {
 	return r0
 }
 
+// FetchPRStatus provides a mock function with given fields: owner, repo, number
+func (_m *PullRequestRepository) FetchPRStatus(owner string, repo string, number int) (pullrequest.PRStatus, error) {
+	ret := _m.Called(owner, repo, number)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FetchPRStatus")
+	}
+
+	var r0 pullrequest.PRStatus
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, string, int) (pullrequest.PRStatus, error)); ok {
+		return rf(owner, repo, number)
+	}
+	if rf, ok := ret.Get(0).(func(string, string, int) pullrequest.PRStatus); ok {
+		r0 = rf(owner, repo, number)
+	} else {
+		r0 = ret.Get(0).(pullrequest.PRStatus)
+	}
+
+	if rf, ok := ret.Get(1).(func(string, string, int) error); ok {
+		r1 = rf(owner, repo, number)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // NewPullRequestRepository creates a new instance of PullRequestRepository. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewPullRequestRepository(t interface {

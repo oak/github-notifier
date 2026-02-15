@@ -316,18 +316,120 @@ func TestE2E_MergedPR_SendsMergedNotification(t *testing.T) {
 	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
 	suite.ClearNotifications()
 
-	// When: PR is merged
+	// When: PR is merged (state changes; search query filters out non-open PRs)
 	suite.mockGitHub.MergePR(999)
-
-	// And: Check runs (merged PRs won't appear in search results)
-	suite.mockGitHub.SetupPRs([]MockPR{}) // Simulate PR no longer in open results
 
 	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
 	require.NoError(t, err)
 
-	// Then: Menu should be updated (PR removed)
+	// Then: Should receive a merged notification
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "Expected merged notification")
+
+	foundMerged := false
+	for _, n := range notifs {
+		if n.Title == "PR Merged" {
+			foundMerged = true
+			assert.Contains(t, n.Body, "Feature complete")
+			break
+		}
+	}
+	assert.True(t, foundMerged, "Should send 'PR Merged' notification")
+
+	// And: Menu should be updated (PR removed)
 	prs := suite.menuAdapter.GetPRs()
 	assert.Len(t, prs, 0, "Merged PR should be removed from menu")
+}
+
+func TestE2E_ClosedPR_SendsClosedNotification(t *testing.T) {
+	// Given: A tracked PR
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "Abandoned feature",
+		Number: 888,
+		Author: "alice",
+		State:  "open",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.ClearNotifications()
+
+	// When: PR is closed without merging
+	suite.mockGitHub.ClosePR(888)
+
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+
+	// Then: Should receive a closed notification
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "Expected closed notification")
+
+	foundClosed := false
+	for _, n := range notifs {
+		if n.Title == "PR Closed" {
+			foundClosed = true
+			assert.Contains(t, n.Body, "Abandoned feature")
+			break
+		}
+	}
+	assert.True(t, foundClosed, "Should send 'PR Closed' notification")
+
+	// And: Menu should be updated (PR removed)
+	prs := suite.menuAdapter.GetPRs()
+	assert.Len(t, prs, 0, "Closed PR should be removed from menu")
+}
+
+func TestE2E_MergedPR_NotRedetectedOnNextCheck(t *testing.T) {
+	// Given: A PR that was merged and notified
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "Already merged",
+		Number: 777,
+		Author: "alice",
+		State:  "open",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.ClearNotifications()
+
+	// Merge the PR
+	suite.mockGitHub.MergePR(777)
+
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	mergedNotifs := suite.notifications.GetNotifications()
+	mergedCount := 0
+	for _, n := range mergedNotifs {
+		if n.Title == "PR Merged" {
+			mergedCount++
+		}
+	}
+	require.Equal(t, 1, mergedCount, "Should get exactly one merged notification")
+
+	// When: Another check runs (PR is still merged, not in open list)
+	suite.ClearNotifications()
+
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	// Then: Should NOT get a duplicate merged notification
+	notifs := suite.notifications.GetNotifications()
+	for _, n := range notifs {
+		assert.NotEqual(t, "PR Merged", n.Title, "Should not re-notify for already-merged PR")
+	}
 }
 
 func TestE2E_NoNewPRs_NoNotifications(t *testing.T) {

@@ -87,6 +87,12 @@ func SetupSuite(t *testing.T) *TestSuite {
 		eventBus,
 	)
 
+	detectClosedPRsUseCase := usecase.NewDetectClosedPullRequestsUseCase(
+		githubAdapter,
+		trackingService,
+		eventBus,
+	)
+
 	trackActivityUseCase := usecase.NewTrackPullRequestActivityUseCase(
 		githubAdapter,
 		activityScheduler,
@@ -104,6 +110,7 @@ func SetupSuite(t *testing.T) *TestSuite {
 	orchestrator := application.NewPullRequestOrchestrator(
 		initializeUseCase,
 		checkNewPRsUseCase,
+		detectClosedPRsUseCase,
 		trackActivityUseCase,
 		updateDisplayUseCase,
 		true, // Enable activity tracking

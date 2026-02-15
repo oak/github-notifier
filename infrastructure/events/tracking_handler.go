@@ -72,7 +72,8 @@ func (h *TrackingEventHandler) handlePRMerged(event *pullrequest.Merged) error {
 	log.Info().Msgf("Tracking: PR merged - %s in %s",
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner())
-	// Could remove from tracking or mark differently
+	// Remove from tracking so it doesn't trigger repeated notifications
+	h.trackingService.RemoveSeen(event.PullRequestID)
 	return nil
 }
 
@@ -81,7 +82,8 @@ func (h *TrackingEventHandler) handlePRClosed(event *pullrequest.Closed) error {
 	log.Info().Msgf("Tracking: PR closed - %s in %s",
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner())
-	// Could remove from tracking or mark differently
+	// Remove from tracking so it doesn't trigger repeated notifications
+	h.trackingService.RemoveSeen(event.PullRequestID)
 	return nil
 }
 

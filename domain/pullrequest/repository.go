@@ -18,6 +18,10 @@ type PullRequestRepository interface {
 	// This modifies the aggregate by calling AddActivity through the proper aggregate methods
 	EnrichWithActivities(prs []*PullRequest, since time.Time) error
 
+	// FetchPRStatus fetches the current status of a specific PR (open, merged, closed).
+	// Used to determine the final status of PRs that have disappeared from the open PR list.
+	FetchPRStatus(owner, repo string, number int) (PRStatus, error)
+
 	// AuthenticatedUser returns the login of the authenticated user.
 	// Used to filter self-authored activities in notifications and tracking.
 	AuthenticatedUser() string

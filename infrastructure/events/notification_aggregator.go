@@ -166,8 +166,13 @@ func (a *NotificationAggregator) addMergedEvent(event *pullrequest.Merged) {
 
 	notification, exists := a.pendingEvents[url]
 	if !exists {
-		// We don't have the full PR object here, so skip if not already tracked
-		return
+		// Create a new notification entry — the event now carries the full PR
+		notification = &PRNotification{
+			PullRequest:   event.PullRequest,
+			Activities:    []ActivityInfo{},
+			StatusChanges: []StatusChange{},
+		}
+		a.pendingEvents[url] = notification
 	}
 
 	notification.StatusChanges = append(notification.StatusChanges, StatusChange{
@@ -181,8 +186,13 @@ func (a *NotificationAggregator) addClosedEvent(event *pullrequest.Closed) {
 
 	notification, exists := a.pendingEvents[url]
 	if !exists {
-		// We don't have the full PR object here, so skip if not already tracked
-		return
+		// Create a new notification entry — the event now carries the full PR
+		notification = &PRNotification{
+			PullRequest:   event.PullRequest,
+			Activities:    []ActivityInfo{},
+			StatusChanges: []StatusChange{},
+		}
+		a.pendingEvents[url] = notification
 	}
 
 	notification.StatusChanges = append(notification.StatusChanges, StatusChange{

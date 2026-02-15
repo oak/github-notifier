@@ -206,6 +206,49 @@ func (a *Adapter) FetchUserCreated() ([]*pullrequest.PullRequest, error) {
 	return a.fetchPaginatedPRs(query)
 }
 
+// FetchPRStatus fetches the current status of a specific PR (open, merged, closed).
+// Uses a lightweight GraphQL query to check only the PR state.
+func (a *Adapter) FetchPRStatus(owner, repo string, number int) (pullrequest.PRStatus, error) {
+	query := fmt.Sprintf(`{
+		repository(owner: "%s", name: "%s") {
+			pullRequest(number: %d) {
+				state
+			}
+		}
+	}`, owner, repo, number)
+
+	resp, err := a.client.ExecuteBatchedTimelineQuery(query)
+	if err != nil {
+		return pullrequest.StatusOpen, fmt.Errorf("failed to fetch PR state: %w", err)
+	}
+
+	repoData, ok := resp.Data["repository"].(map[string]interface{})
+	if !ok {
+		return pullrequest.StatusOpen, fmt.Errorf("unexpected response structure: missing repository")
+	}
+
+	prData, ok := repoData["pullRequest"].(map[string]interface{})
+	if !ok {
+		return pullrequest.StatusOpen, fmt.Errorf("unexpected response structure: missing pullRequest")
+	}
+
+	state, ok := prData["state"].(string)
+	if !ok {
+		return pullrequest.StatusOpen, fmt.Errorf("unexpected response structure: missing state")
+	}
+
+	switch state {
+	case "MERGED":
+		return pullrequest.StatusMerged, nil
+	case "CLOSED":
+		return pullrequest.StatusClosed, nil
+	case "OPEN":
+		return pullrequest.StatusOpen, nil
+	default:
+		return pullrequest.StatusOpen, fmt.Errorf("unknown PR state: %s", state)
+	}
+}
+
 // fetchPaginatedPRs fetches all pages of PRs for a given query
 func (a *Adapter) fetchPaginatedPRs(query string) ([]*pullrequest.PullRequest, error) {
 	var allPRs []*pullrequest.PullRequest
