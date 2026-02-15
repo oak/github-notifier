@@ -489,3 +489,72 @@ func TestPullRequest_MultipleEvents_CollectedInOrder(t *testing.T) {
 	assert.True(t, ok2, "Second event should be ActivityDetected")
 	assert.True(t, ok3, "Third event should be StatusChanged")
 }
+
+func TestPullRequest_RecordHeadCommitUpdate_FirstTime_InitializesWithoutActivity(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+
+	// Act
+	pr.RecordHeadCommitUpdate("abc123", "")
+
+	// Assert
+	assert.Equal(t, "abc123", pr.HeadCommitSHA())
+	assert.Empty(t, pr.Activities(), "First time should not create push activity")
+	assert.Empty(t, pr.CollectEvents(), "First time should not raise events")
+}
+
+func TestPullRequest_RecordHeadCommitUpdate_SameSHA_NoActivity(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+	pr.SetInitialHeadCommitSHA("abc123")
+
+	// Act
+	pr.RecordHeadCommitUpdate("abc123", "")
+
+	// Assert
+	assert.Empty(t, pr.Activities(), "Same SHA should not create push activity")
+	assert.Empty(t, pr.CollectEvents(), "Same SHA should not raise events")
+}
+
+func TestPullRequest_RecordHeadCommitUpdate_Changed_CreatesPushActivity(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1, testutil.WithAuthor("alice"))
+	pr.SetInitialHeadCommitSHA("abc123")
+
+	// Act
+	pr.RecordHeadCommitUpdate("def456", "testuser")
+
+	// Assert
+	assert.Equal(t, "def456", pr.HeadCommitSHA())
+	require.Len(t, pr.Activities(), 1)
+	assert.Equal(t, pullrequest.ActivityTypePush, pr.Activities()[0].Type())
+	assert.Equal(t, "def456", pr.Activities()[0].Body())
+	assert.Equal(t, "alice", pr.Activities()[0].Author().Login())
+}
+
+func TestPullRequest_RecordHeadCommitUpdate_SelfPush_NoActivity(t *testing.T) {
+	// Arrange - PR author is the authenticated user
+	pr := testutil.NewTestPullRequest(1, testutil.WithAuthor("testuser"))
+	pr.SetInitialHeadCommitSHA("abc123")
+
+	// Act
+	pr.RecordHeadCommitUpdate("def456", "testuser")
+
+	// Assert
+	assert.Equal(t, "def456", pr.HeadCommitSHA(), "SHA should still be updated")
+	assert.Empty(t, pr.Activities(), "Self-push should NOT create activity")
+	assert.Empty(t, pr.CollectEvents(), "Self-push should NOT raise events")
+}
+
+func TestPullRequest_RecordHeadCommitUpdate_NoAuthenticatedUser_CreatesPushActivity(t *testing.T) {
+	// Arrange - no authenticated user means no filtering
+	pr := testutil.NewTestPullRequest(1, testutil.WithAuthor("alice"))
+	pr.SetInitialHeadCommitSHA("abc123")
+
+	// Act
+	pr.RecordHeadCommitUpdate("def456", "")
+
+	// Assert
+	require.Len(t, pr.Activities(), 1)
+	assert.Equal(t, pullrequest.ActivityTypePush, pr.Activities()[0].Type())
+}

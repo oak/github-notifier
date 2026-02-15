@@ -17,6 +17,7 @@ type TrackPullRequestActivityUseCase struct {
 	scheduler       *pullrequest.ActivityCheckScheduler
 	trackingService *pullrequest.TrackingService
 	eventPublisher  port.EventPublisher
+	knownHeadSHAs   map[string]string // PR URL → last known head commit SHA
 }
 
 // NewTrackPullRequestActivityUseCase creates a new use case
@@ -31,6 +32,7 @@ func NewTrackPullRequestActivityUseCase(
 		scheduler:       scheduler,
 		trackingService: trackingService,
 		eventPublisher:  eventPublisher,
+		knownHeadSHAs:   make(map[string]string),
 	}
 }
 
@@ -54,11 +56,26 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 		return nil
 	}
 
+	// Restore known head commit SHAs on the fresh PR objects
+	// (PR objects are recreated each cycle, so we need to carry state forward)
+	for _, pr := range prsToCheck {
+		if sha, ok := uc.knownHeadSHAs[pr.URL()]; ok {
+			pr.SetInitialHeadCommitSHA(sha)
+		}
+	}
+
 	// Enrich PRs with activities since last check
 	// This also updates the head commit SHA and creates push activities if head changed
 	if err := uc.prRepo.EnrichWithActivities(prsToCheck, lastCheckTime); err != nil {
 		log.Error().Err(err).Msg("Error enriching PRs with activities")
 		return err
+	}
+
+	// Save updated head commit SHAs for next cycle
+	for _, pr := range prsToCheck {
+		if sha := pr.HeadCommitSHA(); sha != "" {
+			uc.knownHeadSHAs[pr.URL()] = sha
+		}
 	}
 
 	// Mark these PRs as checked in the scheduler

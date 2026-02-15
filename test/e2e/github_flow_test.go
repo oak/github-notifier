@@ -4,7 +4,6 @@
 package e2e
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -585,7 +584,8 @@ func TestE2E_MenuUpdates_ReflectCurrentState(t *testing.T) {
 }
 
 func TestE2E_CommitActivity_DetectsNewPush(t *testing.T) {
-	// Given: A tracked PR
+	// Manual test 11: When someone creates a new commit on a PR that I am a reviewer of
+	// Given: A tracked PR where I am a reviewer
 	suite := SetupSuite(t)
 	defer suite.Teardown()
 
@@ -600,7 +600,7 @@ func TestE2E_CommitActivity_DetectsNewPush(t *testing.T) {
 	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
 	suite.ClearNotifications()
 
-	// When: New commit is pushed
+	// When: New commit is pushed (head SHA changes)
 	suite.mockGitHub.AddCommit(888, MockCommit{
 		SHA:    "def456",
 		Author: "alice",
@@ -609,23 +609,422 @@ func TestE2E_CommitActivity_DetectsNewPush(t *testing.T) {
 	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
 	require.NoError(t, err)
 
-	// Then: Should detect the push activity
-	time.Sleep(50 * time.Millisecond) // Small delay for async processing
-
 	suite.FlushNotifications()
 
 	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify when new commit is pushed on a PR I'm reviewing")
 
-	// Look for activity notification
-	_ = false
+	// Verify it's an activity notification
+	foundActivity := false
 	for _, n := range notifs {
-		if n.Title == "PR Activity" && (strings.Contains(n.Body, "WIP Feature") || strings.Contains(n.Body, "888")) {
-			_ = true
+		if n.Title == "PR Activity" {
+			foundActivity = true
+			assert.Contains(t, n.Body, "WIP Feature", "Notification should reference the PR")
 			break
 		}
 	}
+	assert.True(t, foundActivity, "Should send activity notification for push")
+}
 
-	// Note: Depending on implementation, push might trigger activity
-	// This test verifies the system handles commit changes
-	assert.True(t, len(notifs) >= 0, "System should process commit updates")
+func TestE2E_OwnerSelfComment_NoNotification(t *testing.T) {
+	// Manual test 2: When I comment on my own PR - no notification
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "My own PR",
+		Number: 200,
+		Author: "testuser", // PR created by authenticated user
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.ClearNotifications()
+	time.Sleep(100 * time.Millisecond)
+
+	// When: Owner comments on their own PR
+	suite.mockGitHub.AddComment(200, MockComment{
+		Author:    "testuser",
+		Body:      "I'm updating this",
+		CreatedAt: time.Now(),
+	})
+
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	assert.Len(t, notifs, 0, "MUST NOT notify when owner comments on their own PR")
+}
+
+func TestE2E_ReviewerCommentOnMyPR_Notifies(t *testing.T) {
+	// Manual test 3: When a reviewer comments on my PR - notification
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "My PR for review",
+		Number: 300,
+		Author: "testuser", // My PR
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.ClearNotifications()
+	time.Sleep(100 * time.Millisecond)
+
+	// When: A reviewer comments on my PR
+	suite.mockGitHub.AddComment(300, MockComment{
+		Author:    "reviewer1",
+		Body:      "Please fix this",
+		CreatedAt: time.Now(),
+	})
+
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify when reviewer comments on my PR")
+
+	foundActivity := false
+	for _, n := range notifs {
+		if n.Title == "PR Activity" {
+			foundActivity = true
+			assert.Contains(t, n.Body, "My PR for review")
+			break
+		}
+	}
+	assert.True(t, foundActivity, "Should be activity notification")
+}
+
+func TestE2E_ReviewerReactsToOwnerComment_Notifies(t *testing.T) {
+	// Manual test 4: When reviewer reacts to owner comment on PR - notification
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "My PR with comments",
+		Number: 400,
+		Author: "testuser", // My PR
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// Add owner's comment (old, already seen)
+	suite.mockGitHub.AddComment(400, MockComment{
+		Author:    "testuser",
+		Body:      "Here's my implementation",
+		CreatedAt: time.Now().Add(-2 * time.Hour),
+	})
+
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.ClearNotifications()
+	time.Sleep(500 * time.Millisecond)
+
+	// When: Reviewer reacts to owner's comment
+	suite.mockGitHub.AddReactionToComment(400, 0, MockReaction{
+		Content: "THUMBS_UP",
+		User:    "reviewer1",
+	})
+
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify when reviewer reacts to owner's comment")
+
+	foundActivity := false
+	for _, n := range notifs {
+		if n.Title == "PR Activity" {
+			foundActivity = true
+			break
+		}
+	}
+	assert.True(t, foundActivity, "Should be activity notification for reaction")
+}
+
+func TestE2E_OwnerReactsToReviewerComment_NoNotification(t *testing.T) {
+	// Manual test 5 (revisited): When owner reacts to reviewer comment on their own PR
+	// This should NOT trigger a notification - it's the owner's own action
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "My PR discussion",
+		Number: 500,
+		Author: "testuser", // My PR
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// Add reviewer's comment (old, already seen)
+	suite.mockGitHub.AddComment(500, MockComment{
+		Author:    "reviewer1",
+		Body:      "Nice approach!",
+		CreatedAt: time.Now().Add(-2 * time.Hour),
+	})
+
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.ClearNotifications()
+	time.Sleep(500 * time.Millisecond)
+
+	// When: Owner (authenticated user) reacts to reviewer's comment
+	suite.mockGitHub.AddReactionToComment(500, 0, MockReaction{
+		Content: "HEART",
+		User:    "testuser", // Authenticated user reacts
+	})
+
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	assert.Len(t, notifs, 0, "MUST NOT notify when owner reacts to a comment on their own PR - it's their own action")
+}
+
+func TestE2E_OwnerPushesOwnPR_NoNotification(t *testing.T) {
+	// Manual test 6: When owner adds a new commit on their own PR - no notification
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:         "My WIP PR",
+		Number:        601,
+		Author:        "testuser", // My PR
+		HeadCommitSHA: "initial123",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.ClearNotifications()
+
+	// When: Owner pushes a new commit
+	suite.mockGitHub.AddCommit(601, MockCommit{
+		SHA:    "newcommit456",
+		Author: "testuser",
+	})
+
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	assert.Len(t, notifs, 0, "MUST NOT notify when owner pushes to their own PR")
+}
+
+func TestE2E_SomeoneApprovesMyPR_Notifies(t *testing.T) {
+	// Manual test 7: When someone approves my PR - notification
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "Ready for review",
+		Number: 700,
+		Author: "testuser", // My PR
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.ClearNotifications()
+	time.Sleep(100 * time.Millisecond)
+
+	// When: Someone approves my PR
+	suite.mockGitHub.AddReview(700, MockReview{
+		Author:    "approver",
+		State:     "APPROVED",
+		Body:      "",
+		CreatedAt: time.Now(),
+	})
+
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify when someone approves my PR")
+
+	foundActivity := false
+	for _, n := range notifs {
+		if n.Title == "PR Activity" {
+			foundActivity = true
+			assert.Contains(t, n.Body, "Ready for review")
+			break
+		}
+	}
+	assert.True(t, foundActivity, "Should be activity notification for approval")
+}
+
+func TestE2E_SomeoneRequestsMyReview_Notifies(t *testing.T) {
+	// Manual test 8: When someone creates a PR and requests my review - notification
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	suite.mockGitHub.SetupPRs([]MockPR{
+		{
+			Title:  "Please review this",
+			Number: 800,
+			Author: "colleague", // Someone else's PR
+		},
+	})
+
+	// When: Regular check detects the PR
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify when someone requests my review")
+	assert.Equal(t, "New PR needing review", notifs[0].Title)
+	assert.Contains(t, notifs[0].Body, "Please review this")
+}
+
+func TestE2E_ICommentOnSomeoneElsePR_NoNotification(t *testing.T) {
+	// Manual test 9: When I comment on someone else's PR - no notification
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "Someone else feature",
+		Number: 900,
+		Author: "colleague", // Someone else's PR
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.ClearNotifications()
+	time.Sleep(100 * time.Millisecond)
+
+	// When: I comment on someone else's PR
+	suite.mockGitHub.AddComment(900, MockComment{
+		Author:    "testuser", // Authenticated user
+		Body:      "My review comment",
+		CreatedAt: time.Now(),
+	})
+
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	assert.Len(t, notifs, 0, "MUST NOT notify when I comment on someone else's PR")
+}
+
+func TestE2E_SomeoneReactsToMyCommentOnOthersPR_Notifies(t *testing.T) {
+	// Manual test 10: When someone reacts to a comment I made on someone else's PR - notification
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "Collaborative PR",
+		Number: 1000,
+		Author: "colleague", // Someone else's PR
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// Add my comment (old, already seen)
+	suite.mockGitHub.AddComment(1000, MockComment{
+		Author:    "testuser",
+		Body:      "I think this needs refactoring",
+		CreatedAt: time.Now().Add(-2 * time.Hour),
+	})
+
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.ClearNotifications()
+	time.Sleep(500 * time.Millisecond)
+
+	// When: Someone reacts to my comment
+	suite.mockGitHub.AddReactionToComment(1000, 0, MockReaction{
+		Content: "THUMBS_UP",
+		User:    "colleague",
+	})
+
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify when someone reacts to my comment on another PR")
+
+	foundActivity := false
+	for _, n := range notifs {
+		if n.Title == "PR Activity" {
+			foundActivity = true
+			break
+		}
+	}
+	assert.True(t, foundActivity, "Should be activity notification for reaction")
+}
+
+func TestE2E_NewCommitOnPRImReviewing_Notifies(t *testing.T) {
+	// Manual test 11: When someone creates a new commit on a PR that I am a reviewer of
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:         "Feature under review",
+		Number:        1100,
+		Author:        "colleague",
+		HeadCommitSHA: "initial_sha",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// First check - detect and track PR
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.ClearNotifications()
+
+	// When: PR author pushes a new commit
+	suite.mockGitHub.AddCommit(1100, MockCommit{
+		SHA:    "new_sha_456",
+		Author: "colleague",
+	})
+
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify when new commit is pushed on a PR I'm reviewing")
+
+	foundActivity := false
+	for _, n := range notifs {
+		if n.Title == "PR Activity" {
+			foundActivity = true
+			assert.Contains(t, n.Body, "Feature under review")
+			break
+		}
+	}
+	assert.True(t, foundActivity, "Should be activity notification for new push")
+}
+
+func TestE2E_IApproveAPR_NoNotification(t *testing.T) {
+	// Manual test 12: When I approve a PR - no notification
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:  "Needs my approval",
+		Number: 1200,
+		Author: "colleague",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.ClearNotifications()
+	time.Sleep(100 * time.Millisecond)
+
+	// When: I approve the PR
+	suite.mockGitHub.AddReview(1200, MockReview{
+		Author:    "testuser", // Authenticated user
+		State:     "APPROVED",
+		Body:      "LGTM",
+		CreatedAt: time.Now(),
+	})
+
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	assert.Len(t, notifs, 0, "MUST NOT notify when I approve a PR - it's my own action")
 }

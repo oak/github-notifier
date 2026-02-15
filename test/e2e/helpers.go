@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -203,16 +204,49 @@ func (m *MockGitHubServer) handleBatchedTimelineQuery(w http.ResponseWriter, que
 	// Parse PR aliases from query (e.g., pr0:, pr1:)
 	// For simplicity, we'll return timeline data for all tracked PRs
 	// The query format is: pr0: repository(...) { pullRequest(number: N) { ... } }
-
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	// Note: caller already holds m.mu.RLock()
 
 	data := make(map[string]interface{})
 
-	// Extract all pr aliases and match them to our PRs
-	// Simple approach: return timeline for pr0, pr1, pr2, etc. based on PR array order
-	for i, pr := range m.prs {
-		alias := fmt.Sprintf("pr%d", i)
+	// Parse the query to extract alias → PR number mappings
+	// The query format is: pr0: repository(owner: "...", name: "...") { pullRequest(number: N) { ... } }
+	// We extract alias and number pairs to match with our mock data
+	type aliasMapping struct {
+		alias  string
+		number int
+	}
+	var mappings []aliasMapping
+
+	// Use regex to extract "prN: repository..." patterns
+	aliasRegex := regexp.MustCompile(`(pr\d+):\s*repository\([^)]*\)\s*\{\s*pullRequest\(number:\s*(\d+)\)`)
+	matches := aliasRegex.FindAllStringSubmatch(query, -1)
+	for _, match := range matches {
+		if len(match) == 3 {
+			num := 0
+			fmt.Sscanf(match[2], "%d", &num)
+			mappings = append(mappings, aliasMapping{alias: match[1], number: num})
+		}
+	}
+
+	// If we couldn't parse the query, fall back to index-based matching
+	if len(mappings) == 0 {
+		for i, pr := range m.prs {
+			mappings = append(mappings, aliasMapping{alias: fmt.Sprintf("pr%d", i), number: pr.Number})
+		}
+	}
+
+	// Build a lookup from PR number to PR data
+	prByNumber := make(map[int]MockPR)
+	for _, pr := range m.prs {
+		prByNumber[pr.Number] = pr
+	}
+
+	// Build response for each alias
+	for _, mapping := range mappings {
+		pr, ok := prByNumber[mapping.number]
+		if !ok {
+			continue
+		}
 
 		// Build timeline items
 		var timelineNodes []interface{}
@@ -288,7 +322,7 @@ func (m *MockGitHubServer) handleBatchedTimelineQuery(w http.ResponseWriter, que
 			})
 		}
 
-		data[alias] = map[string]interface{}{
+		data[mapping.alias] = map[string]interface{}{
 			"pullRequest": map[string]interface{}{
 				"url":        pr.URL,
 				"headRefOid": pr.HeadCommitSHA,

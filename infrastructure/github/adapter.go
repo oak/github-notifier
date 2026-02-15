@@ -343,22 +343,9 @@ func (a *Adapter) fetchBatchedTimelines(prs []*pullrequest.PullRequest, since ti
 		// Extract the timeline items for this PR using the alias
 		if repoData, ok := response.Data[info.alias].(map[string]interface{}); ok {
 			if prData, ok := repoData["pullRequest"].(map[string]interface{}); ok {
-				// Extract and update head commit SHA
+				// Delegate head commit change detection to the domain aggregate
 				if headRefOid, ok := prData["headRefOid"].(string); ok {
-					// Check if head changed before updating
-					if info.pr.HeadCommitChanged(headRefOid) {
-						// Head commit changed - create push activity
-						pushActivity := pullrequest.NewActivity(
-							info.pr.Identifier(),
-							pullrequest.ActivityTypePush,
-							info.pr.Author(), // Use PR author as activity author
-							time.Now(),
-							headRefOid, // Store the new SHA in the body
-						)
-						info.pr.AddActivity(pushActivity)
-						log.Info().Msgf("Detected head commit change for PR %s (new SHA: %s)", info.pr.URL(), headRefOid)
-					}
-					info.pr.UpdateHeadCommitSHA(headRefOid)
+					info.pr.RecordHeadCommitUpdate(headRefOid, a.authenticatedUser)
 				}
 
 				if timelineData, ok := prData["timelineItems"].(map[string]interface{}); ok {

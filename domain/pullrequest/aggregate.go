@@ -243,19 +243,43 @@ func (pr *PullRequest) HeadCommitSHA() string {
 	return pr.headCommitSHA
 }
 
-// HeadCommitChanged checks if the head commit SHA has changed
-// Returns false if this is the first time seeing this PR (empty SHA)
-func (pr *PullRequest) HeadCommitChanged(newHeadSHA string) bool {
-	if pr.headCommitSHA == "" {
-		// First time seeing this PR - initialize but don't notify
-		return false
-	}
-	return pr.headCommitSHA != newHeadSHA
+// SetInitialHeadCommitSHA sets the head commit SHA without raising any events.
+// Used to restore known state from a previous check cycle.
+func (pr *PullRequest) SetInitialHeadCommitSHA(sha string) {
+	pr.headCommitSHA = sha
 }
 
-// UpdateHeadCommitSHA updates the stored head commit SHA
-func (pr *PullRequest) UpdateHeadCommitSHA(sha string) {
-	pr.headCommitSHA = sha
+// RecordHeadCommitUpdate detects if the head commit has changed and, if so,
+// creates a push activity and raises an ActivityDetected event.
+// Self-pushes (where the PR author matches authenticatedUser) are ignored.
+// First-time initialization (empty current SHA) records the SHA without notifying.
+func (pr *PullRequest) RecordHeadCommitUpdate(newHeadSHA, authenticatedUser string) {
+	if pr.headCommitSHA == "" {
+		// First time seeing this PR - initialize but don't notify
+		pr.headCommitSHA = newHeadSHA
+		return
+	}
+
+	if pr.headCommitSHA == newHeadSHA {
+		return // No change
+	}
+
+	pr.headCommitSHA = newHeadSHA
+
+	// Filter out self-pushes: the PR author typically pushes to their own branch
+	if authenticatedUser != "" && pr.author.Login() == authenticatedUser {
+		return
+	}
+
+	// Create a push activity within the aggregate
+	pushActivity := NewActivity(
+		pr.identifier,
+		ActivityTypePush,
+		pr.author,
+		time.Now(),
+		newHeadSHA,
+	)
+	pr.AddActivity(pushActivity)
 }
 
 // CollectEvents returns all pending domain events and clears the internal event list
