@@ -39,4 +39,4 @@ linters-settings:
         severity: warning
 
 output:
-  format: colored-line-number
+  formats: colored-line-number

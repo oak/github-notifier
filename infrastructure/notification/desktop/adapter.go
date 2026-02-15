@@ -69,7 +69,7 @@ func (a *Adapter) buildNotificationMessage(prNotif *port.PRNotificationData) str
 	var parts []string
 
 	// Add PR info
-	parts = append(parts, fmt.Sprintf("%s", pr.RepositoryName()))
+	parts = append(parts, pr.RepositoryName())
 	parts = append(parts, pr.Title())
 
 	// Add "NEW" indicator if this is a new PR

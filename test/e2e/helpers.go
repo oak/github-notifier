@@ -129,7 +129,7 @@ func (m *MockGitHubServer) handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Default empty response
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck // Test helper
 		"data": map[string]interface{}{},
 	})
 }
@@ -142,7 +142,7 @@ func (m *MockGitHubServer) handleViewerQuery(w http.ResponseWriter) {
 			},
 		},
 	}
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response) //nolint:errcheck // Test helper
 }
 
 func (m *MockGitHubServer) handleSearchQuery(w http.ResponseWriter, query string) {
@@ -195,7 +195,7 @@ func (m *MockGitHubServer) handleSearchQuery(w http.ResponseWriter, query string
 		},
 	}
 
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response) //nolint:errcheck // Test helper
 }
 
 func (m *MockGitHubServer) handleBatchedTimelineQuery(w http.ResponseWriter, query string) {
@@ -302,7 +302,7 @@ func (m *MockGitHubServer) handleBatchedTimelineQuery(w http.ResponseWriter, que
 		"data": data,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response) //nolint:errcheck // Test helper
 }
 
 // SetupPRs configures the mock server with PRs
