@@ -25,13 +25,15 @@ func TestCheckNewPRs_NoNewPRs(t *testing.T) {
 	prClassifier := pullrequest.NewPRClassifier()
 
 	requestedPRs := testutil.CreateTestPRs(2, 0)
-	userPRs := testutil.CreateTestPRs(1, 0)
+	userPRs := []*pullrequest.PullRequest{
+		testutil.NewTestPullRequest(10, testutil.WithURL("https://github.com/owner/repo/pull/10")),
+	}
 
 	// Mock expectations
 	mockPRRepo.On("FetchRequestedReviews").Return(requestedPRs, nil)
 	mockPRRepo.On("FetchUserCreated").Return(userPRs, nil)
 
-	// No new PRs found
+	// All PRs are new (not seen before)
 	mockSeenRepo.On("HasBeenSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(false).Times(3)
 	mockSeenRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Times(3)
 
@@ -62,7 +64,9 @@ func TestCheckNewPRs_TrulyNewPRs_EmitsEvents(t *testing.T) {
 	prClassifier := pullrequest.NewPRClassifier()
 
 	requestedPRs := testutil.CreateTestPRs(2, 0)
-	userPRs := testutil.CreateTestPRs(1, 0)
+	userPRs := []*pullrequest.PullRequest{
+		testutil.NewTestPullRequest(10, testutil.WithURL("https://github.com/owner/repo/pull/10")),
+	}
 
 	// Mock expectations
 	mockPRRepo.On("FetchRequestedReviews").Return(requestedPRs, nil)
@@ -156,13 +160,13 @@ func TestCheckNewPRs_MixedNewAndActivity(t *testing.T) {
 	now := time.Now()
 
 	// 2 truly new PRs (no activities) - created recently
-	newPR1 := testutil.NewTestPullRequest(1, testutil.WithCreatedAt(now.Add(-10*time.Minute)))
-	newPR2 := testutil.NewTestPullRequest(2, testutil.WithCreatedAt(now.Add(-10*time.Minute)))
+	newPR1 := testutil.NewTestPullRequest(1, testutil.WithURL("https://github.com/owner/repo/pull/1"), testutil.WithCreatedAt(now.Add(-10*time.Minute)))
+	newPR2 := testutil.NewTestPullRequest(2, testutil.WithURL("https://github.com/owner/repo/pull/2"), testutil.WithCreatedAt(now.Add(-10*time.Minute)))
 	newPRs := []*pullrequest.PullRequest{newPR1, newPR2}
 
 	// 2 PRs with recent activities - created 1 hour ago with activities now
-	activePR1 := testutil.NewTestPullRequest(3, testutil.WithCreatedAt(now.Add(-1*time.Hour)))
-	activePR2 := testutil.NewTestPullRequest(4, testutil.WithCreatedAt(now.Add(-1*time.Hour)))
+	activePR1 := testutil.NewTestPullRequest(3, testutil.WithURL("https://github.com/owner/repo/pull/3"), testutil.WithCreatedAt(now.Add(-1*time.Hour)))
+	activePR2 := testutil.NewTestPullRequest(4, testutil.WithURL("https://github.com/owner/repo/pull/4"), testutil.WithCreatedAt(now.Add(-1*time.Hour)))
 	activity1 := testutil.NewTestActivity(pullrequest.ActivityTypeComment, now, testutil.WithActivityPR(activePR1.URL(), activePR1.Number()))
 	activity2 := testutil.NewTestActivity(pullrequest.ActivityTypeComment, now, testutil.WithActivityPR(activePR2.URL(), activePR2.Number()))
 	activePR1.AddActivities([]*pullrequest.Activity{activity1})
@@ -178,9 +182,8 @@ func TestCheckNewPRs_MixedNewAndActivity(t *testing.T) {
 	// All 4 PRs are not seen yet
 	mockSeenRepo.On("HasBeenSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(false)
 
-	// Only truly new PRs (the 2 without recent activities) should be marked as seen
-	// The 2 PRs with activities should NOT be marked as seen
-	mockSeenRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Twice()
+	// All new PRs should be marked as seen (both truly new and those with activity)
+	mockSeenRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Times(4)
 
 	// Events only for truly new PRs (2 events)
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.NewPullRequestDetected")).Return(nil).Twice()
@@ -291,7 +294,10 @@ func TestCheckNewPRs_PublishEventError_ContinuesProcessing(t *testing.T) {
 	prFilter := pullrequest.NewPRFilter(false)
 	prClassifier := pullrequest.NewPRClassifier()
 
-	newPRs := testutil.CreateTestPRs(2, 0)
+	newPRs := []*pullrequest.PullRequest{
+		testutil.NewTestPullRequest(1, testutil.WithURL("https://github.com/owner/repo/pull/1")),
+		testutil.NewTestPullRequest(2, testutil.WithURL("https://github.com/owner/repo/pull/2")),
+	}
 
 	// Mock expectations
 	mockPRRepo.On("FetchRequestedReviews").Return(newPRs, nil)

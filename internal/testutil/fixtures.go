@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/oak3/github-notifier/domain/pullrequest"
@@ -176,15 +177,17 @@ func WithActivityBody(body string) func(*testActivityBuilder) {
 func CreateTestPRs(regularCount, draftCount int) []*pullrequest.PullRequest {
 	prs := make([]*pullrequest.PullRequest, 0, regularCount+draftCount)
 
-	// Create regular PRs
+	// Create regular PRs with unique URLs
 	for i := 0; i < regularCount; i++ {
-		pr := NewTestPullRequest(i+1, WithDraft(false))
+		num := i + 1
+		pr := NewTestPullRequest(num, WithDraft(false), WithURL(fmt.Sprintf("https://github.com/owner/repo/pull/%d", num)))
 		prs = append(prs, pr)
 	}
 
-	// Create draft PRs
+	// Create draft PRs with unique URLs
 	for i := 0; i < draftCount; i++ {
-		pr := NewTestPullRequest(regularCount+i+1, WithDraft(true))
+		num := regularCount + i + 1
+		pr := NewTestPullRequest(num, WithDraft(true), WithURL(fmt.Sprintf("https://github.com/owner/repo/pull/%d", num)))
 		prs = append(prs, pr)
 	}
 
@@ -197,7 +200,8 @@ func CreateTestPRsWithActivities(count int, activitiesPerPR int, activityAge tim
 	now := time.Now()
 
 	for i := 0; i < count; i++ {
-		pr := NewTestPullRequest(i + 1)
+		num := i + 1
+		pr := NewTestPullRequest(num, WithURL(fmt.Sprintf("https://github.com/owner/repo/pull/%d", num)))
 
 		// Add activities
 		activities := make([]*pullrequest.Activity, 0, activitiesPerPR)
