@@ -468,6 +468,93 @@ func TestE2E_FullLifecycle_NewPRToActivity(t *testing.T) {
 	assert.Equal(t, "Feature X", prs[0].Title())
 }
 
+func TestE2E_ActivityOnSeenPR_StillNotifies(t *testing.T) {
+	// Regression test: after a PR is seen, subsequent activity must still
+	// produce "PR Activity" notifications (not "New PR" and not silence).
+	// This tests the interaction between knownPRs, seen repo, and
+	// MarkPullRequestAsUnseen across 4 orchestrator cycles.
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	// Cycle 1: PR detected as new
+	pr := MockPR{
+		Title:  "Seen PR Activity Test",
+		Number: 600,
+		Author: "alice",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "Cycle 1: should get new PR notification")
+	assert.Equal(t, "New PR needing review", notifs[0].Title, "Cycle 1: should be 'New PR needing review'")
+	suite.ClearNotifications()
+	time.Sleep(500 * time.Millisecond)
+
+	// Cycle 2: Comment added → should get "PR Activity"
+	suite.mockGitHub.AddComment(600, MockComment{
+		Author:    "bob",
+		Body:      "First comment",
+		CreatedAt: time.Now(),
+	})
+
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs = suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "Cycle 2: MUST notify for activity on seen PR")
+	foundActivity := false
+	for _, n := range notifs {
+		if n.Title == "PR Activity" {
+			foundActivity = true
+			break
+		}
+	}
+	assert.True(t, foundActivity, "Cycle 2: should be 'PR Activity', not 'New PR needing review'")
+	suite.ClearNotifications()
+	time.Sleep(500 * time.Millisecond)
+
+	// Cycle 3: No new activity → should get NO notification
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs = suite.notifications.GetNotifications()
+	assert.Len(t, notifs, 0, "Cycle 3: should NOT re-notify without new activity")
+	suite.ClearNotifications()
+	time.Sleep(500 * time.Millisecond)
+
+	// Cycle 4: Another comment → should AGAIN get "PR Activity" (not "New PR")
+	suite.mockGitHub.AddComment(600, MockComment{
+		Author:    "charlie",
+		Body:      "Second comment",
+		CreatedAt: time.Now(),
+	})
+
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs = suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "Cycle 4: MUST notify for second round of activity on seen PR")
+	foundActivity = false
+	foundNewPR := false
+	for _, n := range notifs {
+		if n.Title == "PR Activity" {
+			foundActivity = true
+		}
+		if n.Title == "New PR needing review" {
+			foundNewPR = true
+		}
+	}
+	assert.True(t, foundActivity, "Cycle 4: should be 'PR Activity'")
+	assert.False(t, foundNewPR, "Cycle 4: must NOT re-detect as new PR after MarkPullRequestAsUnseen")
+}
+
 func TestE2E_MenuUpdates_ReflectCurrentState(t *testing.T) {
 	// Given: Multiple PRs
 	suite := SetupSuite(t)

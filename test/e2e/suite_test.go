@@ -172,9 +172,6 @@ func (s *TestSuite) ClearNotifications() {
 // FlushNotifications immediately flushes any pending notifications
 func (s *TestSuite) FlushNotifications() {
 	if s.notificationHandler != nil {
-		// Manually flush the aggregator
-		s.notificationHandler.Stop()
-		// Recreate it for the next round
-		s.notificationHandler = events.NewNotificationEventHandler(s.notifications)
+		s.notificationHandler.Flush()
 	}
 }
