@@ -10,10 +10,17 @@ permissions:
 
 jobs:
   # --------------------------------------------------
+  # 0. Run tests before releasing (reuse test workflow)
+  # --------------------------------------------------
+  tests:
+    uses: ./.github/workflows/test.yml
+
+  # --------------------------------------------------
   # 1. Create the release (ONCE)
   # --------------------------------------------------
   create-release:
     name: Create GitHub Release
+    needs: tests
     runs-on: ubuntu-latest
 
     steps:
