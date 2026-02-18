@@ -18,6 +18,8 @@ import (
 
 // MenuAdapter adapts the systray menu to the MenuPort interface
 type MenuAdapter struct {
+	authenticatedUser         string            // GitHub login of the authenticated user
+	userMenuItem              *systray.MenuItem // Disabled menu item showing the authenticated user
 	requestedPRsTitleMenuItem *systray.MenuItem
 	userPRsTitleMenuItem      *systray.MenuItem
 	requestedPRsMenuItems     []MenuItemPair
@@ -51,7 +53,7 @@ type MenuItemPair struct {
 }
 
 // NewMenuAdapter creates a new menu adapter
-func NewMenuAdapter(maxNumberOfRepos, maxNumberOfPRs int, themeProvider ThemeProvider) *MenuAdapter {
+func NewMenuAdapter(maxNumberOfRepos, maxNumberOfPRs int, themeProvider ThemeProvider, authenticatedUser string) *MenuAdapter {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	requestedPRsMenuItems := make([]MenuItemPair, maxNumberOfRepos)
@@ -65,6 +67,7 @@ func NewMenuAdapter(maxNumberOfRepos, maxNumberOfPRs int, themeProvider ThemePro
 	}
 
 	return &MenuAdapter{
+		authenticatedUser:     authenticatedUser,
 		requestedPRsMenuItems: requestedPRsMenuItems,
 		userPRsMenuItems:      userPRsMenuItems,
 		maxNumberOfRepos:      maxNumberOfRepos,
@@ -140,6 +143,15 @@ func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullre
 		}
 	}
 	m.clickedPRsMu.Unlock()
+
+	// Show authenticated user as first inactive menu item
+	if m.authenticatedUser != "" {
+		if m.userMenuItem == nil {
+			m.userMenuItem = systray.AddMenuItem("@"+m.authenticatedUser+"   ", "Signed in as "+m.authenticatedUser)
+			m.userMenuItem.Disable()
+			systray.AddSeparator()
+		}
+	}
 
 	// Add asterisk to section title if it contains unseen PRs
 	requestedReviewTitle := fmt.Sprintf("PRs Requested Reviews: %d", len(requestedReviewPRs))

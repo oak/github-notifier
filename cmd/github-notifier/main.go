@@ -95,7 +95,7 @@ func main() {
 		notificationAdapter = desktopAdapter
 	}
 
-	menuAdapter := ui.NewMenuAdapter(cfg.MaxNumberOfRepos, cfg.MaxNumberOfPRs, themeProvider)
+	menuAdapter := ui.NewMenuAdapter(cfg.MaxNumberOfRepos, cfg.MaxNumberOfPRs, themeProvider, githubAdapter.AuthenticatedUser())
 
 	// Initialize domain services
 	prFilter := pullrequest.NewPRFilter(cfg.IncludeDraftPRs)
