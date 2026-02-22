@@ -47,10 +47,12 @@ func main() {
 	// Load configuration
 	cfg := config.LoadConfig()
 	if !cfg.IsValid() {
-		log.Fatal().Msg("GitHub token not configured. Set GITHUB_TOKEN environment variable.")
+		log.Fatal().
+			Str("config_file", cfg.ConfigFilePath).
+			Msg("GitHub token not configured. Set GITHUB_TOKEN environment variable or in " + cfg.ConfigFilePath)
 	}
 
-	log.Info().Msg("Starting GitHub PR Notifier...")
+	log.Info().Str("config_file", cfg.ConfigFilePath).Msg("Starting GitHub PR Notifier...")
 
 	// Initialize infrastructure adapters
 	githubAdapter := github.NewAdapter(cfg.GitHubToken)
