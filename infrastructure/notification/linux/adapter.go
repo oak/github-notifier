@@ -281,6 +281,24 @@ func (a *Adapter) openURL(url string) error {
 	return nil
 }
 
+// NotifyMessage sends a simple text notification via D-Bus
+func (a *Adapter) NotifyMessage(title, message string) error {
+	if a.notifier == nil {
+		log.Warn().Msg("D-Bus notifier not initialized, skipping notification")
+		return nil
+	}
+
+	notification := notify.Notification{
+		AppName:       "GitHub Notifier",
+		Summary:       title,
+		Body:          message,
+		ExpireTimeout: 10000, // 10 seconds for setup messages
+	}
+
+	_, err := a.notifier.SendNotification(notification)
+	return err
+}
+
 // SupportsClickActions returns true for Linux adapter
 func (a *Adapter) SupportsClickActions() bool {
 	return a.notifier != nil

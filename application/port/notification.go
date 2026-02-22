@@ -33,6 +33,9 @@ type NotificationPort interface {
 	// NotifyPullRequests sends grouped notifications for pull requests
 	NotifyPullRequests(notifications []*PRNotificationData) error
 
+	// NotifyMessage sends a simple text notification (e.g., setup instructions)
+	NotifyMessage(title, message string) error
+
 	// SupportsClickActions returns true if this adapter supports click actions
 	SupportsClickActions() bool
 }

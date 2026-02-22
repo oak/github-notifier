@@ -31,6 +31,24 @@ func (_m *NotificationPort) NotifyPullRequests(notifications []*port.PRNotificat
 	return r0
 }
 
+// NotifyMessage provides a mock function with given fields: title, message
+func (_m *NotificationPort) NotifyMessage(title string, message string) error {
+	ret := _m.Called(title, message)
+
+	if len(ret) == 0 {
+		panic("no return value specified for NotifyMessage")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = rf(title, message)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // SupportsClickActions provides a mock function with no fields
 func (_m *NotificationPort) SupportsClickActions() bool {
 	ret := _m.Called()

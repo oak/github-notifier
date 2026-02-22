@@ -46,14 +46,107 @@ func main() {
 
 	// Load configuration
 	cfg := config.LoadConfig()
-	if !cfg.IsValid() {
-		log.Fatal().
-			Str("config_file", cfg.ConfigFilePath).
-			Msg("GitHub token not configured. Set GITHUB_TOKEN environment variable or in " + cfg.ConfigFilePath)
-	}
 
 	log.Info().Str("config_file", cfg.ConfigFilePath).Msg("Starting GitHub PR Notifier...")
 
+	// Create application with context
+	ctx, cancel := context.WithCancel(context.Background())
+	app := &App{
+		cfg:    cfg,
+		ctx:    ctx,
+		cancel: cancel,
+	}
+
+	// Setup signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+
+	// Start signal handler in background
+	go func() {
+		sig := <-sigChan
+		log.Info().Str("signal", sig.String()).Msg("Received shutdown signal")
+		systray.Quit()
+	}()
+
+	// Start systray (blocking call)
+	log.Info().Msg("Application starting")
+	systray.Run(app.onReady, app.onExit)
+	log.Info().Msg("Application terminated")
+}
+
+func (app *App) onReady() {
+	if app.cfg.IsValid() {
+		app.startWithConfig(app.cfg)
+		return
+	}
+
+	// Token not set — enter waiting mode
+	log.Warn().
+		Str("config_file", app.cfg.ConfigFilePath).
+		Msg("GitHub token not configured — waiting for user to set it")
+
+	app.enterWaitingMode()
+}
+
+// enterWaitingMode sets up a minimal systray, notifies the user, opens the
+// config file in their editor, and watches for a valid config to appear.
+func (app *App) enterWaitingMode() {
+	// We need a MenuAdapter just for the waiting state UI
+	themeProvider := ui.NewSystemThemeProvider()
+	app.menuAdapter = ui.NewMenuAdapter(1, 1, themeProvider, "")
+	app.menuAdapter.SetupWaitingState(app.cfg.ConfigFilePath)
+
+	// Send a desktop notification to inform the user via the proper port
+	desktopNotifier := app.createDesktopNotifier(themeProvider)
+	if err := desktopNotifier.NotifyMessage(
+		"GitHub Notifier — Setup Required",
+		"GitHub token not configured. Opening config file...",
+	); err != nil {
+		log.Warn().Err(err).Msg("Failed to send setup notification")
+	}
+
+	// Open the config file in the default editor
+	if err := config.OpenInEditor(app.cfg.ConfigFilePath); err != nil {
+		log.Warn().Err(err).Msg("Failed to open config file in editor")
+	}
+
+	// Start watching the config file for a valid token
+	validCfgCh := config.WatchForValidConfig(app.ctx, app.cfg.ConfigFilePath)
+
+	app.wg.Add(1)
+	go func() {
+		defer app.wg.Done()
+		select {
+		case cfg, ok := <-validCfgCh:
+			if !ok || cfg == nil {
+				return
+			}
+			log.Info().Msg("Valid configuration detected — initializing application")
+			app.cfg = cfg
+			app.startWithConfig(cfg)
+		case <-app.ctx.Done():
+			return
+		}
+	}()
+}
+
+// createDesktopNotifier creates an OS-appropriate desktop notification adapter.
+// Used both for the waiting-mode setup notification and the normal runtime.
+func (app *App) createDesktopNotifier(themeProvider *ui.SystemThemeProvider) port.NotificationPort {
+	switch runtime.GOOS {
+	case "darwin":
+		return macos.NewAdapter(themeProvider, app.cfg.MacOSNotificationSender)
+	case "linux":
+		return linux.NewAdapter(themeProvider)
+	default:
+		return desktop.NewAdapter(themeProvider)
+	}
+}
+
+// startWithConfig initializes all infrastructure and starts the polling loop.
+// It can be called either at startup (happy path) or after the config watcher
+// detects a valid config (waiting path).
+func (app *App) startWithConfig(cfg *config.Config) {
 	// Initialize infrastructure adapters
 	githubAdapter := github.NewAdapter(cfg.GitHubToken)
 	seenRepo := memory.NewSeenPullRequestRepository()
@@ -62,20 +155,7 @@ func main() {
 
 	// Setup notification adapters (OS-specific desktop + optional Slack)
 	var notificationAdapter port.NotificationPort
-	var desktopAdapter port.NotificationPort
-
-	// Use OS-specific adapter for better native support
-	switch runtime.GOOS {
-	case "darwin":
-		log.Info().Msg("Using macOS native notifications with click action support")
-		desktopAdapter = macos.NewAdapter(themeProvider, cfg.MacOSNotificationSender)
-	case "linux":
-		log.Info().Msg("Using Linux native notifications with click action support")
-		desktopAdapter = linux.NewAdapter(themeProvider)
-	default:
-		log.Info().Msgf("Using generic desktop notifications for %s", runtime.GOOS)
-		desktopAdapter = desktop.NewAdapter(themeProvider)
-	}
+	desktopAdapter := app.createDesktopNotifier(themeProvider)
 
 	if desktopAdapter.SupportsClickActions() {
 		log.Info().Msg("Click actions enabled - clicking notifications will open PRs")
@@ -97,7 +177,16 @@ func main() {
 		notificationAdapter = desktopAdapter
 	}
 
-	menuAdapter := ui.NewMenuAdapter(cfg.MaxNumberOfRepos, cfg.MaxNumberOfPRs, themeProvider, githubAdapter.AuthenticatedUser())
+	// Clear waiting-state menu items if transitioning from waiting mode
+	if app.menuAdapter != nil {
+		app.menuAdapter.ClearWaitingState()
+	}
+
+	// Create menu adapter (replaces waiting-state adapter if present)
+	app.menuAdapter = ui.NewMenuAdapter(cfg.MaxNumberOfRepos, cfg.MaxNumberOfPRs, themeProvider, githubAdapter.AuthenticatedUser())
+
+	systray.SetTooltip("GitHub PR Notifier")
+	app.menuAdapter.Setup()
 
 	// Initialize domain services
 	prFilter := pullrequest.NewPRFilter(cfg.IncludeDraftPRs)
@@ -112,7 +201,6 @@ func main() {
 
 	// Register event handlers
 	notificationHandler := events.NewNotificationEventHandler(notificationAdapter, githubAdapter.AuthenticatedUser())
-	// AuthenticatedUser is now part of the PullRequestRepository port interface
 	trackingHandler := events.NewTrackingEventHandler(trackingService)
 
 	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, notificationHandler)
@@ -131,7 +219,7 @@ func main() {
 		githubAdapter,
 		trackingService,
 		prFilter,
-		menuAdapter,
+		app.menuAdapter,
 	)
 
 	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(
@@ -157,12 +245,12 @@ func main() {
 	)
 
 	updateDisplayUseCase := usecase.NewUpdatePullRequestDisplayUseCase(
-		menuAdapter,
+		app.menuAdapter,
 		trackingService,
 	)
 
 	// Create orchestrator
-	orchestrator := application.NewPullRequestOrchestrator(
+	app.orchestrator = application.NewPullRequestOrchestrator(
 		initializeUseCase,
 		checkNewPRsUseCase,
 		detectClosedPRsUseCase,
@@ -171,46 +259,13 @@ func main() {
 		cfg.EnableActivityTracking,
 	)
 
-	// Create application with context
-	ctx, cancel := context.WithCancel(context.Background())
-	app := &App{
-		cfg:          cfg,
-		orchestrator: orchestrator,
-		menuAdapter:  menuAdapter,
-		ctx:          ctx,
-		cancel:       cancel,
-	}
-
-	// Setup signal handling for graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
-
-	// Start signal handler in background
-	go func() {
-		sig := <-sigChan
-		log.Info().Str("signal", sig.String()).Msg("Received shutdown signal")
-		systray.Quit()
-	}()
-
-	// Start systray (blocking call)
-	log.Info().Msg("Application starting")
-	systray.Run(app.onReady, app.onExit)
-	log.Info().Msg("Application terminated")
-}
-
-func (app *App) onReady() {
-	systray.SetTooltip("GitHub PR Notifier")
-
-	// Setup menu
-	app.menuAdapter.Setup()
-
 	// Initial check
 	if err := app.orchestrator.ExecuteInitialCheck(app.ctx); err != nil {
 		log.Error().Err(err).Msg("Error during initial check")
 	}
 
 	// Setup periodic checks with context cancellation
-	app.checkTicker = time.NewTicker(time.Duration(app.cfg.CheckInterval) * time.Minute)
+	app.checkTicker = time.NewTicker(time.Duration(cfg.CheckInterval) * time.Minute)
 	app.wg.Add(1)
 	go func() {
 		defer app.wg.Done()
@@ -241,7 +296,9 @@ func (app *App) onExit() {
 	}
 
 	// Shutdown menu adapter
-	app.menuAdapter.Shutdown()
+	if app.menuAdapter != nil {
+		app.menuAdapter.Shutdown()
+	}
 
 	// Wait for all goroutines to complete with timeout
 	log.Info().Msg("Waiting for background tasks to complete")

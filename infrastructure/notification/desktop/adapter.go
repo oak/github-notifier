@@ -162,6 +162,12 @@ func (a *Adapter) getActivityLabel(actType pullrequest.ActivityType, count int) 
 	}
 }
 
+// NotifyMessage sends a simple text notification
+func (a *Adapter) NotifyMessage(title, message string) error {
+	iconData := a.selectIcon()
+	return beeep.Notify(title, message, iconData)
+}
+
 // SupportsClickActions returns false for the generic desktop adapter
 func (a *Adapter) SupportsClickActions() bool {
 	return false

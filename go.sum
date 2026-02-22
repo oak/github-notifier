@@ -9,6 +9,8 @@ github.com/deckarep/gosx-notifier v0.0.0-20180201035817-e127226297fb h1:6S+TKObz
 github.com/deckarep/gosx-notifier v0.0.0-20180201035817-e127226297fb/go.mod h1:wf3nKtOnQqCp7kp9xB7hHnNlZ6m3NoiOxjrB9hFRq4Y=
 github.com/esiqveland/notify v0.13.3 h1:QCMw6o1n+6rl+oLUfg8P1IIDSFsDEb2WlXvVvIJbI/o=
 github.com/esiqveland/notify v0.13.3/go.mod h1:hesw/IRYTO0x99u1JPweAl4+5mwXJibQVUcP0Iu5ORE=
+github.com/fsnotify/fsnotify v1.9.0 h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=
+github.com/fsnotify/fsnotify v1.9.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/gen2brain/beeep v0.11.2 h1:+KfiKQBbQCuhfJFPANZuJ+oxsSKAYNe88hIpJuyKWDA=
 github.com/gen2brain/beeep v0.11.2/go.mod h1:jQVvuwnLuwOcdctHn/uyh8horSBNJ8uGb9Cn2W4tvoc=
 github.com/getlantern/context v0.0.0-20190109183933-c447772a6520 h1:NRUJuo3v3WGC/g5YiyF790gut6oQr5f3FBI88Wv0dx4=

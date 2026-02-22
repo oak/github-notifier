@@ -38,6 +38,20 @@ func (c *CompositeAdapter) NotifyPullRequests(notifications []*port.PRNotificati
 	return firstError
 }
 
+// NotifyMessage sends a simple text notification to all configured adapters
+func (c *CompositeAdapter) NotifyMessage(title, message string) error {
+	var firstError error
+	for _, adapter := range c.adapters {
+		if err := adapter.NotifyMessage(title, message); err != nil {
+			log.Error().Msgf("Notification adapter failed: %v", err)
+			if firstError == nil {
+				firstError = err
+			}
+		}
+	}
+	return firstError
+}
+
 // SupportsClickActions returns true if any adapter supports click actions
 func (c *CompositeAdapter) SupportsClickActions() bool {
 	for _, adapter := range c.adapters {

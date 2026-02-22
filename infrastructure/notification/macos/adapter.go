@@ -184,6 +184,17 @@ func (a *Adapter) getActivityLabel(actType pullrequest.ActivityType, count int) 
 	}
 }
 
+// NotifyMessage sends a simple text notification via macOS native notifications
+func (a *Adapter) NotifyMessage(title, message string) error {
+	note := gosxnotifier.NewNotification(message)
+	note.Title = title
+	if a.sender != "" {
+		note.Sender = a.sender
+	}
+	note.Sound = gosxnotifier.Default
+	return note.Push()
+}
+
 // SupportsClickActions returns true for macOS adapter
 func (a *Adapter) SupportsClickActions() bool {
 	return true

@@ -25,6 +25,7 @@ type MenuAdapter struct {
 	requestedPRsMenuItems     []MenuItemPair
 	userPRsMenuItems          []MenuItemPair
 	quitMenuItem              *systray.MenuItem
+	waitingMenuItems          []*systray.MenuItem // Menu items shown during waiting-for-config state
 	maxNumberOfRepos          int
 	maxNumberOfPRs            int
 	darkIcon                  []byte
@@ -84,6 +85,41 @@ func NewMenuAdapter(maxNumberOfRepos, maxNumberOfPRs int, themeProvider ThemePro
 func (m *MenuAdapter) Setup() {
 	// Use embedded icons
 	m.SetThemeIcons(assets.DarkIcon, assets.LightIcon)
+}
+
+// SetupWaitingState shows a minimal systray menu indicating the app is waiting
+// for a valid configuration. It displays the config file path and a quit button.
+func (m *MenuAdapter) SetupWaitingState(configFilePath string) {
+	m.SetThemeIcons(assets.DarkIcon, assets.LightIcon)
+	systray.SetTooltip("GitHub Notifier — waiting for configuration")
+
+	waitingItem := systray.AddMenuItem("⚠ Waiting for GitHub token...", "Set your GitHub token in the config file")
+	waitingItem.Disable()
+
+	configItem := systray.AddMenuItem("Config: "+configFilePath, "Config file location")
+	configItem.Disable()
+
+	// Track these items so ClearWaitingState can hide them
+	m.waitingMenuItems = []*systray.MenuItem{waitingItem, configItem}
+
+	systray.AddSeparator()
+	m.quitMenuItem = systray.AddMenuItem("Quit", "Quit the app")
+	go m.handleQuitClick()
+}
+
+// ClearWaitingState hides the waiting-mode menu items so the normal
+// PR menu can take over. Called when a valid config is detected.
+func (m *MenuAdapter) ClearWaitingState() {
+	for _, item := range m.waitingMenuItems {
+		item.Hide()
+	}
+	m.waitingMenuItems = nil
+
+	// Hide the old quit item — a new one will be created by UpdateDisplay
+	if m.quitMenuItem != nil {
+		m.quitMenuItem.Hide()
+		m.quitMenuItem = nil
+	}
 }
 
 // SetThemeIcons sets the dark and light icons

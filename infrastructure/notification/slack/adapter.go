@@ -177,6 +177,12 @@ func (a *Adapter) getActivityLabel(actType pullrequest.ActivityType, count int) 
 	}
 }
 
+// NotifyMessage sends a simple text notification via Slack
+func (a *Adapter) NotifyMessage(title, message string) error {
+	ctx := context.Background()
+	return a.notifier.Send(ctx, title, message)
+}
+
 // SupportsClickActions returns false for Slack adapter (links are in message)
 func (a *Adapter) SupportsClickActions() bool {
 	return false
