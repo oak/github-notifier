@@ -25,6 +25,8 @@ type MenuAdapter struct {
 	requestedPRsMenuItems     []MenuItemPair
 	userPRsMenuItems          []MenuItemPair
 	quitMenuItem              *systray.MenuItem
+	requestedPRsEmptyItem     *systray.MenuItem   // Separate (empty) placeholder for requested reviews section
+	userPRsEmptyItem          *systray.MenuItem   // Separate (empty) placeholder for user PRs section
 	waitingMenuItems          []*systray.MenuItem // Menu items shown during waiting-for-config state
 	maxNumberOfRepos          int
 	maxNumberOfPRs            int
@@ -199,7 +201,7 @@ func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullre
 		requestedReviewTitle,
 	)
 
-	m.updatePRSection(requestedReviewPRs, m.requestedPRsMenuItems, m.requestedPRsTitleMenuItem)
+	m.updatePRSection(requestedReviewPRs, m.requestedPRsMenuItems, m.requestedPRsTitleMenuItem, &m.requestedPRsEmptyItem)
 
 	// Add asterisk to section title if it contains unseen PRs
 	userPRsTitle := fmt.Sprintf("Your PRs: %d", len(userCreatedPRs))
@@ -211,7 +213,7 @@ func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullre
 		userPRsTitle,
 	)
 
-	m.updatePRSection(userCreatedPRs, m.userPRsMenuItems, m.userPRsTitleMenuItem)
+	m.updatePRSection(userCreatedPRs, m.userPRsMenuItems, m.userPRsTitleMenuItem, &m.userPRsEmptyItem)
 
 	totalPRs := len(requestedReviewPRs) + len(userCreatedPRs)
 	systray.SetTooltip(fmt.Sprintf("GitHub Notifier: %d PRs", totalPRs))
@@ -248,30 +250,37 @@ func (m *MenuAdapter) addOrUpdateParentMenuItem(menuItem *systray.MenuItem, titl
 
 // updatePRSection updates the PR menu section in-place without first clearing all items,
 // which avoids the menu briefly disappearing between a clear and rebuild.
-func (m *MenuAdapter) updatePRSection(prs []*pullrequest.PullRequest, menuItems []MenuItemPair, sectionTitle *systray.MenuItem) {
+//
+// emptyItem is a pointer to the section's dedicated "(empty)" placeholder. It is kept
+// separate from the repo slots so that repo items are never used as disabled leaf nodes.
+// A previously-leaf item that later gains children causes a GTK leaf→parent transition
+// that some dbusmenu/appindicator stacks do not propagate correctly.
+func (m *MenuAdapter) updatePRSection(prs []*pullrequest.PullRequest, menuItems []MenuItemPair, sectionTitle *systray.MenuItem, emptyItem **systray.MenuItem) {
 	if len(prs) == 0 {
-		// Show "(empty)" placeholder in the first slot
-		if menuItems[0].Parent == nil {
-			menuItems[0].Parent = sectionTitle.AddSubMenuItem("", "")
+		// Show dedicated "(empty)" placeholder (never shares a slot with a repo item).
+		if *emptyItem == nil {
+			*emptyItem = sectionTitle.AddSubMenuItem("(empty)   ", "")
+			(*emptyItem).Disable()
 		}
-		menuItems[0].Parent.SetTitle("(empty)   ")
-		menuItems[0].Parent.Disable()
-		menuItems[0].Parent.Show()
+		(*emptyItem).Show()
 
-		// Hide all child items of slot 0
-		for j := 0; j < m.maxNumberOfPRs; j++ {
-			if menuItems[0].Children[j] != nil {
-				menuItems[0].Children[j].Hide()
-			}
-		}
-
-		// Hide remaining repo slots
-		for i := 1; i < m.maxNumberOfRepos; i++ {
+		// Hide all repo slots and their children.
+		for i := 0; i < m.maxNumberOfRepos; i++ {
 			if menuItems[i].Parent != nil {
+				for j := 0; j < m.maxNumberOfPRs; j++ {
+					if menuItems[i].Children[j] != nil {
+						menuItems[i].Children[j].Hide()
+					}
+				}
 				menuItems[i].Parent.Hide()
 			}
 		}
 		return
+	}
+
+	// Non-empty: hide the dedicated placeholder.
+	if *emptyItem != nil {
+		(*emptyItem).Hide()
 	}
 
 	prsByRepo := m.groupPRsByRepository(prs)
