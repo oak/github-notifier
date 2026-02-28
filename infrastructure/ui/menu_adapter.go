@@ -199,15 +199,7 @@ func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullre
 		requestedReviewTitle,
 	)
 
-	m.clearMenuItems(m.requestedPRsTitleMenuItem, m.requestedPRsMenuItems)
-
-	if len(requestedReviewPRs) > 0 {
-		m.buildPRSection(requestedReviewPRs, m.requestedPRsMenuItems)
-	} else {
-		m.requestedPRsMenuItems[0].Parent.SetTitle("(empty)   ")
-		m.requestedPRsMenuItems[0].Parent.Show()
-		m.requestedPRsMenuItems[0].Parent.Disable()
-	}
+	m.updatePRSection(requestedReviewPRs, m.requestedPRsMenuItems, m.requestedPRsTitleMenuItem)
 
 	// Add asterisk to section title if it contains unseen PRs
 	userPRsTitle := fmt.Sprintf("Your PRs: %d", len(userCreatedPRs))
@@ -219,15 +211,7 @@ func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullre
 		userPRsTitle,
 	)
 
-	m.clearMenuItems(m.userPRsTitleMenuItem, m.userPRsMenuItems)
-
-	if len(userCreatedPRs) > 0 {
-		m.buildPRSection(userCreatedPRs, m.userPRsMenuItems)
-	} else {
-		m.userPRsMenuItems[0].Parent.SetTitle("(empty)   ")
-		m.userPRsMenuItems[0].Parent.Show()
-		m.userPRsMenuItems[0].Parent.Disable()
-	}
+	m.updatePRSection(userCreatedPRs, m.userPRsMenuItems, m.userPRsTitleMenuItem)
 
 	totalPRs := len(requestedReviewPRs) + len(userCreatedPRs)
 	systray.SetTooltip(fmt.Sprintf("GitHub Notifier: %d PRs", totalPRs))
@@ -254,23 +238,6 @@ func (m *MenuAdapter) Shutdown() {
 	m.cancel()
 }
 
-func (m *MenuAdapter) clearMenuItems(firstLevelTitleMenuItem *systray.MenuItem, firstLevelMenuItems []MenuItemPair) {
-	for i := 0; i < m.maxNumberOfRepos; i++ {
-		if firstLevelMenuItems[i].Parent == nil {
-			firstLevelMenuItems[i].Parent = firstLevelTitleMenuItem.AddSubMenuItem("", "")
-		}
-		firstLevelMenuItems[i].Parent.Enable()
-		firstLevelMenuItems[i].Parent.Hide()
-		for j := 0; j < m.maxNumberOfPRs; j++ {
-			if firstLevelMenuItems[i].Children[j] == nil {
-				firstLevelMenuItems[i].Children[j] = firstLevelMenuItems[i].Parent.AddSubMenuItem("", "")
-			}
-			firstLevelMenuItems[i].Children[j].Enable()
-			firstLevelMenuItems[i].Children[j].Hide()
-		}
-	}
-}
-
 func (m *MenuAdapter) addOrUpdateParentMenuItem(menuItem *systray.MenuItem, title string) *systray.MenuItem {
 	if menuItem == nil {
 		menuItem = systray.AddMenuItem("", "")
@@ -279,7 +246,34 @@ func (m *MenuAdapter) addOrUpdateParentMenuItem(menuItem *systray.MenuItem, titl
 	return menuItem
 }
 
-func (m *MenuAdapter) buildPRSection(prs []*pullrequest.PullRequest, parentMenuItem []MenuItemPair) {
+// updatePRSection updates the PR menu section in-place without first clearing all items,
+// which avoids the menu briefly disappearing between a clear and rebuild.
+func (m *MenuAdapter) updatePRSection(prs []*pullrequest.PullRequest, menuItems []MenuItemPair, sectionTitle *systray.MenuItem) {
+	if len(prs) == 0 {
+		// Show "(empty)" placeholder in the first slot
+		if menuItems[0].Parent == nil {
+			menuItems[0].Parent = sectionTitle.AddSubMenuItem("", "")
+		}
+		menuItems[0].Parent.SetTitle("(empty)   ")
+		menuItems[0].Parent.Disable()
+		menuItems[0].Parent.Show()
+
+		// Hide all child items of slot 0
+		for j := 0; j < m.maxNumberOfPRs; j++ {
+			if menuItems[0].Children[j] != nil {
+				menuItems[0].Children[j].Hide()
+			}
+		}
+
+		// Hide remaining repo slots
+		for i := 1; i < m.maxNumberOfRepos; i++ {
+			if menuItems[i].Parent != nil {
+				menuItems[i].Parent.Hide()
+			}
+		}
+		return
+	}
+
 	prsByRepo := m.groupPRsByRepository(prs)
 
 	// Sort repository names to ensure consistent ordering
@@ -289,41 +283,60 @@ func (m *MenuAdapter) buildPRSection(prs []*pullrequest.PullRequest, parentMenuI
 	}
 	sort.Strings(repoNames)
 
-	i := 0
-	for _, repoName := range repoNames {
+	// Update repo slots that are in use
+	for i, repoName := range repoNames {
 		repoPRs := prsByRepo[repoName]
+
+		if menuItems[i].Parent == nil {
+			menuItems[i].Parent = sectionTitle.AddSubMenuItem("", "")
+		}
+
 		// Add asterisk to repository name if it contains unseen PRs
 		repoTitle := repoName
 		if m.hasUnseenPRs(repoPRs) {
 			repoTitle = "* " + repoName
 		}
-		parentMenuItem[i].Parent.SetTitle(repoTitle + "   ")
+		menuItems[i].Parent.SetTitle(repoTitle + "   ")
+		menuItems[i].Parent.Enable()
 
+		// Update PR child slots that are in use
 		for j, pr := range repoPRs {
-
-			menuItem := parentMenuItem[i].Children[j]
-
-			prTitle := m.formatPRTitle(pr)
-			menuItem.SetTitle(prTitle)
-			menuItem.Show()
-
-			// Cancel old goroutine for this menu item if it exists
-			m.menuItemCancelsMu.Lock()
-			if cancelFunc, exists := m.menuItemCancels[menuItem]; exists {
-				cancelFunc() // Cancel the old goroutine
+			if menuItems[i].Children[j] == nil {
+				menuItems[i].Children[j] = menuItems[i].Parent.AddSubMenuItem("", "")
 			}
 
-			// Create new context for this menu item
+			menuItem := menuItems[i].Children[j]
+			menuItem.SetTitle(m.formatPRTitle(pr))
+			menuItem.Enable()
+			menuItem.Show()
+
+			// Cancel old goroutine for this menu item and start a new one
+			m.menuItemCancelsMu.Lock()
+			if cancelFunc, exists := m.menuItemCancels[menuItem]; exists {
+				cancelFunc()
+			}
 			itemCtx, itemCancel := context.WithCancel(m.ctx)
 			m.menuItemCancels[menuItem] = itemCancel
 			m.menuItemCancelsMu.Unlock()
 
-			// Start new goroutine with its own context
 			go m.handlePRClick(itemCtx, menuItem, pr)
 		}
 
-		parentMenuItem[i].Parent.Show()
-		i++
+		// Hide child slots no longer in use for this repo
+		for j := len(repoPRs); j < m.maxNumberOfPRs; j++ {
+			if menuItems[i].Children[j] != nil {
+				menuItems[i].Children[j].Hide()
+			}
+		}
+
+		menuItems[i].Parent.Show()
+	}
+
+	// Hide repo slots no longer in use
+	for i := len(repoNames); i < m.maxNumberOfRepos; i++ {
+		if menuItems[i].Parent != nil {
+			menuItems[i].Parent.Hide()
+		}
 	}
 }
 
