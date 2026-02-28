@@ -33,14 +33,18 @@ func NewInitializeFirstCheckUseCase(
 	}
 }
 
-// Execute runs the first-run initialization
-// Returns true if this was the first run (tracking service was empty)
-func (uc *InitializeFirstCheckUseCase) Execute(ctx context.Context) (bool, error) {
+// Execute runs the first-run initialization.
+// Returns (true, allPRs, nil) on the first run ever, where allPRs contains all
+// currently-open PRs that were marked as seen. The caller should use allPRs to
+// seed any stateful use cases (e.g. pipeline-status tracking) so that the
+// first regular check does not re-fire change events for every existing PR.
+// Returns (false, nil, nil) when the tracking store is already populated.
+func (uc *InitializeFirstCheckUseCase) Execute(ctx context.Context) (bool, []*pullrequest.PullRequest, error) {
 	// Check if this is truly the first run ever
 	isFirstRunEver := uc.trackingService.IsEmpty()
 
 	if !isFirstRunEver {
-		return false, nil
+		return false, nil, nil
 	}
 
 	log.Info().Msg("First run detected - marking all existing PRs as already seen")
@@ -49,13 +53,13 @@ func (uc *InitializeFirstCheckUseCase) Execute(ctx context.Context) (bool, error
 	requestedReviewPRs, err := uc.prRepo.FetchRequestedReviews()
 	if err != nil {
 		log.Error().Err(err).Msg("Error fetching requested review PRs")
-		return false, err
+		return false, nil, err
 	}
 
 	userCreatedPRs, err := uc.prRepo.FetchUserCreated()
 	if err != nil {
 		log.Error().Err(err).Msg("Error fetching user created PRs")
-		return false, err
+		return false, nil, err
 	}
 
 	// Filter draft PRs if configured
@@ -69,8 +73,8 @@ func (uc *InitializeFirstCheckUseCase) Execute(ctx context.Context) (bool, error
 	// Update the UI with tracking service
 	uc.uiPort.UpdateDisplay(requestedReviewPRs, userCreatedPRs, uc.trackingService)
 
-	log.Info().Msgf("First run complete: marked %d PRs as seen",
-		len(requestedReviewPRs)+len(userCreatedPRs))
+	allPRs := append(requestedReviewPRs, userCreatedPRs...)
+	log.Info().Msgf("First run complete: marked %d PRs as seen", len(allPRs))
 
-	return true, nil
+	return true, allPRs, nil
 }

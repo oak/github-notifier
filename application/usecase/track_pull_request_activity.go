@@ -43,6 +43,23 @@ func NewTrackPullRequestActivityUseCase(
 	}
 }
 
+// SeedKnownState pre-populates the known head-commit SHAs and pipeline statuses
+// from a set of PR objects. This should be called once after first-run
+// initialisation so that the very first regular check does not treat every
+// existing PR's pipeline status as a brand-new transition (which would generate
+// a notification storm).
+func (uc *TrackPullRequestActivityUseCase) SeedKnownState(prs []*pullrequest.PullRequest) {
+	for _, pr := range prs {
+		if sha := pr.HeadCommitSHA(); sha != "" {
+			uc.knownHeadSHAs[pr.URL()] = sha
+		}
+		if status := pr.PipelineStatus(); status != pullrequest.PipelineStatusUnknown {
+			uc.knownPipelineStatuses[pr.URL()] = status
+		}
+	}
+	log.Info().Msgf("Activity tracker: seeded known state for %d PRs", len(prs))
+}
+
 // Execute checks for new activity on PRs using two-tier scheduling
 // Only checks PRs that are due based on the scheduling strategy
 func (uc *TrackPullRequestActivityUseCase) Execute(

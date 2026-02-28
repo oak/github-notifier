@@ -1676,3 +1676,97 @@ func TestE2E_PipelineRunningToSuccess_SendsTwoNotifications(t *testing.T) {
 	require.Len(t, prs, 1)
 	assert.Equal(t, pullrequest.PipelineStatusSuccess, prs[0].PipelineStatus())
 }
+
+// === First-run noise suppression tests (OAK-20) ===
+
+func TestE2E_FirstRun_NoPipelineNoise(t *testing.T) {
+	// Given: Multiple PRs already exist with known pipeline statuses on first start
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	suite.mockGitHub.SetupPRs([]MockPR{
+		{
+			Title:          "Already green feature",
+			Number:         3000,
+			Author:         "alice",
+			HeadCommitSHA:  "aaa111",
+			PipelineStatus: "SUCCESS",
+		},
+		{
+			Title:          "Failing feature",
+			Number:         3001,
+			Author:         "bob",
+			HeadCommitSHA:  "bbb222",
+			PipelineStatus: "FAILURE",
+		},
+		{
+			Title:          "Running build",
+			Number:         3002,
+			Author:         "carol",
+			HeadCommitSHA:  "ccc333",
+			PipelineStatus: "IN_PROGRESS",
+		},
+	})
+
+	// When: First-run initialisation
+	err := suite.orchestrator.ExecuteInitialCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	// Then: No notifications should be sent (all PRs are "already known")
+	notifs := suite.notifications.GetNotifications()
+	assert.Empty(t, notifs, "First run MUST NOT generate any notifications")
+	suite.ClearNotifications()
+
+	// And: Immediately running a second check with unchanged statuses also produces no noise
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs = suite.notifications.GetNotifications()
+	for _, n := range notifs {
+		assert.NotContains(t, n.Title, "Pipeline",
+			"Second check MUST NOT re-notify for unchanged pipeline statuses")
+	}
+}
+
+func TestE2E_FirstRun_PipelineChangeAfterInit_StillNotifies(t *testing.T) {
+	// Given: A PR that is already known (SUCCESS) on first run
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	suite.mockGitHub.SetupPRs([]MockPR{
+		{
+			Title:          "Stable feature",
+			Number:         3100,
+			Author:         "alice",
+			HeadCommitSHA:  "ddd444",
+			PipelineStatus: "SUCCESS",
+		},
+	})
+
+	// First-run initialisation
+	err := suite.orchestrator.ExecuteInitialCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.ClearNotifications()
+
+	// When: The pipeline subsequently fails
+	suite.mockGitHub.SetPipelineStatus(3100, "FAILURE")
+
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	// Then: We SHOULD be notified about the new failure
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify when pipeline changes after first run")
+
+	foundPipeline := false
+	for _, n := range notifs {
+		if n.Title == "PR Pipeline Failed 🔴" {
+			foundPipeline = true
+			break
+		}
+	}
+	assert.True(t, foundPipeline, "Should send pipeline failure notification after first-run init")
+}

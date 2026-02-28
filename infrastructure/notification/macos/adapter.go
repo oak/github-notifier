@@ -92,6 +92,11 @@ func (a *Adapter) buildNotificationTitle(prNotif *port.PRNotificationData) strin
 		return fmt.Sprintf("New PR #%d", pr.Number())
 	}
 
+	if prNotif.PipelineChange != nil {
+		s := prNotif.PipelineChange.NewStatus
+		return fmt.Sprintf("PR #%d Pipeline %s %s", pr.Number(), s.Label(), s.Emoji())
+	}
+
 	if len(prNotif.ReviewChanges) > 0 {
 		return fmt.Sprintf("PR #%d Review", pr.Number())
 	}
@@ -109,6 +114,12 @@ func (a *Adapter) buildNotificationMessage(prNotif *port.PRNotificationData) str
 
 	if prNotif.IsNew {
 		parts = append(parts, "🆕 Needs review")
+	}
+
+	// Add pipeline status right after the PR title so it is immediately visible
+	if prNotif.PipelineChange != nil {
+		s := prNotif.PipelineChange.NewStatus
+		parts = append(parts, fmt.Sprintf("Pipeline: %s %s", s.Emoji(), s.Label()))
 	}
 
 	if len(prNotif.Activities) > 0 {
