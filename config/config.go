@@ -77,7 +77,7 @@ var configEntries = []configEntry{
 	},
 	{
 		key:          "MACOS_NOTIFICATION_SENDER",
-		description:  "macOS notification sender bundle ID, e.g. com.apple.Terminal (optional)",
+		description:  "macOS notification sender bundle ID (optional, leave empty - sender impersonation is broken on macOS 12+)",
 		defaultValue: "",
 	},
 }

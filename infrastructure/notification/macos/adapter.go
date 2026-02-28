@@ -1,20 +1,23 @@
 package macos
 
 import (
+	"errors"
 	"fmt"
+	"os/exec"
 	"strings"
 
-	gosxnotifier "github.com/deckarep/gosx-notifier"
 	"github.com/rs/zerolog/log"
 
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
-// Adapter implements the NotificationPort interface for macOS
+// Adapter implements the NotificationPort interface for macOS using the
+// system-installed terminal-notifier binary (brew install terminal-notifier).
 type Adapter struct {
 	themeProvider ThemeProvider
 	sender        string
+	binaryPath    string
 }
 
 // ThemeProvider provides the current system theme
@@ -22,12 +25,18 @@ type ThemeProvider interface {
 	GetSystemTheme() string
 }
 
-// NewAdapter creates a new macOS notification adapter
-func NewAdapter(themeProvider ThemeProvider, sender string) *Adapter {
+// NewAdapter creates a new macOS notification adapter.
+// Returns an error if terminal-notifier is not found in PATH.
+func NewAdapter(themeProvider ThemeProvider, sender string) (*Adapter, error) {
+	path, err := exec.LookPath("terminal-notifier")
+	if err != nil {
+		return nil, errors.New("terminal-notifier not found in PATH; install it with: brew install terminal-notifier")
+	}
 	return &Adapter{
 		themeProvider: themeProvider,
 		sender:        sender,
-	}
+		binaryPath:    path,
+	}, nil
 }
 
 // NotifyPullRequests sends grouped notifications for pull requests
@@ -36,7 +45,6 @@ func (a *Adapter) NotifyPullRequests(notifications []*port.PRNotificationData) e
 		return nil
 	}
 
-	// Send one notification per PR
 	for _, prNotif := range notifications {
 		if err := a.sendPRNotification(prNotif); err != nil {
 			log.Error().Err(err).Msg("Error sending PR notification")
@@ -50,28 +58,29 @@ func (a *Adapter) NotifyPullRequests(notifications []*port.PRNotificationData) e
 // sendPRNotification sends a single PR notification with all its activities
 func (a *Adapter) sendPRNotification(prNotif *port.PRNotificationData) error {
 	pr := prNotif.PullRequest
-
-	// Build the title
 	title := a.buildNotificationTitle(prNotif)
-
-	// Build the message
 	message := a.buildNotificationMessage(prNotif)
+	return a.push(title, message, pr.URL())
+}
 
-	note := gosxnotifier.NewNotification(message)
-	note.Title = title
+// push invokes terminal-notifier with the given title, message, open URL, and optional sender.
+func (a *Adapter) push(title, message, openURL string) error {
+	args := []string{
+		"-title", title,
+		"-message", message,
+		"-sound", "default",
+	}
+	if openURL != "" {
+		args = append(args, "-open", openURL)
+	}
 	if a.sender != "" {
-		note.Sender = a.sender
-	}
-	note.Sound = gosxnotifier.Default
-
-	// Set up click action to open PR URL
-	note.Link = pr.URL()
-
-	if err := note.Push(); err != nil {
-		log.Error().Err(err).Msg("Error sending macOS notification")
-		return err
+		args = append(args, "-sender", a.sender)
 	}
 
+	out, err := exec.Command(a.binaryPath, args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("terminal-notifier: %w (output: %s)", err, strings.TrimSpace(string(out)))
+	}
 	return nil
 }
 
@@ -95,20 +104,16 @@ func (a *Adapter) buildNotificationMessage(prNotif *port.PRNotificationData) str
 	pr := prNotif.PullRequest
 	var parts []string
 
-	// Add PR info
 	parts = append(parts, pr.RepositoryName())
 	parts = append(parts, pr.Title())
 
-	// Add "NEW" indicator if this is a new PR
 	if prNotif.IsNew {
 		parts = append(parts, "🆕 Needs review")
 	}
 
-	// Add activities
 	if len(prNotif.Activities) > 0 {
 		activityLines := []string{}
 
-		// Sort by priority
 		activityOrder := []pullrequest.ActivityType{
 			pullrequest.ActivityTypePush,
 			pullrequest.ActivityTypeReview,
@@ -131,7 +136,6 @@ func (a *Adapter) buildNotificationMessage(prNotif *port.PRNotificationData) str
 		}
 	}
 
-	// Add status changes
 	for _, statusChange := range prNotif.StatusChanges {
 		if statusChange.EventType == pullrequest.StatusChangeMerged {
 			parts = append(parts, "✅ Merged")
@@ -140,7 +144,6 @@ func (a *Adapter) buildNotificationMessage(prNotif *port.PRNotificationData) str
 		}
 	}
 
-	// Add review state changes
 	for _, reviewChange := range prNotif.ReviewChanges {
 		parts = append(parts, fmt.Sprintf("%s %s %s", reviewChange.State.Emoji(), reviewChange.Reviewer, reviewChange.State.Label()))
 	}
@@ -186,13 +189,7 @@ func (a *Adapter) getActivityLabel(actType pullrequest.ActivityType, count int) 
 
 // NotifyMessage sends a simple text notification via macOS native notifications
 func (a *Adapter) NotifyMessage(title, message string) error {
-	note := gosxnotifier.NewNotification(message)
-	note.Title = title
-	if a.sender != "" {
-		note.Sender = a.sender
-	}
-	note.Sound = gosxnotifier.Default
-	return note.Push()
+	return a.push(title, message, "")
 }
 
 // SupportsClickActions returns true for macOS adapter

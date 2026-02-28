@@ -135,7 +135,12 @@ func (app *App) enterWaitingMode() {
 func (app *App) createDesktopNotifier(themeProvider *ui.SystemThemeProvider) port.NotificationPort {
 	switch runtime.GOOS {
 	case "darwin":
-		return macos.NewAdapter(themeProvider, app.cfg.MacOSNotificationSender)
+		adapter, err := macos.NewAdapter(themeProvider, app.cfg.MacOSNotificationSender)
+		if err != nil {
+			log.Warn().Err(err).Msg("Falling back to desktop notifications")
+			return desktop.NewAdapter(themeProvider)
+		}
+		return adapter
 	case "linux":
 		return linux.NewAdapter(themeProvider)
 	default:
