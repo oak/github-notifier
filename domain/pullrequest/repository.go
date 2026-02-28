@@ -27,6 +27,28 @@ type PullRequestRepository interface {
 	AuthenticatedUser() string
 }
 
+// PRTrackingRepository is the port for persisting the locally-tracked state of
+// open pull requests across process restarts. It stores the identity and
+// mutable fields that cannot be cheaply re-derived from the GitHub API each
+// cycle (head commit SHA, pipeline status, last activity check timestamp,
+// reviews, etc.).
+//
+// Adapters must treat Save as a full replacement of the stored set — it is not
+// an upsert. Only open PRs are ever stored; closed/merged PRs are excluded
+// before Save is called.
+type PRTrackingRepository interface {
+	// Save replaces the entire stored set with the provided snapshots.
+	// Called after every successful check cycle with the current open PR set.
+	Save(snapshots []PRStateSnapshot) error
+
+	// LoadAll returns all previously saved snapshots.
+	// Returns an empty slice (not an error) when no state has been saved yet.
+	LoadAll() ([]PRStateSnapshot, error)
+
+	// Clear removes all stored snapshots (e.g. on a hard reset).
+	Clear() error
+}
+
 // SeenRepository is the port for persisting seen pull requests
 type SeenRepository interface {
 	// MarkAsSeen marks a PR as seen
