@@ -13,6 +13,7 @@ import (
 	"github.com/oak3/github-notifier/domain/pullrequest"
 	"github.com/oak3/github-notifier/infrastructure/events"
 	"github.com/oak3/github-notifier/infrastructure/github"
+	jsonrepo "github.com/oak3/github-notifier/infrastructure/persistence/json"
 	"github.com/oak3/github-notifier/infrastructure/persistence/memory"
 )
 
@@ -118,6 +119,137 @@ func SetupSuite(t *testing.T) *TestSuite {
 		trackActivityUseCase,
 		updateDisplayUseCase,
 		true, // Enable activity tracking
+	)
+
+	return &TestSuite{
+		ctx:                 ctx,
+		cancel:              cancel,
+		mockGitHub:          mockGitHub,
+		orchestrator:        orchestrator,
+		notifications:       notifications,
+		menuAdapter:         menuAdapter,
+		trackingService:     trackingService,
+		notificationHandler: notificationHandler,
+	}
+}
+
+// SetupSuiteFromStateFile creates a TestSuite backed by a JSON StateRepository
+// at the given path.  Two successive calls with the same path simulate a
+// process restart: the second instance loads all state that the first one saved.
+// The mock GitHub server is NOT shared between calls; the caller must configure
+// both instances independently (or pass the URL directly via the mock returned
+// from the first call).
+func SetupSuiteFromStateFile(t *testing.T, stateFilePath string) *TestSuite {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
+	mockGitHub := SetupMockGitHubServer()
+
+	notifications := NewSpyNotificationAdapter()
+	menuAdapter := NewSpyUIAdapter()
+
+	githubAdapter := github.NewAdapterWithURL(mockGitHub.URL)
+	stateRepo := jsonrepo.NewStateRepository(stateFilePath)
+	trackingService := pullrequest.NewTrackingService(stateRepo)
+
+	eventBus := events.NewInMemoryEventBus()
+
+	notificationHandler := events.NewNotificationEventHandler(notifications, githubAdapter.AuthenticatedUser())
+	trackingHandler := events.NewTrackingEventHandler(trackingService)
+
+	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventActivityDetected, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventReviewStateChanged, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventMerged, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventClosed, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventPipelineStatusChanged, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, trackingHandler)
+	eventBus.Subscribe(pullrequest.EventActivityDetected, trackingHandler)
+	eventBus.Subscribe(pullrequest.EventReviewStateChanged, trackingHandler)
+	eventBus.Subscribe(pullrequest.EventMerged, trackingHandler)
+	eventBus.Subscribe(pullrequest.EventClosed, trackingHandler)
+	eventBus.Subscribe(pullrequest.EventPipelineStatusChanged, trackingHandler)
+
+	prFilter := pullrequest.NewPRFilter(false)
+	prClassifier := pullrequest.NewPRClassifier()
+	activityScheduler := pullrequest.NewActivityCheckScheduler(72, 15)
+
+	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(githubAdapter, trackingService, prFilter, menuAdapter)
+	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(githubAdapter, trackingService, prFilter, prClassifier, eventBus)
+	detectClosedPRsUseCase := usecase.NewDetectClosedPullRequestsUseCase(githubAdapter, stateRepo, eventBus)
+	trackActivityUseCase := usecase.NewTrackPullRequestActivityUseCase(githubAdapter, stateRepo, activityScheduler, trackingService, eventBus, githubAdapter.AuthenticatedUser())
+	updateDisplayUseCase := usecase.NewUpdatePullRequestDisplayUseCase(menuAdapter, trackingService)
+
+	orchestrator := application.NewPullRequestOrchestrator(
+		initializeUseCase,
+		checkNewPRsUseCase,
+		detectClosedPRsUseCase,
+		trackActivityUseCase,
+		updateDisplayUseCase,
+		true,
+	)
+
+	return &TestSuite{
+		ctx:                 ctx,
+		cancel:              cancel,
+		mockGitHub:          mockGitHub,
+		orchestrator:        orchestrator,
+		notifications:       notifications,
+		menuAdapter:         menuAdapter,
+		trackingService:     trackingService,
+		notificationHandler: notificationHandler,
+	}
+}
+
+// SetupSuiteOnMockServer creates a TestSuite connected to an existing
+// MockGitHubServer.  Useful for restart tests where the second "process" must
+// talk to the same mock server as the first one.
+func SetupSuiteOnMockServer(t *testing.T, mockGitHub *MockGitHubServer, stateFilePath string) *TestSuite {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
+	notifications := NewSpyNotificationAdapter()
+	menuAdapter := NewSpyUIAdapter()
+
+	githubAdapter := github.NewAdapterWithURL(mockGitHub.URL)
+	stateRepo := jsonrepo.NewStateRepository(stateFilePath)
+	trackingService := pullrequest.NewTrackingService(stateRepo)
+
+	eventBus := events.NewInMemoryEventBus()
+
+	notificationHandler := events.NewNotificationEventHandler(notifications, githubAdapter.AuthenticatedUser())
+	trackingHandler := events.NewTrackingEventHandler(trackingService)
+
+	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventActivityDetected, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventReviewStateChanged, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventMerged, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventClosed, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventPipelineStatusChanged, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, trackingHandler)
+	eventBus.Subscribe(pullrequest.EventActivityDetected, trackingHandler)
+	eventBus.Subscribe(pullrequest.EventReviewStateChanged, trackingHandler)
+	eventBus.Subscribe(pullrequest.EventMerged, trackingHandler)
+	eventBus.Subscribe(pullrequest.EventClosed, trackingHandler)
+	eventBus.Subscribe(pullrequest.EventPipelineStatusChanged, trackingHandler)
+
+	prFilter := pullrequest.NewPRFilter(false)
+	prClassifier := pullrequest.NewPRClassifier()
+	activityScheduler := pullrequest.NewActivityCheckScheduler(72, 15)
+
+	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(githubAdapter, trackingService, prFilter, menuAdapter)
+	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(githubAdapter, trackingService, prFilter, prClassifier, eventBus)
+	detectClosedPRsUseCase := usecase.NewDetectClosedPullRequestsUseCase(githubAdapter, stateRepo, eventBus)
+	trackActivityUseCase := usecase.NewTrackPullRequestActivityUseCase(githubAdapter, stateRepo, activityScheduler, trackingService, eventBus, githubAdapter.AuthenticatedUser())
+	updateDisplayUseCase := usecase.NewUpdatePullRequestDisplayUseCase(menuAdapter, trackingService)
+
+	orchestrator := application.NewPullRequestOrchestrator(
+		initializeUseCase,
+		checkNewPRsUseCase,
+		detectClosedPRsUseCase,
+		trackActivityUseCase,
+		updateDisplayUseCase,
+		true,
 	)
 
 	return &TestSuite{

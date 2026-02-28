@@ -24,7 +24,7 @@ import (
 	"github.com/oak3/github-notifier/infrastructure/notification/linux"
 	"github.com/oak3/github-notifier/infrastructure/notification/macos"
 	"github.com/oak3/github-notifier/infrastructure/notification/slack"
-	"github.com/oak3/github-notifier/infrastructure/persistence/memory"
+	jsonrepo "github.com/oak3/github-notifier/infrastructure/persistence/json"
 	"github.com/oak3/github-notifier/infrastructure/ui"
 	"github.com/oak3/github-notifier/internal/logger"
 )
@@ -154,9 +154,8 @@ func (app *App) createDesktopNotifier(themeProvider *ui.SystemThemeProvider) por
 func (app *App) startWithConfig(cfg *config.Config) {
 	// Initialize infrastructure adapters
 	githubAdapter := github.NewAdapter(cfg.GitHubToken)
-	seenRepo := memory.NewSeenPullRequestRepository()
-	trackingRepo := memory.NewPRTrackingRepository()
-	trackingService := pullrequest.NewTrackingService(seenRepo)
+	stateRepo := jsonrepo.NewStateRepository(cfg.StateFilePath())
+	trackingService := pullrequest.NewTrackingService(stateRepo)
 	themeProvider := ui.NewSystemThemeProvider()
 
 	// Setup notification adapters (OS-specific desktop + optional Slack)
@@ -240,13 +239,13 @@ func (app *App) startWithConfig(cfg *config.Config) {
 
 	detectClosedPRsUseCase := usecase.NewDetectClosedPullRequestsUseCase(
 		githubAdapter,
-		trackingRepo,
+		stateRepo,
 		eventBus,
 	)
 
 	trackActivityUseCase := usecase.NewTrackPullRequestActivityUseCase(
 		githubAdapter,
-		trackingRepo,
+		stateRepo,
 		activityScheduler,
 		trackingService,
 		eventBus,
