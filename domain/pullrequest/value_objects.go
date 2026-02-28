@@ -158,6 +158,28 @@ func (s PRStatus) IsOpen() bool {
 	return s == StatusOpen
 }
 
+// MarshalText implements encoding.TextMarshaler so PRStatus serialises as a
+// human-readable string ("open", "merged", "closed") in JSON and other
+// text-based formats.
+func (s PRStatus) MarshalText() ([]byte, error) {
+	return []byte(s.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *PRStatus) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case "open":
+		*s = StatusOpen
+	case "merged":
+		*s = StatusMerged
+	case "closed":
+		*s = StatusClosed
+	default:
+		return fmt.Errorf("unknown PR status %q", string(text))
+	}
+	return nil
+}
+
 // ReviewState represents the state of a pull request review
 type ReviewState int
 
@@ -236,6 +258,29 @@ func (rs ReviewState) Label() string {
 	}
 }
 
+// MarshalText implements encoding.TextMarshaler so ReviewState serialises as a
+// stable lowercase string in JSON and other text-based formats.
+func (rs ReviewState) MarshalText() ([]byte, error) {
+	return []byte(rs.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (rs *ReviewState) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case "approved":
+		*rs = ReviewStateApproved
+	case "changes_requested":
+		*rs = ReviewStateChangesRequested
+	case "commented":
+		*rs = ReviewStateCommented
+	case "dismissed":
+		*rs = ReviewStateDismissed
+	default:
+		return fmt.Errorf("unknown review state %q", string(text))
+	}
+	return nil
+}
+
 // PipelineStatus represents the CI/CD pipeline (status check rollup) state of a PR
 type PipelineStatus int
 
@@ -292,6 +337,29 @@ func (p PipelineStatus) Label() string {
 	default:
 		return "Unknown"
 	}
+}
+
+// MarshalText implements encoding.TextMarshaler so PipelineStatus serialises as
+// a stable lowercase string in JSON and other text-based formats.
+func (p PipelineStatus) MarshalText() ([]byte, error) {
+	return []byte(p.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (p *PipelineStatus) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case "unknown":
+		*p = PipelineStatusUnknown
+	case "running":
+		*p = PipelineStatusRunning
+	case "success":
+		*p = PipelineStatusSuccess
+	case "failed":
+		*p = PipelineStatusFailed
+	default:
+		return fmt.Errorf("unknown pipeline status %q", string(text))
+	}
+	return nil
 }
 
 // PipelineStatusFromRollup converts a GitHub statusCheckRollup state string to a PipelineStatus

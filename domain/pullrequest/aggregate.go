@@ -255,6 +255,13 @@ func (pr *PullRequest) UpdateLastActivityCheck() {
 	pr.lastActivityCheck = time.Now()
 }
 
+// SetInitialLastActivityCheck sets the last-activity-check timestamp without
+// raising any events. Used to restore known state from a previous cycle when
+// hydrating a fresh PR object retrieved from the GitHub API.
+func (pr *PullRequest) SetInitialLastActivityCheck(t time.Time) {
+	pr.lastActivityCheck = t
+}
+
 // LastActivityCheck returns when we last checked for activities
 func (pr *PullRequest) LastActivityCheck() time.Time {
 	return pr.lastActivityCheck
