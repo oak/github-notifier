@@ -43,6 +43,7 @@ func SetupSuite(t *testing.T) *TestSuite {
 	// Setup infrastructure
 	githubAdapter := github.NewAdapterWithURL(mockGitHub.URL)
 	seenRepo := memory.NewSeenPullRequestRepository()
+	trackingRepo := memory.NewPRTrackingRepository()
 	trackingService := pullrequest.NewTrackingService(seenRepo)
 
 	// Setup event infrastructure
@@ -91,11 +92,13 @@ func SetupSuite(t *testing.T) *TestSuite {
 
 	detectClosedPRsUseCase := usecase.NewDetectClosedPullRequestsUseCase(
 		githubAdapter,
+		trackingRepo,
 		eventBus,
 	)
 
 	trackActivityUseCase := usecase.NewTrackPullRequestActivityUseCase(
 		githubAdapter,
+		trackingRepo,
 		activityScheduler,
 		trackingService,
 		eventBus,

@@ -155,6 +155,7 @@ func (app *App) startWithConfig(cfg *config.Config) {
 	// Initialize infrastructure adapters
 	githubAdapter := github.NewAdapter(cfg.GitHubToken)
 	seenRepo := memory.NewSeenPullRequestRepository()
+	trackingRepo := memory.NewPRTrackingRepository()
 	trackingService := pullrequest.NewTrackingService(seenRepo)
 	themeProvider := ui.NewSystemThemeProvider()
 
@@ -239,11 +240,13 @@ func (app *App) startWithConfig(cfg *config.Config) {
 
 	detectClosedPRsUseCase := usecase.NewDetectClosedPullRequestsUseCase(
 		githubAdapter,
+		trackingRepo,
 		eventBus,
 	)
 
 	trackActivityUseCase := usecase.NewTrackPullRequestActivityUseCase(
 		githubAdapter,
+		trackingRepo,
 		activityScheduler,
 		trackingService,
 		eventBus,

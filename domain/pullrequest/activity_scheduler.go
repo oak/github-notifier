@@ -79,3 +79,13 @@ func (s *ActivityCheckScheduler) MarkChecked(prs []*PullRequest) {
 		s.lastCheckMap[pr.URL()] = now
 	}
 }
+
+// SeedLastChecked pre-populates the last-check timestamp for a single PR URL.
+// Used to restore the scheduler's state after a process restart so that stale
+// PRs that were recently checked are not immediately re-checked.
+// Zero-value timestamps are ignored.
+func (s *ActivityCheckScheduler) SeedLastChecked(url string, t time.Time) {
+	if !t.IsZero() {
+		s.lastCheckMap[url] = t
+	}
+}

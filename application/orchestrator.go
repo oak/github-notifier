@@ -54,11 +54,10 @@ func (o *PullRequestOrchestrator) ExecuteInitialCheck(ctx context.Context) error
 	}
 
 	if wasFirstRun {
-		// Seed the activity tracker with the current state of all existing PRs so
-		// that the first regular check does not fire spurious PipelineStatusChanged
-		// events for every PR that already has a known pipeline status.
-		o.trackActivityUseCase.SeedKnownState(firstRunPRs)
 		log.Info().Msg("First run complete - all existing PRs marked as seen")
+		// Seed the tracking repo with initial PR state (including pipeline status)
+		// so the first regular check can correctly detect changes from baseline.
+		o.detectClosedPRsUseCase.TrackPRs(firstRunPRs)
 		return nil
 	}
 

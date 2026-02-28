@@ -10,43 +10,82 @@ import (
 )
 
 // DetectClosedPullRequestsUseCase detects PRs that have been merged or closed
-// by comparing locally tracked PRs against the current fetch results.
-// When a tracked PR disappears from the open PR list, it queries GitHub for
-// the final status and emits the appropriate domain events.
+// by comparing the current fetch results against the set of open PRs persisted
+// at the end of the previous check cycle.
+//
+// When a tracked PR disappears from the open PR list it queries GitHub for the
+// final status and emits the appropriate domain events.
+//
 // Tracking cleanup (e.g. removing from seen state) is handled by event handlers
 // subscribed to Merged and Closed events.
 type DetectClosedPullRequestsUseCase struct {
 	prRepo         pullrequest.PullRequestRepository
+	trackingRepo   pullrequest.PRTrackingRepository
 	eventPublisher port.EventPublisher
-	trackedPRs     map[string]*pullrequest.PullRequest // URL -> PR (all PRs we've ever tracked)
 }
 
-// NewDetectClosedPullRequestsUseCase creates a new use case
+// NewDetectClosedPullRequestsUseCase creates a new use case.
 func NewDetectClosedPullRequestsUseCase(
 	prRepo pullrequest.PullRequestRepository,
+	trackingRepo pullrequest.PRTrackingRepository,
 	eventPublisher port.EventPublisher,
 ) *DetectClosedPullRequestsUseCase {
 	return &DetectClosedPullRequestsUseCase{
 		prRepo:         prRepo,
+		trackingRepo:   trackingRepo,
 		eventPublisher: eventPublisher,
-		trackedPRs:     make(map[string]*pullrequest.PullRequest),
 	}
 }
 
-// TrackPRs records PRs that are currently being tracked.
-// Called after each fetch to build up the set of known PRs.
+// TrackPRs records the current open PR set for next-cycle comparison.
+//
+// It performs a merge: identity and status fields are taken from the supplied
+// PR objects while enrichment fields (HeadCommitSHA, PipelineStatus,
+// LastActivityCheck) are preserved from the previously-saved snapshots. This
+// ensures that TrackPullRequestActivityUseCase always sees the PREVIOUS
+// cycle's enrichment state when it loads the repository — which is what it
+// needs to detect cross-cycle changes correctly.
 func (uc *DetectClosedPullRequestsUseCase) TrackPRs(prs []*pullrequest.PullRequest) {
+	existing, err := uc.trackingRepo.LoadAll()
+	if err != nil {
+		log.Error().Err(err).Msg("DetectClosedPRs: failed to load existing snapshots for merge; saving without enrichment data")
+		existing = nil
+	}
+
+	// Build lookup map for previous enrichment data
+	prevByURL := make(map[string]pullrequest.PRStateSnapshot, len(existing))
+	for _, s := range existing {
+		prevByURL[s.URL] = s
+	}
+
+	snapshots := make([]pullrequest.PRStateSnapshot, 0, len(prs))
 	for _, pr := range prs {
-		uc.trackedPRs[pr.URL()] = pr
+		snap := pr.ToSnapshot()
+		// Preserve enrichment fields from the previous snapshot so that
+		// TrackPullRequestActivityUseCase can correctly detect changes.
+		if prev, ok := prevByURL[pr.URL()]; ok {
+			snap.HeadCommitSHA = prev.HeadCommitSHA
+			snap.PipelineStatus = prev.PipelineStatus
+			snap.LastActivityCheck = prev.LastActivityCheck
+		}
+		snapshots = append(snapshots, snap)
+	}
+
+	if err := uc.trackingRepo.Save(snapshots); err != nil {
+		log.Error().Err(err).Msg("DetectClosedPRs: failed to save tracked PR snapshots")
 	}
 }
 
-// Execute compares currently fetched open PRs against tracked PRs to detect
-// merged/closed PRs. For each missing PR, it queries GitHub for the final
-// status and emits the appropriate event.
+// Execute compares the current open PR list against the previously-saved
+// snapshot set to detect merged/closed PRs.
 func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentPRs []*pullrequest.PullRequest) error {
-	if len(uc.trackedPRs) == 0 {
-		return nil // Nothing tracked yet
+	snapshots, err := uc.trackingRepo.LoadAll()
+	if err != nil {
+		return err
+	}
+
+	if len(snapshots) == 0 {
+		return nil // Nothing tracked yet — first cycle
 	}
 
 	// Build a set of currently open PR URLs
@@ -55,27 +94,39 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 		currentURLs[pr.URL()] = true
 	}
 
-	// Find tracked PRs that are no longer in the open list
-	var missingPRs []*pullrequest.PullRequest
-	for url, pr := range uc.trackedPRs {
-		if !currentURLs[url] {
-			missingPRs = append(missingPRs, pr)
+	// Find snapshots for PRs that are no longer in the open list
+	var missing []pullrequest.PRStateSnapshot
+	for _, snap := range snapshots {
+		if !currentURLs[snap.URL] {
+			missing = append(missing, snap)
 		}
 	}
 
-	if len(missingPRs) == 0 {
+	if len(missing) == 0 {
 		return nil
 	}
 
-	log.Info().Msgf("Detected %d PR(s) missing from open list, checking final status", len(missingPRs))
+	log.Info().Msgf("Detected %d PR(s) missing from open list, checking final status", len(missing))
 
-	// Query GitHub for the final status of each missing PR
-	for _, pr := range missingPRs {
+	// Track which missing PRs were confirmed closed/merged so we can remove
+	// them from the repository immediately (avoids re-processing on the next
+	// Execute call in the same cycle).
+	processedURLs := make(map[string]bool, len(missing))
+
+	for _, snap := range missing {
+		// Reconstitute the full aggregate so we can call Merge()/Close() and
+		// publish the proper domain events.
+		pr, reconErr := pullrequest.ReconstitutePRFromSnapshot(snap)
+		if reconErr != nil {
+			log.Error().Err(reconErr).Msgf("DetectClosedPRs: failed to reconstitute PR %s, skipping", snap.URL)
+			continue
+		}
+
 		repo := pr.Repository()
-		status, err := uc.prRepo.FetchPRStatus(repo.Owner(), repo.Name(), pr.Number())
-		if err != nil {
-			// Don't remove from tracked on API errors — avoid false positives
-			log.Error().Err(err).Msgf("Error fetching status for PR %s, skipping", pr.URL())
+		status, fetchErr := uc.prRepo.FetchPRStatus(repo.Owner(), repo.Name(), pr.Number())
+		if fetchErr != nil {
+			// Don't remove from tracking on API errors — avoid false positives.
+			log.Error().Err(fetchErr).Msgf("Error fetching status for PR %s, skipping", pr.URL())
 			continue
 		}
 
@@ -84,38 +135,45 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 			log.Info().Msgf("PR %s was merged", pr.URL())
 			pr.Merge()
 			uc.publishEvents(pr)
-			uc.cleanup(pr)
+			processedURLs[snap.URL] = true
 
 		case pullrequest.StatusClosed:
 			log.Info().Msgf("PR %s was closed", pr.URL())
 			pr.Close()
 			uc.publishEvents(pr)
-			uc.cleanup(pr)
+			processedURLs[snap.URL] = true
 
 		case pullrequest.StatusOpen:
-			// PR is still open but not in our fetch results — this can happen
-			// transiently (e.g., pagination, search index lag). Keep tracking.
+			// PR is still open but not in our fetch results — transient
+			// (pagination lag, search index lag). Keep tracking.
 			log.Debug().Msgf("PR %s still open but not in fetch results, keeping tracked", pr.URL())
 		}
+	}
+
+	if len(processedURLs) == 0 {
+		return nil
+	}
+
+	// Remove confirmed closed/merged PRs from the repository immediately so
+	// that a subsequent Execute call does not re-process them.
+	remaining := make([]pullrequest.PRStateSnapshot, 0, len(snapshots)-len(processedURLs))
+	for _, s := range snapshots {
+		if !processedURLs[s.URL] {
+			remaining = append(remaining, s)
+		}
+	}
+	if saveErr := uc.trackingRepo.Save(remaining); saveErr != nil {
+		log.Error().Err(saveErr).Msg("DetectClosedPRs: failed to remove closed PRs from tracking repo")
 	}
 
 	return nil
 }
 
 // publishEvents collects and publishes all pending domain events from the PR aggregate.
-// Merge() and Close() raise their respective Merged/Closed events on the aggregate;
-// this method forwards them to the event bus so all handlers receive them.
 func (uc *DetectClosedPullRequestsUseCase) publishEvents(pr *pullrequest.PullRequest) {
 	for _, event := range pr.CollectEvents() {
 		if err := uc.eventPublisher.Publish(event); err != nil {
 			log.Error().Err(err).Msgf("Error publishing event for PR %s", pr.URL())
 		}
 	}
-}
-
-// cleanup removes a PR from the local tracked set.
-// Tracking state cleanup (seen repository) is handled by the TrackingEventHandler
-// in response to the Merged/Closed events emitted above.
-func (uc *DetectClosedPullRequestsUseCase) cleanup(pr *pullrequest.PullRequest) {
-	delete(uc.trackedPRs, pr.URL())
 }
