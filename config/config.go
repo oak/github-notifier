@@ -12,6 +12,10 @@ import (
 const (
 	// DefaultConfigFileName is the name of the config file in the user's home directory
 	DefaultConfigFileName = ".github-notifier.conf"
+
+	// DefaultStateFileName is the name of the state file in the user's home directory.
+	// It lives alongside the config file and holds the persisted seen/tracked PR state.
+	DefaultStateFileName = ".github-notifier.state.json"
 )
 
 // Config holds application configuration
@@ -240,4 +244,11 @@ func resolveInt(key string, fileValues map[string]string, defaultValue int) int 
 // IsValid checks if the configuration is valid
 func (c *Config) IsValid() bool {
 	return c.GitHubToken != ""
+}
+
+// StateFilePath returns the path to the JSON state file that persists seen and
+// tracked PR state across process restarts.  It is a sibling of ConfigFilePath
+// with the name DefaultStateFileName.
+func (c *Config) StateFilePath() string {
+	return filepath.Join(filepath.Dir(c.ConfigFilePath), DefaultStateFileName)
 }
