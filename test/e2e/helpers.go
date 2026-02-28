@@ -660,6 +660,20 @@ func (s *SpyNotificationAdapter) NotifyPullRequests(notifications []*port.PRNoti
 	return nil
 }
 
+// NotifyMessage captures a simple text notification (implements NotificationPort)
+func (s *SpyNotificationAdapter) NotifyMessage(title, message string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.notifications = append(s.notifications, CapturedNotification{
+		Title: title,
+		Body:  message,
+		Time:  time.Now(),
+	})
+
+	return nil
+}
+
 // SupportsClickActions returns true
 func (s *SpyNotificationAdapter) SupportsClickActions() bool {
 	return true

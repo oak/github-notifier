@@ -43,6 +43,7 @@ jobs:
           go tool cover -func=coverage.out | grep -E '(domain|application|infrastructure)' | grep -v '.go:' || true
 
       - name: Upload coverage to Codecov
+        if: github.event_name != 'pull_request'
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.out
@@ -53,6 +54,7 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Archive coverage report
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
@@ -111,6 +113,7 @@ jobs:
         run: go build -v ./cmd/github-notifier
 
       - name: Upload build artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: github-notifier-${{ matrix.os }}
