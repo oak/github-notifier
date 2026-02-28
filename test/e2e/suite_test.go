@@ -89,7 +89,6 @@ func SetupSuite(t *testing.T) *TestSuite {
 
 	detectClosedPRsUseCase := usecase.NewDetectClosedPullRequestsUseCase(
 		githubAdapter,
-		trackingService,
 		eventBus,
 	)
 

@@ -168,14 +168,10 @@ func (uc *CheckNewPullRequestsUseCase) detectReviewStateChanges(prs []*pullreque
 			pr.AddReview(review)
 		}
 
-		// Collect and publish only ReviewStateChanged events
-		// (other events like ActivityDetected may be pending from test fixtures
-		// or initial state — those are handled by the activity tracking use case)
+		// Collect and publish events raised by AddReview.
 		for _, event := range pr.CollectEvents() {
-			if _, ok := event.(*pullrequest.ReviewStateChanged); ok {
-				if err := uc.eventPublisher.Publish(event); err != nil {
-					log.Error().Err(err).Msg("Error publishing review state changed event")
-				}
+			if err := uc.eventPublisher.Publish(event); err != nil {
+				log.Error().Err(err).Msg("Error publishing review state changed event")
 			}
 		}
 

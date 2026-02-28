@@ -120,22 +120,20 @@ func (pr *PullRequest) Age() time.Duration {
 	return time.Since(pr.createdAt)
 }
 
-// Close marks the PR as closed
+// Close marks the PR as closed and raises a Closed domain event
 func (pr *PullRequest) Close() {
 	if pr.status != StatusClosed {
-		oldStatus := pr.status
 		pr.status = StatusClosed
-		event := NewStatusChanged(pr, oldStatus, StatusClosed)
+		event := NewClosed(pr)
 		pr.raiseEvent(&event)
 	}
 }
 
-// Merge marks the PR as merged
+// Merge marks the PR as merged and raises a Merged domain event
 func (pr *PullRequest) Merge() {
 	if pr.status != StatusMerged {
-		oldStatus := pr.status
 		pr.status = StatusMerged
-		event := NewStatusChanged(pr, oldStatus, StatusMerged)
+		event := NewMerged(pr)
 		pr.raiseEvent(&event)
 	}
 }
@@ -179,6 +177,21 @@ func (pr *PullRequest) AddActivity(activity *Activity) {
 func (pr *PullRequest) AddActivities(activities []*Activity) {
 	for _, activity := range activities {
 		pr.AddActivity(activity)
+	}
+}
+
+// SetInitialActivities hydrates the PR with activities during reconstruction (e.g. from the
+// GitHub API) without raising domain events. Use this for data loading; use AddActivity /
+// AddActivities only when new activity is discovered during business logic.
+func (pr *PullRequest) SetInitialActivities(activities []*Activity) {
+	for _, activity := range activities {
+		if activity == nil {
+			continue
+		}
+		pr.activities = append(pr.activities, activity)
+		if activity.CreatedAt().After(pr.lastActivityAt) {
+			pr.lastActivityAt = activity.CreatedAt()
+		}
 	}
 }
 

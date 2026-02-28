@@ -237,7 +237,6 @@ func (app *App) startWithConfig(cfg *config.Config) {
 
 	detectClosedPRsUseCase := usecase.NewDetectClosedPullRequestsUseCase(
 		githubAdapter,
-		trackingService,
 		eventBus,
 	)
 

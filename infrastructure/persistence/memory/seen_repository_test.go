@@ -102,11 +102,9 @@ func TestSeenRepository_MultiplePRs(t *testing.T) {
 	repo.MarkAsSeen(pr2.Identifier())
 
 	// Assert
-	// Note: testutil creates PRs with same URL, so they're all treated as same PR
-	// This tests that marking works correctly with the same identifier
 	assert.True(t, repo.HasBeenSeen(pr1.Identifier()))
 	assert.True(t, repo.HasBeenSeen(pr2.Identifier()))
-	assert.True(t, repo.HasBeenSeen(pr3.Identifier())) // Same URL as pr1 and pr2
+	assert.False(t, repo.HasBeenSeen(pr3.Identifier())) // pr3 was never marked as seen
 }
 
 func TestSeenRepository_MarkSamePRTwice(t *testing.T) {

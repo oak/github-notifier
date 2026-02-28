@@ -31,7 +31,7 @@ func NewTestAuthor(login string) pullrequest.Author {
 // NewTestPullRequest creates a test pull request with sensible defaults
 func NewTestPullRequest(number int, opts ...func(*testPRBuilder)) *pullrequest.PullRequest {
 	builder := &testPRBuilder{
-		url:       "https://github.com/owner/repo/pull/1",
+		url:       fmt.Sprintf("https://github.com/owner/repo/pull/%d", number),
 		number:    number,
 		title:     "Test PR",
 		repo:      NewTestRepository("owner/repo"),
@@ -214,7 +214,7 @@ func CreateTestPRsWithActivities(count int, activitiesPerPR int, activityAge tim
 			activities = append(activities, activity)
 		}
 
-		pr.AddActivities(activities)
+		pr.SetInitialActivities(activities)
 		prs = append(prs, pr)
 	}
 

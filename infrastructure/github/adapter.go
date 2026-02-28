@@ -308,7 +308,8 @@ func (a *Adapter) EnrichWithActivities(prs []*pullrequest.PullRequest, since tim
 			continue
 		}
 
-		// Add activities to each PR through the aggregate
+		// Add activities to each PR through the aggregate, raising ActivityDetected events.
+		// This is the activity tracking path — events are intentional here.
 		for _, pr := range batch {
 			if activities, found := activitiesMap[pr.URL()]; found {
 				pr.AddActivities(activities)

@@ -13,24 +13,23 @@ import (
 // by comparing locally tracked PRs against the current fetch results.
 // When a tracked PR disappears from the open PR list, it queries GitHub for
 // the final status and emits the appropriate domain events.
+// Tracking cleanup (e.g. removing from seen state) is handled by event handlers
+// subscribed to Merged and Closed events.
 type DetectClosedPullRequestsUseCase struct {
-	prRepo          pullrequest.PullRequestRepository
-	trackingService *pullrequest.TrackingService
-	eventPublisher  port.EventPublisher
-	trackedPRs      map[string]*pullrequest.PullRequest // URL -> PR (all PRs we've ever tracked)
+	prRepo         pullrequest.PullRequestRepository
+	eventPublisher port.EventPublisher
+	trackedPRs     map[string]*pullrequest.PullRequest // URL -> PR (all PRs we've ever tracked)
 }
 
 // NewDetectClosedPullRequestsUseCase creates a new use case
 func NewDetectClosedPullRequestsUseCase(
 	prRepo pullrequest.PullRequestRepository,
-	trackingService *pullrequest.TrackingService,
 	eventPublisher port.EventPublisher,
 ) *DetectClosedPullRequestsUseCase {
 	return &DetectClosedPullRequestsUseCase{
-		prRepo:          prRepo,
-		trackingService: trackingService,
-		eventPublisher:  eventPublisher,
-		trackedPRs:      make(map[string]*pullrequest.PullRequest),
+		prRepo:         prRepo,
+		eventPublisher: eventPublisher,
+		trackedPRs:     make(map[string]*pullrequest.PullRequest),
 	}
 }
 
@@ -84,13 +83,13 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 		case pullrequest.StatusMerged:
 			log.Info().Msgf("PR %s was merged", pr.URL())
 			pr.Merge()
-			uc.publishMergedEvent(pr)
+			uc.publishEvents(pr)
 			uc.cleanup(pr)
 
 		case pullrequest.StatusClosed:
 			log.Info().Msgf("PR %s was closed", pr.URL())
 			pr.Close()
-			uc.publishClosedEvent(pr)
+			uc.publishEvents(pr)
 			uc.cleanup(pr)
 
 		case pullrequest.StatusOpen:
@@ -103,24 +102,20 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 	return nil
 }
 
-// publishMergedEvent emits a Merged domain event
-func (uc *DetectClosedPullRequestsUseCase) publishMergedEvent(pr *pullrequest.PullRequest) {
-	event := pullrequest.NewMerged(pr)
-	if err := uc.eventPublisher.Publish(&event); err != nil {
-		log.Error().Err(err).Msgf("Error publishing Merged event for PR %s", pr.URL())
+// publishEvents collects and publishes all pending domain events from the PR aggregate.
+// Merge() and Close() raise their respective Merged/Closed events on the aggregate;
+// this method forwards them to the event bus so all handlers receive them.
+func (uc *DetectClosedPullRequestsUseCase) publishEvents(pr *pullrequest.PullRequest) {
+	for _, event := range pr.CollectEvents() {
+		if err := uc.eventPublisher.Publish(event); err != nil {
+			log.Error().Err(err).Msgf("Error publishing event for PR %s", pr.URL())
+		}
 	}
 }
 
-// publishClosedEvent emits a Closed domain event
-func (uc *DetectClosedPullRequestsUseCase) publishClosedEvent(pr *pullrequest.PullRequest) {
-	event := pullrequest.NewClosed(pr)
-	if err := uc.eventPublisher.Publish(&event); err != nil {
-		log.Error().Err(err).Msgf("Error publishing Closed event for PR %s", pr.URL())
-	}
-}
-
-// cleanup removes a PR from tracked state and the seen repository
+// cleanup removes a PR from the local tracked set.
+// Tracking state cleanup (seen repository) is handled by the TrackingEventHandler
+// in response to the Merged/Closed events emitted above.
 func (uc *DetectClosedPullRequestsUseCase) cleanup(pr *pullrequest.PullRequest) {
 	delete(uc.trackedPRs, pr.URL())
-	uc.trackingService.RemoveSeen(pr.Identifier())
 }

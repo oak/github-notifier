@@ -17,11 +17,9 @@ import (
 func TestDetectClosedPRs_NoTrackedPRs_NoOp(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 
-	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, trackingService, mockEventPublisher)
+	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockEventPublisher)
 
 	currentPRs := testutil.CreateTestPRs(2, 0)
 
@@ -36,11 +34,9 @@ func TestDetectClosedPRs_NoTrackedPRs_NoOp(t *testing.T) {
 func TestDetectClosedPRs_AllPRsStillOpen_NoEvents(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 
-	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, trackingService, mockEventPublisher)
+	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockEventPublisher)
 
 	prs := testutil.CreateTestPRs(3, 0)
 
@@ -58,11 +54,9 @@ func TestDetectClosedPRs_AllPRsStillOpen_NoEvents(t *testing.T) {
 func TestDetectClosedPRs_MergedPR_EmitsMergedEvent(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 
-	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, trackingService, mockEventPublisher)
+	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockEventPublisher)
 
 	pr1 := testutil.NewTestPullRequest(1, testutil.WithURL("https://github.com/owner/repo/pull/1"))
 	pr2 := testutil.NewTestPullRequest(2, testutil.WithURL("https://github.com/owner/repo/pull/2"))
@@ -79,7 +73,6 @@ func TestDetectClosedPRs_MergedPR_EmitsMergedEvent(t *testing.T) {
 		_, ok := e.(*pullrequest.Merged)
 		return ok
 	})).Return(nil).Once()
-	mockSeenRepo.On("UnmarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Once()
 
 	// Act
 	err := uc.Execute(context.Background(), currentPRs)
@@ -88,17 +81,14 @@ func TestDetectClosedPRs_MergedPR_EmitsMergedEvent(t *testing.T) {
 	require.NoError(t, err)
 	mockPRRepo.AssertExpectations(t)
 	mockEventPublisher.AssertExpectations(t)
-	mockSeenRepo.AssertExpectations(t)
 }
 
 func TestDetectClosedPRs_ClosedPR_EmitsClosedEvent(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 
-	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, trackingService, mockEventPublisher)
+	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockEventPublisher)
 
 	pr1 := testutil.NewTestPullRequest(1, testutil.WithURL("https://github.com/owner/repo/pull/1"))
 	pr2 := testutil.NewTestPullRequest(2, testutil.WithURL("https://github.com/owner/repo/pull/2"))
@@ -115,7 +105,6 @@ func TestDetectClosedPRs_ClosedPR_EmitsClosedEvent(t *testing.T) {
 		_, ok := e.(*pullrequest.Closed)
 		return ok
 	})).Return(nil).Once()
-	mockSeenRepo.On("UnmarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Once()
 
 	// Act
 	err := uc.Execute(context.Background(), currentPRs)
@@ -124,17 +113,14 @@ func TestDetectClosedPRs_ClosedPR_EmitsClosedEvent(t *testing.T) {
 	require.NoError(t, err)
 	mockPRRepo.AssertExpectations(t)
 	mockEventPublisher.AssertExpectations(t)
-	mockSeenRepo.AssertExpectations(t)
 }
 
 func TestDetectClosedPRs_APIError_KeepsPRTracked(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 
-	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, trackingService, mockEventPublisher)
+	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockEventPublisher)
 
 	pr1 := testutil.NewTestPullRequest(1, testutil.WithURL("https://github.com/owner/repo/pull/1"))
 
@@ -161,7 +147,6 @@ func TestDetectClosedPRs_APIError_KeepsPRTracked(t *testing.T) {
 		_, ok := e.(*pullrequest.Merged)
 		return ok
 	})).Return(nil).Once()
-	mockSeenRepo.On("UnmarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Once()
 
 	err = uc.Execute(context.Background(), currentPRs)
 	require.NoError(t, err)
@@ -172,11 +157,9 @@ func TestDetectClosedPRs_APIError_KeepsPRTracked(t *testing.T) {
 func TestDetectClosedPRs_PRStillOpenButMissing_KeepsTracked(t *testing.T) {
 	// Arrange — PR disappears from search results but is still open (e.g., search index lag)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 
-	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, trackingService, mockEventPublisher)
+	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockEventPublisher)
 
 	pr1 := testutil.NewTestPullRequest(1, testutil.WithURL("https://github.com/owner/repo/pull/1"))
 
@@ -202,11 +185,9 @@ func TestDetectClosedPRs_PRStillOpenButMissing_KeepsTracked(t *testing.T) {
 func TestDetectClosedPRs_MultiplePRs_MixedStatuses(t *testing.T) {
 	// Arrange — multiple PRs disappear with different final statuses
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 
-	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, trackingService, mockEventPublisher)
+	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockEventPublisher)
 
 	pr1 := testutil.NewTestPullRequest(1, testutil.WithURL("https://github.com/owner/repo/pull/1"))
 	pr2 := testutil.NewTestPullRequest(2, testutil.WithURL("https://github.com/owner/repo/pull/2"))
@@ -231,7 +212,6 @@ func TestDetectClosedPRs_MultiplePRs_MixedStatuses(t *testing.T) {
 		_, ok := e.(*pullrequest.Closed)
 		return ok
 	})).Return(nil).Once()
-	mockSeenRepo.On("UnmarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Times(2)
 
 	// Act
 	err := uc.Execute(context.Background(), currentPRs)
@@ -240,17 +220,14 @@ func TestDetectClosedPRs_MultiplePRs_MixedStatuses(t *testing.T) {
 	require.NoError(t, err)
 	mockPRRepo.AssertExpectations(t)
 	mockEventPublisher.AssertExpectations(t)
-	mockSeenRepo.AssertExpectations(t)
 }
 
 func TestDetectClosedPRs_CleanupRemovesPRFromTracking(t *testing.T) {
 	// Arrange — verify that after a PR is detected as merged, it's no longer tracked
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 
-	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, trackingService, mockEventPublisher)
+	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockEventPublisher)
 
 	pr1 := testutil.NewTestPullRequest(1, testutil.WithURL("https://github.com/owner/repo/pull/1"))
 
@@ -263,7 +240,6 @@ func TestDetectClosedPRs_CleanupRemovesPRFromTracking(t *testing.T) {
 		_, ok := e.(*pullrequest.Merged)
 		return ok
 	})).Return(nil).Once()
-	mockSeenRepo.On("UnmarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Once()
 
 	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{})
 	require.NoError(t, err)
@@ -279,11 +255,9 @@ func TestDetectClosedPRs_CleanupRemovesPRFromTracking(t *testing.T) {
 func TestDetectClosedPRs_TrackPRs_UpdatesExistingEntry(t *testing.T) {
 	// Arrange — TrackPRs should update the PR reference if called again with the same URL
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 
-	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, trackingService, mockEventPublisher)
+	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockEventPublisher)
 
 	pr1 := testutil.NewTestPullRequest(1, testutil.WithURL("https://github.com/owner/repo/pull/1"), testutil.WithTitle("Original"))
 	pr1Updated := testutil.NewTestPullRequest(1, testutil.WithURL("https://github.com/owner/repo/pull/1"), testutil.WithTitle("Updated"))
@@ -302,7 +276,6 @@ func TestDetectClosedPRs_TrackPRs_UpdatesExistingEntry(t *testing.T) {
 		// The event should carry the updated PR reference
 		return assert.Equal(t, "Updated", merged.PullRequest.Title())
 	})).Return(nil).Once()
-	mockSeenRepo.On("UnmarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Once()
 
 	// Act
 	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{})

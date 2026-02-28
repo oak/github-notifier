@@ -391,7 +391,7 @@ func TestPullRequest_AddActivity_Nil_NoEvent(t *testing.T) {
 	assert.Len(t, events, 0, "Should not raise event for nil activity")
 }
 
-func TestPullRequest_Close_RaisesStatusChangedEvent(t *testing.T) {
+func TestPullRequest_Close_RaisesClosedEvent(t *testing.T) {
 	// Arrange
 	pr := testutil.NewTestPullRequest(1)
 
@@ -401,14 +401,13 @@ func TestPullRequest_Close_RaisesStatusChangedEvent(t *testing.T) {
 
 	// Assert
 	require.Len(t, events, 1)
-	event, ok := events[0].(*pullrequest.StatusChanged)
-	require.True(t, ok, "Expected StatusChanged event")
+	event, ok := events[0].(*pullrequest.Closed)
+	require.True(t, ok, "Expected Closed event")
 	assert.Equal(t, pr.Identifier(), event.PullRequestID)
-	assert.Equal(t, pullrequest.StatusOpen, event.OldStatus)
-	assert.Equal(t, pullrequest.StatusClosed, event.NewStatus)
+	assert.Equal(t, pullrequest.StatusClosed, pr.Status())
 }
 
-func TestPullRequest_Merge_RaisesStatusChangedEvent(t *testing.T) {
+func TestPullRequest_Merge_RaisesMergedEvent(t *testing.T) {
 	// Arrange
 	pr := testutil.NewTestPullRequest(1)
 
@@ -418,11 +417,10 @@ func TestPullRequest_Merge_RaisesStatusChangedEvent(t *testing.T) {
 
 	// Assert
 	require.Len(t, events, 1)
-	event, ok := events[0].(*pullrequest.StatusChanged)
-	require.True(t, ok, "Expected StatusChanged event")
+	event, ok := events[0].(*pullrequest.Merged)
+	require.True(t, ok, "Expected Merged event")
 	assert.Equal(t, pr.Identifier(), event.PullRequestID)
-	assert.Equal(t, pullrequest.StatusOpen, event.OldStatus)
-	assert.Equal(t, pullrequest.StatusMerged, event.NewStatus)
+	assert.Equal(t, pullrequest.StatusMerged, pr.Status())
 }
 
 func TestPullRequest_CloseAlreadyClosed_NoEvent(t *testing.T) {
@@ -482,10 +480,10 @@ func TestPullRequest_MultipleEvents_CollectedInOrder(t *testing.T) {
 	require.Len(t, events, 3)
 	_, ok1 := events[0].(*pullrequest.ActivityDetected)
 	_, ok2 := events[1].(*pullrequest.NewPullRequestDetected)
-	_, ok3 := events[2].(*pullrequest.StatusChanged)
+	_, ok3 := events[2].(*pullrequest.Closed)
 	assert.True(t, ok1, "First event should be ActivityDetected")
 	assert.True(t, ok2, "Second event should be NewPullRequestDetected")
-	assert.True(t, ok3, "Third event should be StatusChanged")
+	assert.True(t, ok3, "Third event should be Closed")
 }
 
 func TestPullRequest_RecordHeadCommitUpdate_FirstTime_InitializesWithoutActivity(t *testing.T) {
