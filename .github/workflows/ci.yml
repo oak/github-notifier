@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_call:
+
+jobs:
+  # --------------------------------------------------
+  # 1. Lint — gate for everything else
+  # --------------------------------------------------
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libayatana-appindicator3-dev libgtk-3-dev
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          args: --timeout=5m
+
+  # --------------------------------------------------
+  # 2. Test + Build per OS — all run in parallel after lint.
+  #    Tests run first within each job so a failure stops the build.
+  #    Each OS tests its own platform code (e.g. macOS-specific tests
+  #    run on macOS, Linux-specific on Linux).
+  # --------------------------------------------------
+  test-and-build:
+    name: Test & Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libayatana-appindicator3-dev libgtk-3-dev
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run tests (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        run: go test -v ./...
+
+      - name: Display coverage summary
+        if: runner.os != 'Windows'
+        run: |
+          echo "=== Coverage Summary ==="
+          go tool cover -func=coverage.out | grep total:
+          echo ""
+          echo "=== Coverage by Package ==="
+          go tool cover -func=coverage.out | grep -E '(domain|application|infrastructure)' | grep -v '.go:' || true
+
+      - name: Run E2E tests
+        if: runner.os != 'Windows'
+        run: go test -v -tags=e2e ./test/e2e/...
+
+      - name: Build
+        run: go build -v ./cmd/github-notifier
+
+  # --------------------------------------------------
+  # 3. Aggregate success gate — require this in branch protection
+  # --------------------------------------------------
+  ci:
+    name: CI
+    if: always()
+    needs: [lint, test-and-build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: All checks passed
+        run: |
+          results='${{ join(needs.*.result, ',') }}'
+          if echo "$results" | grep -qE 'failure|cancelled'; then
+            echo "❌ One or more CI jobs failed or were cancelled"
+            exit 1
+          fi
+          echo "✅ All CI checks passed"

@@ -4,6 +4,7 @@ package macos
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"testing"
 )
@@ -13,6 +14,9 @@ import (
 //
 //	go test -v -run TestPushWithSender ./infrastructure/notification/macos/
 func TestPushWithSender(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("skipping in CI: no NotificationCenter instance available in headless runners")
+	}
 	path, err := exec.LookPath("terminal-notifier")
 	if err != nil {
 		t.Skip("terminal-notifier not found in PATH; install with: brew install terminal-notifier")

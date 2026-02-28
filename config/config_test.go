@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -61,6 +62,9 @@ func TestLoadConfigWithPath_CreatesDefaultFileWhenMissing(t *testing.T) {
 }
 
 func TestLoadConfigWithPath_CreatesFileWithRestrictedPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows: Unix file permission bits (0600) are not supported")
+	}
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.conf")
 

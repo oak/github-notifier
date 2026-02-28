@@ -10,17 +10,17 @@ permissions:
 
 jobs:
   # --------------------------------------------------
-  # 0. Run tests before releasing (reuse test workflow)
+  # 0. Run full CI (lint → tests → builds) before releasing
   # --------------------------------------------------
-  tests:
-    uses: ./.github/workflows/test.yml
+  ci:
+    uses: ./.github/workflows/ci.yml
 
   # --------------------------------------------------
   # 1. Create the release (ONCE)
   # --------------------------------------------------
   create-release:
     name: Create GitHub Release
-    needs: tests
+    needs: ci
     runs-on: ubuntu-latest
 
     steps:
@@ -36,7 +36,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # --------------------------------------------------
-  # 2. Linux build
+  # 2. Linux build + upload — parallel with 3 & 4
   # --------------------------------------------------
   build-linux:
     name: Build Linux
@@ -83,7 +83,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # --------------------------------------------------
-  # 3. macOS build
+  # 3. macOS build + upload — parallel with 2 & 4
   # --------------------------------------------------
   build-macos:
     name: Build macOS
@@ -121,7 +121,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # --------------------------------------------------
-  # 4. Windows build
+  # 4. Windows build + upload — parallel with 2 & 3
   # --------------------------------------------------
   build-windows:
     name: Build Windows
