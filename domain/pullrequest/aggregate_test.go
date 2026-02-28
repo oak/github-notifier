@@ -708,3 +708,96 @@ func TestPullRequest_Reviews_ReturnsCopy(t *testing.T) {
 	// Assert - original should be unchanged
 	assert.Len(t, pr.Reviews(), 1)
 }
+
+// Pipeline status tests
+
+func TestPullRequest_PipelineStatus_DefaultIsUnknown(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+
+	// Assert
+	assert.Equal(t, pullrequest.PipelineStatusUnknown, pr.PipelineStatus())
+}
+
+func TestPullRequest_UpdatePipelineStatus_ChangesStatus(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+
+	// Act
+	pr.UpdatePipelineStatus(pullrequest.PipelineStatusRunning)
+
+	// Assert
+	assert.Equal(t, pullrequest.PipelineStatusRunning, pr.PipelineStatus())
+}
+
+func TestPullRequest_UpdatePipelineStatus_RaisesEvent_WhenStatusChanges(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+
+	// Act
+	pr.UpdatePipelineStatus(pullrequest.PipelineStatusRunning)
+
+	// Assert
+	events := pr.CollectEvents()
+	require.Len(t, events, 1)
+
+	pipelineEvent, ok := events[0].(*pullrequest.PipelineStatusChanged)
+	require.True(t, ok, "expected PipelineStatusChanged event")
+	assert.Equal(t, pullrequest.PipelineStatusUnknown, pipelineEvent.OldStatus)
+	assert.Equal(t, pullrequest.PipelineStatusRunning, pipelineEvent.NewStatus)
+}
+
+func TestPullRequest_UpdatePipelineStatus_NoEvent_WhenStatusUnchanged(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+	pr.UpdatePipelineStatus(pullrequest.PipelineStatusRunning)
+	pr.CollectEvents() // drain
+
+	// Act - update with same status
+	pr.UpdatePipelineStatus(pullrequest.PipelineStatusRunning)
+
+	// Assert
+	events := pr.CollectEvents()
+	assert.Empty(t, events)
+}
+
+func TestPullRequest_UpdatePipelineStatus_MultipleTransitions(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(1)
+
+	// Act: unknown -> running -> success
+	pr.UpdatePipelineStatus(pullrequest.PipelineStatusRunning)
+	pr.UpdatePipelineStatus(pullrequest.PipelineStatusSuccess)
+
+	// Assert
+	assert.Equal(t, pullrequest.PipelineStatusSuccess, pr.PipelineStatus())
+
+	events := pr.CollectEvents()
+	require.Len(t, events, 2)
+
+	e1 := events[0].(*pullrequest.PipelineStatusChanged)
+	assert.Equal(t, pullrequest.PipelineStatusUnknown, e1.OldStatus)
+	assert.Equal(t, pullrequest.PipelineStatusRunning, e1.NewStatus)
+
+	e2 := events[1].(*pullrequest.PipelineStatusChanged)
+	assert.Equal(t, pullrequest.PipelineStatusRunning, e2.OldStatus)
+	assert.Equal(t, pullrequest.PipelineStatusSuccess, e2.NewStatus)
+}
+
+func TestPullRequest_UpdatePipelineStatus_EventCarriesFullPR(t *testing.T) {
+	// Arrange
+	pr := testutil.NewTestPullRequest(42)
+
+	// Act
+	pr.UpdatePipelineStatus(pullrequest.PipelineStatusFailed)
+
+	// Assert
+	events := pr.CollectEvents()
+	require.Len(t, events, 1)
+
+	pipelineEvent := events[0].(*pullrequest.PipelineStatusChanged)
+	assert.Equal(t, pr, pipelineEvent.PullRequest)
+	assert.Equal(t, pr.Identifier(), pipelineEvent.PullRequestID)
+	assert.Equal(t, pr.Repository(), pipelineEvent.Repository)
+	assert.False(t, pipelineEvent.OccurredAt().IsZero())
+}

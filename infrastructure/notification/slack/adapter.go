@@ -69,6 +69,9 @@ func (a *Adapter) buildSlackMessage(prNotif *port.PRNotificationData) (string, s
 	var title string
 	if prNotif.IsNew {
 		title = fmt.Sprintf("🆕 New PR #%d", pr.Number())
+	} else if prNotif.PipelineChange != nil {
+		s := prNotif.PipelineChange.NewStatus
+		title = fmt.Sprintf("%s PR #%d – Pipeline %s", s.Emoji(), pr.Number(), s.Label())
 	} else if len(prNotif.ReviewChanges) > 0 {
 		title = fmt.Sprintf("🔔 PR #%d Review", pr.Number())
 	} else {
@@ -84,6 +87,12 @@ func (a *Adapter) buildSlackMessage(prNotif *port.PRNotificationData) (string, s
 		repoInfo.NameWithOwner(),
 		pr.Number()))
 	parts = append(parts, pr.Title())
+
+	// Add pipeline status right after the PR title so it is immediately visible
+	if prNotif.PipelineChange != nil {
+		s := prNotif.PipelineChange.NewStatus
+		parts = append(parts, fmt.Sprintf("*Pipeline:* %s %s", s.Emoji(), s.Label()))
+	}
 
 	// Add "NEW" indicator
 	if prNotif.IsNew {

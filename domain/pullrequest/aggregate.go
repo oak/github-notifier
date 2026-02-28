@@ -18,6 +18,7 @@ type PullRequest struct {
 	lastActivityCheck time.Time          // When we last checked for activities
 	headCommitSHA     string             // Latest commit SHA (head)
 	reviews           map[string]*Review // reviewer login -> latest review
+	pipelineStatus    PipelineStatus     // Latest CI/CD pipeline rollup status
 	events            []Event            // Domain events pending publication
 }
 
@@ -56,6 +57,7 @@ func NewPullRequest(
 		lastActivityAt:    createdAt,
 		lastActivityCheck: time.Time{}, // Zero value - will be checked immediately on first run
 		reviews:           make(map[string]*Review),
+		pipelineStatus:    PipelineStatusUnknown,
 		events:            make([]Event, 0),
 	}, nil
 }
@@ -269,6 +271,13 @@ func (pr *PullRequest) SetInitialHeadCommitSHA(sha string) {
 	pr.headCommitSHA = sha
 }
 
+// SetInitialPipelineStatus sets the pipeline status without raising any events.
+// Used to restore known state from a previous check cycle, so that
+// UpdatePipelineStatus can correctly detect changes vs. no-ops.
+func (pr *PullRequest) SetInitialPipelineStatus(status PipelineStatus) {
+	pr.pipelineStatus = status
+}
+
 // RecordHeadCommitUpdate detects if the head commit has changed and, if so,
 // creates a push activity on the aggregate (which raises an ActivityDetected event).
 // The aggregate records all domain facts; notification filtering (e.g. suppressing
@@ -353,6 +362,25 @@ func (pr *PullRequest) Reviews() map[string]*Review {
 		result[k] = v
 	}
 	return result
+}
+
+// PipelineStatus returns the current CI/CD pipeline rollup status
+func (pr *PullRequest) PipelineStatus() PipelineStatus {
+	return pr.pipelineStatus
+}
+
+// UpdatePipelineStatus updates the pipeline status and raises a PipelineStatusChanged event
+// if the status has changed. No-op if the status is the same.
+func (pr *PullRequest) UpdatePipelineStatus(newStatus PipelineStatus) {
+	if pr.pipelineStatus == newStatus {
+		return
+	}
+
+	oldStatus := pr.pipelineStatus
+	pr.pipelineStatus = newStatus
+
+	event := NewPipelineStatusChanged(pr, oldStatus, newStatus)
+	pr.raiseEvent(&event)
 }
 
 // ReviewSummary returns a ReviewSummary for display purposes

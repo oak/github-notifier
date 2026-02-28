@@ -214,3 +214,22 @@ func TestTrackingHandler_HandleStatusChanged(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 }
+
+func TestTrackingHandler_HandlePipelineStatusChanged(t *testing.T) {
+	// Arrange
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(trackingService)
+
+	pr := testutil.NewTestPullRequest(1)
+	event := pullrequest.NewPipelineStatusChanged(pr, pullrequest.PipelineStatusRunning, pullrequest.PipelineStatusSuccess)
+
+	// Act
+	err := handler.Handle(context.Background(), &event)
+
+	// Assert - should handle without error, just logs
+	require.NoError(t, err)
+	// No tracking service calls expected (pipeline events are log-only)
+	mockSeenRepo.AssertNotCalled(t, "MarkAsSeen")
+	mockSeenRepo.AssertNotCalled(t, "UnmarkAsSeen")
+}

@@ -13,12 +13,13 @@ import (
 // TrackPullRequestActivityUseCase handles checking for new activity on PRs
 // Uses a two-tier scheduling strategy to optimize API calls
 type TrackPullRequestActivityUseCase struct {
-	prRepo            pullrequest.PullRequestRepository
-	scheduler         *pullrequest.ActivityCheckScheduler
-	trackingService   *pullrequest.TrackingService
-	eventPublisher    port.EventPublisher
-	knownHeadSHAs     map[string]string // PR URL → last known head commit SHA
-	authenticatedUser string            // GitHub login — used to filter self-activity for unseen marking
+	prRepo                pullrequest.PullRequestRepository
+	scheduler             *pullrequest.ActivityCheckScheduler
+	trackingService       *pullrequest.TrackingService
+	eventPublisher        port.EventPublisher
+	knownHeadSHAs         map[string]string                     // PR URL → last known head commit SHA
+	knownPipelineStatuses map[string]pullrequest.PipelineStatus // PR URL → last known pipeline status
+	authenticatedUser     string                                // GitHub login — used to filter self-activity for unseen marking
 }
 
 // NewTrackPullRequestActivityUseCase creates a new use case.
@@ -32,12 +33,13 @@ func NewTrackPullRequestActivityUseCase(
 	authenticatedUser string,
 ) *TrackPullRequestActivityUseCase {
 	return &TrackPullRequestActivityUseCase{
-		prRepo:            prRepo,
-		scheduler:         scheduler,
-		trackingService:   trackingService,
-		eventPublisher:    eventPublisher,
-		knownHeadSHAs:     make(map[string]string),
-		authenticatedUser: authenticatedUser,
+		prRepo:                prRepo,
+		scheduler:             scheduler,
+		trackingService:       trackingService,
+		eventPublisher:        eventPublisher,
+		knownHeadSHAs:         make(map[string]string),
+		knownPipelineStatuses: make(map[string]pullrequest.PipelineStatus),
+		authenticatedUser:     authenticatedUser,
 	}
 }
 
@@ -64,11 +66,25 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 		return nil
 	}
 
-	// Restore known head commit SHAs on the fresh PR objects
+	// Restore known state on fresh PR objects
 	// (PR objects are recreated each cycle, so we need to carry state forward)
+	//
+	// For pipeline status: the initial search query now seeds the PR with the
+	// current GitHub state via SetInitialPipelineStatus. We must override that
+	// with our tracked value so UpdatePipelineStatus can correctly detect
+	// changes vs. no-ops. If we have no tracked value yet (first time seeing
+	// this PR's pipeline), reset to Unknown so the batched query's
+	// UpdatePipelineStatus fires the first transition event.
 	for _, pr := range prsToCheck {
 		if sha, ok := uc.knownHeadSHAs[pr.URL()]; ok {
 			pr.SetInitialHeadCommitSHA(sha)
+		}
+		if status, ok := uc.knownPipelineStatuses[pr.URL()]; ok {
+			pr.SetInitialPipelineStatus(status)
+		} else {
+			// No tracked value yet — reset to Unknown so the first status from
+			// the batched timeline query is treated as a new transition.
+			pr.SetInitialPipelineStatus(pullrequest.PipelineStatusUnknown)
 		}
 	}
 
@@ -79,10 +95,13 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 		return err
 	}
 
-	// Save updated head commit SHAs for next cycle
+	// Save updated state for next cycle
 	for _, pr := range prsToCheck {
 		if sha := pr.HeadCommitSHA(); sha != "" {
 			uc.knownHeadSHAs[pr.URL()] = sha
+		}
+		if status := pr.PipelineStatus(); status != pullrequest.PipelineStatusUnknown {
+			uc.knownPipelineStatuses[pr.URL()] = status
 		}
 	}
 

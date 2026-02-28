@@ -356,3 +356,74 @@ func TestNotificationHandler_ImmediateFlush_OnStop(t *testing.T) {
 	// Assert - no need to wait, Stop() flushes immediately
 	mockNotificationPort.AssertExpectations(t)
 }
+
+func TestNotificationHandler_HandlePipelineStatusChanged_Success(t *testing.T) {
+	// Arrange
+	mockNotificationPort := mocks.NewNotificationPort(t)
+	handler := events.NewNotificationEventHandler(mockNotificationPort, "")
+	defer handler.Stop()
+
+	pr := testutil.NewTestPullRequest(1)
+	event := pullrequest.NewPipelineStatusChanged(pr, pullrequest.PipelineStatusUnknown, pullrequest.PipelineStatusFailed)
+
+	// Mock expectations
+	mockNotificationPort.On("NotifyPullRequests", mock.MatchedBy(func(notifications []*port.PRNotificationData) bool {
+		if len(notifications) != 1 {
+			return false
+		}
+		notif := notifications[0]
+		return notif.PullRequest == pr &&
+			notif.PipelineChange != nil &&
+			notif.PipelineChange.OldStatus == pullrequest.PipelineStatusUnknown &&
+			notif.PipelineChange.NewStatus == pullrequest.PipelineStatusFailed
+	})).Return(nil)
+
+	// Act
+	err := handler.Handle(context.Background(), &event)
+	require.NoError(t, err)
+
+	// Wait for aggregator to flush
+	time.Sleep(2200 * time.Millisecond)
+
+	// Assert
+	mockNotificationPort.AssertExpectations(t)
+}
+
+func TestNotificationHandler_HandlePipelineStatusChanged_GroupedWithActivity(t *testing.T) {
+	// Arrange
+	mockNotificationPort := mocks.NewNotificationPort(t)
+	handler := events.NewNotificationEventHandler(mockNotificationPort, "")
+	defer handler.Stop()
+
+	pr := testutil.NewTestPullRequest(1)
+
+	activity := testutil.NewTestActivity(
+		pullrequest.ActivityTypeComment,
+		time.Now(),
+		testutil.WithActivityPR(pr.URL(), pr.Number()),
+	)
+	activityEvent := pullrequest.NewActivityDetected(pr, activity)
+	pipelineEvent := pullrequest.NewPipelineStatusChanged(pr, pullrequest.PipelineStatusRunning, pullrequest.PipelineStatusSuccess)
+
+	// Expect a single grouped notification with both activity and pipeline change
+	mockNotificationPort.On("NotifyPullRequests", mock.MatchedBy(func(notifications []*port.PRNotificationData) bool {
+		if len(notifications) != 1 {
+			return false
+		}
+		notif := notifications[0]
+		return notif.PullRequest == pr &&
+			len(notif.Activities) == 1 &&
+			notif.PipelineChange != nil &&
+			notif.PipelineChange.NewStatus == pullrequest.PipelineStatusSuccess
+	})).Return(nil)
+
+	// Act
+	_ = handler.Handle(context.Background(), &activityEvent)
+	_ = handler.Handle(context.Background(), &pipelineEvent)
+
+	// Wait for aggregator to flush
+	time.Sleep(2200 * time.Millisecond)
+
+	// Assert
+	mockNotificationPort.AssertExpectations(t)
+}

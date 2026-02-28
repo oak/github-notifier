@@ -28,15 +28,16 @@ type MockGitHubServer struct {
 
 // MockPR represents a pull request in the mock server
 type MockPR struct {
-	Title         string
-	URL           string
-	Number        int
-	CreatedAt     time.Time
-	IsDraft       bool
-	State         string
-	Repository    string
-	Author        string
-	HeadCommitSHA string
+	Title          string
+	URL            string
+	Number         int
+	CreatedAt      time.Time
+	IsDraft        bool
+	State          string
+	Repository     string
+	Author         string
+	HeadCommitSHA  string
+	PipelineStatus string // GitHub statusCheckRollup state: SUCCESS, FAILURE, PENDING, IN_PROGRESS, etc.
 }
 
 // MockLatestReview represents a review returned in the search query's latestReviews connection
@@ -215,6 +216,21 @@ func (m *MockGitHubServer) handleSearchQuery(w http.ResponseWriter, query string
 			}
 		}
 
+		// Add pipeline status (commits/statusCheckRollup) if set
+		if pr.PipelineStatus != "" {
+			node["commits"] = map[string]interface{}{
+				"nodes": []interface{}{
+					map[string]interface{}{
+						"commit": map[string]interface{}{
+							"statusCheckRollup": map[string]interface{}{
+								"state": pr.PipelineStatus,
+							},
+						},
+					},
+				},
+			}
+		}
+
 		nodes = append(nodes, node)
 	}
 
@@ -357,10 +373,25 @@ func (m *MockGitHubServer) handleBatchedTimelineQuery(w http.ResponseWriter, que
 			})
 		}
 
+		// Build the commits/statusCheckRollup field
+		var commitsNodes []interface{}
+		if pr.PipelineStatus != "" {
+			commitsNodes = append(commitsNodes, map[string]interface{}{
+				"commit": map[string]interface{}{
+					"statusCheckRollup": map[string]interface{}{
+						"state": pr.PipelineStatus,
+					},
+				},
+			})
+		}
+
 		data[mapping.alias] = map[string]interface{}{
 			"pullRequest": map[string]interface{}{
 				"url":        pr.URL,
 				"headRefOid": pr.HeadCommitSHA,
+				"commits": map[string]interface{}{
+					"nodes": commitsNodes,
+				},
 				"timelineItems": map[string]interface{}{
 					"nodes": timelineNodes,
 				},
@@ -574,6 +605,20 @@ func (m *MockGitHubServer) ClosePR(prNumber int) {
 	}
 }
 
+// SetPipelineStatus sets the statusCheckRollup state for a PR.
+// Use GitHub rollup state strings: SUCCESS, FAILURE, PENDING, IN_PROGRESS, ERROR, CANCELLED.
+func (m *MockGitHubServer) SetPipelineStatus(prNumber int, state string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for i, pr := range m.prs {
+		if pr.Number == prNumber {
+			m.prs[i].PipelineStatus = state
+			break
+		}
+	}
+}
+
 // SetError sets an error state for the server
 func (m *MockGitHubServer) SetError(code int, message string) {
 	m.mu.Lock()
@@ -631,6 +676,9 @@ func (s *SpyNotificationAdapter) NotifyPullRequests(notifications []*port.PRNoti
 					title = "PR Closed"
 				}
 			}
+		} else if prNotif.PipelineChange != nil {
+			s := prNotif.PipelineChange.NewStatus
+			title = fmt.Sprintf("PR Pipeline %s %s", s.Label(), s.Emoji())
 		} else if !prNotif.IsNew && len(prNotif.ReviewChanges) > 0 {
 			title = "PR Review"
 		} else if !prNotif.IsNew && len(prNotif.Activities) > 0 {

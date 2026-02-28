@@ -15,6 +15,7 @@ const (
 	EventClosed                 = "Closed"
 	EventStatusChanged          = "StatusChanged"
 	EventReviewStateChanged     = "ReviewStateChanged"
+	EventPipelineStatusChanged  = "PipelineStatusChanged"
 )
 
 // StatusChangeType represents the type of status change
@@ -168,5 +169,32 @@ func NewReviewStateChanged(pr *PullRequest, reviewer Author, state ReviewState) 
 
 // OccurredAt returns when the event occurred
 func (e ReviewStateChanged) OccurredAt() time.Time {
+	return e.occurredAt
+}
+
+// PipelineStatusChanged is raised when the CI/CD pipeline rollup status changes on a PR
+type PipelineStatusChanged struct {
+	PullRequestID PRIdentifier
+	Repository    RepositoryInfo
+	OldStatus     PipelineStatus
+	NewStatus     PipelineStatus
+	PullRequest   *PullRequest // Full PR for notification purposes
+	occurredAt    time.Time
+}
+
+// NewPipelineStatusChanged creates a new PipelineStatusChanged event
+func NewPipelineStatusChanged(pr *PullRequest, oldStatus, newStatus PipelineStatus) PipelineStatusChanged {
+	return PipelineStatusChanged{
+		PullRequestID: pr.Identifier(),
+		Repository:    pr.Repository(),
+		OldStatus:     oldStatus,
+		NewStatus:     newStatus,
+		PullRequest:   pr,
+		occurredAt:    time.Now(),
+	}
+}
+
+// OccurredAt returns when the event occurred
+func (e PipelineStatusChanged) OccurredAt() time.Time {
 	return e.occurredAt
 }

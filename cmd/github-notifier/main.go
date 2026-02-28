@@ -213,11 +213,13 @@ func (app *App) startWithConfig(cfg *config.Config) {
 	eventBus.Subscribe(pullrequest.EventReviewStateChanged, notificationHandler)
 	eventBus.Subscribe(pullrequest.EventMerged, notificationHandler)
 	eventBus.Subscribe(pullrequest.EventClosed, notificationHandler)
+	eventBus.Subscribe(pullrequest.EventPipelineStatusChanged, notificationHandler)
 	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, trackingHandler)
 	eventBus.Subscribe(pullrequest.EventActivityDetected, trackingHandler)
 	eventBus.Subscribe(pullrequest.EventReviewStateChanged, trackingHandler)
 	eventBus.Subscribe(pullrequest.EventMerged, trackingHandler)
 	eventBus.Subscribe(pullrequest.EventClosed, trackingHandler)
+	eventBus.Subscribe(pullrequest.EventPipelineStatusChanged, trackingHandler)
 
 	// Initialize use cases
 	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(

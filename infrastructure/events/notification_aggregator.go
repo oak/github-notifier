@@ -9,11 +9,12 @@ import (
 
 // PRNotification represents aggregated notification data for a PR
 type PRNotification struct {
-	PullRequest   *pullrequest.PullRequest
-	IsNew         bool
-	Activities    []ActivityInfo
-	StatusChanges []StatusChange
-	ReviewChanges []ReviewChange
+	PullRequest    *pullrequest.PullRequest
+	IsNew          bool
+	Activities     []ActivityInfo
+	StatusChanges  []StatusChange
+	ReviewChanges  []ReviewChange
+	PipelineChange *PipelineStatusChange // nil if no pipeline status change
 }
 
 // ActivityInfo holds information about a specific activity
@@ -31,6 +32,12 @@ type StatusChange struct {
 type ReviewChange struct {
 	Reviewer string
 	State    pullrequest.ReviewState
+}
+
+// PipelineStatusChange holds information about a CI/CD pipeline status transition
+type PipelineStatusChange struct {
+	OldStatus pullrequest.PipelineStatus
+	NewStatus pullrequest.PipelineStatus
 }
 
 // NotificationAggregator batches notifications and groups them by PR
@@ -73,6 +80,8 @@ func (a *NotificationAggregator) AddEvent(event pullrequest.Event) {
 		a.addMergedEvent(e)
 	case *pullrequest.Closed:
 		a.addClosedEvent(e)
+	case *pullrequest.PipelineStatusChanged:
+		a.addPipelineStatusChangedEvent(e)
 	}
 
 	// Reset or start the flush timer
@@ -198,6 +207,33 @@ func (a *NotificationAggregator) addClosedEvent(event *pullrequest.Closed) {
 	notification.StatusChanges = append(notification.StatusChanges, StatusChange{
 		EventType: pullrequest.StatusChangeClosed,
 	})
+}
+
+// addPipelineStatusChangedEvent records a pipeline status transition.
+// Only the latest transition is kept — older ones are overwritten.
+func (a *NotificationAggregator) addPipelineStatusChangedEvent(event *pullrequest.PipelineStatusChanged) {
+	url := event.PullRequestID.URL()
+
+	notification, exists := a.pendingEvents[url]
+	if !exists {
+		notification = &PRNotification{
+			PullRequest: event.PullRequest,
+			Activities:  []ActivityInfo{},
+		}
+		a.pendingEvents[url] = notification
+	}
+
+	// Keep only the latest transition: preserve OldStatus from the first event
+	// in this flush window so the user sees the full transition
+	if notification.PipelineChange == nil {
+		notification.PipelineChange = &PipelineStatusChange{
+			OldStatus: event.OldStatus,
+			NewStatus: event.NewStatus,
+		}
+	} else {
+		// Update only the NewStatus — the OldStatus stays as the starting point
+		notification.PipelineChange.NewStatus = event.NewStatus
+	}
 }
 
 // resetFlushTimer resets the flush timer

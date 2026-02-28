@@ -16,6 +16,15 @@ type PullRequestDTO struct {
 		Login string `json:"login"`
 	} `json:"author"`
 	LatestReviews *LatestReviewsDTO `json:"latestReviews,omitempty"`
+	Commits       *struct {
+		Nodes []struct {
+			Commit struct {
+				StatusCheckRollup *struct {
+					State string `json:"state"`
+				} `json:"statusCheckRollup"`
+			} `json:"commit"`
+		} `json:"nodes"`
+	} `json:"commits,omitempty"`
 }
 
 // LatestReviewsDTO represents the latest reviews connection on a PR

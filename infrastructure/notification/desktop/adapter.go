@@ -60,6 +60,11 @@ func (a *Adapter) buildNotificationTitle(prNotif *port.PRNotificationData) strin
 		return fmt.Sprintf("New PR #%d", pr.Number())
 	}
 
+	if prNotif.PipelineChange != nil {
+		s := prNotif.PipelineChange.NewStatus
+		return fmt.Sprintf("PR #%d – Pipeline %s %s", pr.Number(), s.Label(), s.Emoji())
+	}
+
 	// If we have review changes, show them prominently
 	if len(prNotif.ReviewChanges) > 0 {
 		return fmt.Sprintf("PR #%d Review", pr.Number())
@@ -76,6 +81,12 @@ func (a *Adapter) buildNotificationMessage(prNotif *port.PRNotificationData) str
 	// Add PR info
 	parts = append(parts, pr.RepositoryName())
 	parts = append(parts, pr.Title())
+
+	// Add pipeline status right after the PR title so it is never truncated
+	if prNotif.PipelineChange != nil {
+		s := prNotif.PipelineChange.NewStatus
+		parts = append(parts, fmt.Sprintf("Pipeline: %s %s", s.Emoji(), s.Label()))
+	}
 
 	// Add "NEW" indicator if this is a new PR
 	if prNotif.IsNew {

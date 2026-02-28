@@ -39,7 +39,8 @@ func (h *NotificationEventHandler) Handle(ctx context.Context, event pullrequest
 		*pullrequest.ActivityDetected,
 		*pullrequest.ReviewStateChanged,
 		*pullrequest.Merged,
-		*pullrequest.Closed:
+		*pullrequest.Closed,
+		*pullrequest.PipelineStatusChanged:
 		// Add event to aggregator for batching
 		h.aggregator.AddEvent(event)
 		return nil
@@ -93,6 +94,14 @@ func (h *NotificationEventHandler) sendGroupedNotifications(notifications []*PRN
 			portNotification.ReviewChanges[i] = port.ReviewChangeInfo{
 				Reviewer: reviewChange.Reviewer,
 				State:    reviewChange.State,
+			}
+		}
+
+		// Convert pipeline change
+		if notification.PipelineChange != nil {
+			portNotification.PipelineChange = &port.PipelineStatusChange{
+				OldStatus: notification.PipelineChange.OldStatus,
+				NewStatus: notification.PipelineChange.NewStatus,
 			}
 		}
 

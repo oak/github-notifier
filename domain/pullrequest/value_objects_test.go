@@ -383,3 +383,69 @@ func TestPRStatus_IsOpen(t *testing.T) {
 		})
 	}
 }
+
+// PipelineStatus tests
+
+func TestPipelineStatus_String(t *testing.T) {
+	tests := []struct {
+		status   pullrequest.PipelineStatus
+		expected string
+	}{
+		{pullrequest.PipelineStatusUnknown, "unknown"},
+		{pullrequest.PipelineStatusRunning, "running"},
+		{pullrequest.PipelineStatusSuccess, "success"},
+		{pullrequest.PipelineStatusFailed, "failed"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.status.String())
+		})
+	}
+}
+
+func TestPipelineStatus_Emoji(t *testing.T) {
+	tests := []struct {
+		status   pullrequest.PipelineStatus
+		expected string
+	}{
+		{pullrequest.PipelineStatusUnknown, "❓"},
+		{pullrequest.PipelineStatusRunning, "🟡"},
+		{pullrequest.PipelineStatusSuccess, "🟢"},
+		{pullrequest.PipelineStatusFailed, "🔴"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.status.String(), func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.status.Emoji())
+		})
+	}
+}
+
+func TestPipelineStatusFromRollup(t *testing.T) {
+	tests := []struct {
+		state    string
+		expected pullrequest.PipelineStatus
+	}{
+		{"PENDING", pullrequest.PipelineStatusRunning},
+		{"IN_PROGRESS", pullrequest.PipelineStatusRunning},
+		{"WAITING", pullrequest.PipelineStatusRunning},
+		{"QUEUED", pullrequest.PipelineStatusRunning},
+		{"SUCCESS", pullrequest.PipelineStatusSuccess},
+		{"NEUTRAL", pullrequest.PipelineStatusSuccess},
+		{"SKIPPED", pullrequest.PipelineStatusSuccess},
+		{"FAILURE", pullrequest.PipelineStatusFailed},
+		{"ERROR", pullrequest.PipelineStatusFailed},
+		{"CANCELLED", pullrequest.PipelineStatusFailed},
+		{"TIMED_OUT", pullrequest.PipelineStatusFailed},
+		{"", pullrequest.PipelineStatusUnknown},
+		{"SOME_FUTURE_STATE", pullrequest.PipelineStatusUnknown},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.state, func(t *testing.T) {
+			result := pullrequest.PipelineStatusFromRollup(tt.state)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

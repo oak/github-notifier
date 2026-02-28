@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
 func TestE2E_NewPRDetection_SendsNotification(t *testing.T) {
@@ -1427,4 +1429,250 @@ func TestE2E_MenuDisplaysReviewStates(t *testing.T) {
 	assert.NotEmpty(t, formatted, "Review summary should produce formatted output")
 	assert.Contains(t, formatted, "✅", "Should show approval emoji")
 	assert.Contains(t, formatted, "❌", "Should show changes requested emoji")
+}
+
+// === Pipeline Status E2E Tests (OAK-19) ===
+
+func TestE2E_PipelineInitialStatus_ShownInMenuImmediately(t *testing.T) {
+	// Given: A PR that already has a known pipeline status when first fetched
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:          "Feature already green",
+		Number:         1950,
+		Author:         "alice",
+		HeadCommitSHA:  "abc000",
+		PipelineStatus: "SUCCESS",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// When: first check runs
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+
+	// Then: menu should immediately show the pipeline emoji, no second check needed
+	prs := suite.menuAdapter.GetPRs()
+	require.Len(t, prs, 1)
+	assert.Equal(t, pullrequest.PipelineStatusSuccess, prs[0].PipelineStatus(),
+		"Pipeline status should be visible in menu after first check")
+}
+
+func TestE2E_PipelineSuccess_SendsNotificationAndUpdatesMenu(t *testing.T) {
+	// Given: A tracked PR that starts with no pipeline status
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:         "Feature with CI",
+		Number:        2000,
+		Author:        "alice",
+		HeadCommitSHA: "abc123",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// First check: detect the PR
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.ClearNotifications()
+
+	// When: CI completes successfully
+	suite.mockGitHub.SetPipelineStatus(2000, "SUCCESS")
+
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	// Then: Should notify about pipeline success
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify when pipeline succeeds")
+
+	foundPipeline := false
+	for _, n := range notifs {
+		if n.Title == "PR Pipeline Passed 🟢" {
+			foundPipeline = true
+			assert.Contains(t, n.Body, "Feature with CI")
+			break
+		}
+	}
+	assert.True(t, foundPipeline, "Should send pipeline success notification")
+
+	// And: The PR in the menu should have the correct pipeline status
+	prs := suite.menuAdapter.GetPRs()
+	require.Len(t, prs, 1)
+	assert.Equal(t, pullrequest.PipelineStatusSuccess, prs[0].PipelineStatus())
+}
+
+func TestE2E_PipelineFailure_SendsNotificationAndUpdatesMenu(t *testing.T) {
+	// Given: A tracked PR with a running pipeline
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:          "Broken feature",
+		Number:         2100,
+		Author:         "alice",
+		HeadCommitSHA:  "def456",
+		PipelineStatus: "IN_PROGRESS",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// First check: detect the PR with running pipeline
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.ClearNotifications()
+
+	// When: CI fails
+	suite.mockGitHub.SetPipelineStatus(2100, "FAILURE")
+
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	// Then: Should notify about pipeline failure
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify when pipeline fails")
+
+	foundPipeline := false
+	for _, n := range notifs {
+		if n.Title == "PR Pipeline Failed 🔴" {
+			foundPipeline = true
+			assert.Contains(t, n.Body, "Broken feature")
+			break
+		}
+	}
+	assert.True(t, foundPipeline, "Should send pipeline failure notification")
+
+	// And: The PR in the menu should reflect the failure
+	prs := suite.menuAdapter.GetPRs()
+	require.Len(t, prs, 1)
+	assert.Equal(t, pullrequest.PipelineStatusFailed, prs[0].PipelineStatus())
+}
+
+func TestE2E_PipelineRunning_SendsNotification(t *testing.T) {
+	// Given: A tracked PR with no pipeline status yet
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:         "Work in progress",
+		Number:        2200,
+		Author:        "alice",
+		HeadCommitSHA: "ghi789",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// First check: detect the PR
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.ClearNotifications()
+
+	// When: CI starts running
+	suite.mockGitHub.SetPipelineStatus(2200, "IN_PROGRESS")
+
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	// Then: Should notify that pipeline is running
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify when pipeline starts running")
+
+	foundPipeline := false
+	for _, n := range notifs {
+		if n.Title == "PR Pipeline Running 🟡" {
+			foundPipeline = true
+			break
+		}
+	}
+	assert.True(t, foundPipeline, "Should send pipeline running notification")
+
+	// And: Menu should show running status
+	prs := suite.menuAdapter.GetPRs()
+	require.Len(t, prs, 1)
+	assert.Equal(t, pullrequest.PipelineStatusRunning, prs[0].PipelineStatus())
+}
+
+func TestE2E_PipelineSameStatus_NoNotification(t *testing.T) {
+	// Given: A tracked PR with a successful pipeline
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:          "Stable feature",
+		Number:         2300,
+		Author:         "alice",
+		HeadCommitSHA:  "jkl012",
+		PipelineStatus: "SUCCESS",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// First check: detect PR with success status
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.ClearNotifications()
+
+	// When: Same status on next check (no change)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	// Then: Should NOT send a pipeline notification
+	notifs := suite.notifications.GetNotifications()
+	for _, n := range notifs {
+		assert.NotContains(t, n.Title, "Pipeline", "Should NOT notify when pipeline status is unchanged")
+	}
+}
+
+func TestE2E_PipelineRunningToSuccess_SendsTwoNotifications(t *testing.T) {
+	// Given: A tracked PR with no initial pipeline status
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:         "Full CI cycle",
+		Number:        2400,
+		Author:        "alice",
+		HeadCommitSHA: "mno345",
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// First check: detect PR
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.ClearNotifications()
+
+	// Cycle 2: pipeline starts
+	suite.mockGitHub.SetPipelineStatus(2400, "IN_PROGRESS")
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "Should notify on pipeline start")
+	suite.ClearNotifications()
+
+	// Cycle 3: pipeline succeeds
+	suite.mockGitHub.SetPipelineStatus(2400, "SUCCESS")
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	// Then: Should notify about success transition
+	notifs = suite.notifications.GetNotifications()
+	require.Greater(t, len(notifs), 0, "MUST notify when pipeline transitions from running to success")
+
+	foundSuccess := false
+	for _, n := range notifs {
+		if n.Title == "PR Pipeline Passed 🟢" {
+			foundSuccess = true
+			break
+		}
+	}
+	assert.True(t, foundSuccess, "Should send pipeline success notification after running")
+
+	// And: Final menu state should be success
+	prs := suite.menuAdapter.GetPRs()
+	require.Len(t, prs, 1)
+	assert.Equal(t, pullrequest.PipelineStatusSuccess, prs[0].PipelineStatus())
 }

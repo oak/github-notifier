@@ -4,11 +4,12 @@ import "github.com/oak3/github-notifier/domain/pullrequest"
 
 // PRNotificationData represents the data for a single PR notification
 type PRNotificationData struct {
-	PullRequest   *pullrequest.PullRequest
-	IsNew         bool
-	Activities    []ActivityInfo
-	StatusChanges []StatusChange
-	ReviewChanges []ReviewChangeInfo
+	PullRequest    *pullrequest.PullRequest
+	IsNew          bool
+	Activities     []ActivityInfo
+	StatusChanges  []StatusChange
+	ReviewChanges  []ReviewChangeInfo
+	PipelineChange *PipelineStatusChange // nil if no pipeline status change
 }
 
 // ActivityInfo holds information about activities
@@ -26,6 +27,12 @@ type StatusChange struct {
 type ReviewChangeInfo struct {
 	Reviewer string
 	State    pullrequest.ReviewState
+}
+
+// PipelineStatusChange holds information about a CI/CD pipeline status transition
+type PipelineStatusChange struct {
+	OldStatus pullrequest.PipelineStatus
+	NewStatus pullrequest.PipelineStatus
 }
 
 // NotificationPort is the port for sending notifications

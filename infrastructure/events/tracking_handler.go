@@ -42,6 +42,9 @@ func (h *TrackingEventHandler) Handle(ctx context.Context, event pullrequest.Eve
 	case *pullrequest.StatusChanged:
 		return h.handleStatusChanged(e)
 
+	case *pullrequest.PipelineStatusChanged:
+		return h.handlePipelineStatusChanged(e)
+
 	default:
 		// Ignore other event types
 		return nil
@@ -102,5 +105,14 @@ func (h *TrackingEventHandler) handleReviewStateChanged(event *pullrequest.Revie
 		event.PullRequestID.URL(),
 		event.Reviewer.Login(),
 		event.State.Label())
+	return nil
+}
+
+// handlePipelineStatusChanged handles pipeline status change events
+func (h *TrackingEventHandler) handlePipelineStatusChanged(event *pullrequest.PipelineStatusChanged) error {
+	log.Info().Msgf("Tracking: Pipeline status changed %s → %s on PR - %s",
+		event.OldStatus,
+		event.NewStatus,
+		event.PullRequestID.URL())
 	return nil
 }

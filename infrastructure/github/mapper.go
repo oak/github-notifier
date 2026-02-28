@@ -47,6 +47,16 @@ func (m *Mapper) ToDomain(dto PullRequestDTO) (*pullrequest.PullRequest, error) 
 		pr.SetInitialReviews(reviews)
 	}
 
+	// Map initial pipeline status if present
+	if dto.Commits != nil && len(dto.Commits.Nodes) > 0 {
+		last := dto.Commits.Nodes[len(dto.Commits.Nodes)-1]
+		if last.Commit.StatusCheckRollup != nil {
+			status := pullrequest.PipelineStatusFromRollup(last.Commit.StatusCheckRollup.State)
+			// Set initial pipeline status without raising events (this is initial state, not a change)
+			pr.SetInitialPipelineStatus(status)
+		}
+	}
+
 	return pr, nil
 }
 

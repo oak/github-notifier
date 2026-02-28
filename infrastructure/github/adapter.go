@@ -84,6 +84,15 @@ func (a *Adapter) FetchRequestedReviews() ([]*pullrequest.PullRequest, error) {
 						isDraft
 						author { login }
 						repository { nameWithOwner }
+						commits(last: 1) {
+							nodes {
+								commit {
+									statusCheckRollup {
+										state
+									}
+								}
+							}
+						}
 						latestReviews(first: 20) {
 							nodes {
 								author { login }
@@ -124,6 +133,15 @@ func (a *Adapter) FetchRequestedReviews() ([]*pullrequest.PullRequest, error) {
 						isDraft
 						author { login }
 						repository { nameWithOwner }
+						commits(last: 1) {
+							nodes {
+								commit {
+									statusCheckRollup {
+										state
+									}
+								}
+							}
+						}
 						latestReviews(first: 20) {
 							nodes {
 								author { login }
@@ -186,6 +204,15 @@ func (a *Adapter) FetchUserCreated() ([]*pullrequest.PullRequest, error) {
 						isDraft
 						author { login }
 						repository { nameWithOwner }
+						commits(last: 1) {
+							nodes {
+								commit {
+									statusCheckRollup {
+										state
+									}
+								}
+							}
+						}
 						latestReviews(first: 20) {
 							nodes {
 								author { login }
@@ -356,6 +383,15 @@ func (a *Adapter) fetchBatchedTimelines(prs []*pullrequest.PullRequest, since ti
 				pullRequest(number: %d) {
 					url
 					headRefOid
+					commits(last: 1) {
+						nodes {
+							commit {
+								statusCheckRollup {
+									state
+								}
+							}
+						}
+					}
 					timelineItems(first: 50, itemTypes: [ISSUE_COMMENT, PULL_REQUEST_REVIEW, PULL_REQUEST_COMMIT]) {
 						nodes {
 							__typename
@@ -418,6 +454,22 @@ func (a *Adapter) fetchBatchedTimelines(prs []*pullrequest.PullRequest, since ti
 				// Delegate head commit change detection to the domain aggregate
 				if headRefOid, ok := prData["headRefOid"].(string); ok {
 					info.pr.RecordHeadCommitUpdate(headRefOid)
+				}
+
+				// Parse pipeline status from statusCheckRollup on the latest commit
+				if commits, ok := prData["commits"].(map[string]interface{}); ok {
+					if nodes, ok := commits["nodes"].([]interface{}); ok && len(nodes) > 0 {
+						if lastNode, ok := nodes[len(nodes)-1].(map[string]interface{}); ok {
+							if commit, ok := lastNode["commit"].(map[string]interface{}); ok {
+								if rollup, ok := commit["statusCheckRollup"].(map[string]interface{}); ok {
+									if state, ok := rollup["state"].(string); ok {
+										pipelineStatus := pullrequest.PipelineStatusFromRollup(state)
+										info.pr.UpdatePipelineStatus(pipelineStatus)
+									}
+								}
+							}
+						}
+					}
 				}
 
 				if timelineData, ok := prData["timelineItems"].(map[string]interface{}); ok {
