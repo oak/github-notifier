@@ -10,6 +10,23 @@ import (
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
+// CheckCycleState carries all state that must persist between polling cycles.
+// It is owned by the orchestrator and threaded through each Execute call.
+type CheckCycleState struct {
+	KnownPRs      map[string]bool
+	KnownReviews  map[string]map[string]*pullrequest.Review
+	LastCheckTime time.Time
+}
+
+// NewCheckCycleState returns a freshly initialised CheckCycleState.
+func NewCheckCycleState() CheckCycleState {
+	return CheckCycleState{
+		KnownPRs:      make(map[string]bool),
+		KnownReviews:  make(map[string]map[string]*pullrequest.Review),
+		LastCheckTime: time.Now(),
+	}
+}
+
 // CheckNewPullRequestsUseCase handles fetching and detecting new PRs
 // Emits domain events for new PRs instead of directly sending notifications
 type CheckNewPullRequestsUseCase struct {
@@ -17,9 +34,6 @@ type CheckNewPullRequestsUseCase struct {
 	trackingService *pullrequest.TrackingService
 	prFilter        pullrequest.FilterFn
 	eventPublisher  port.EventPublisher
-	lastCheckTime   time.Time
-	knownPRs        map[string]bool                           // Tracks all PRs ever encountered by URL, independent of seen repository
-	knownReviews    map[string]map[string]*pullrequest.Review // PR URL -> reviewer login -> review state
 }
 
 // NewCheckNewPullRequestsUseCase creates a new use case
@@ -34,9 +48,6 @@ func NewCheckNewPullRequestsUseCase(
 		trackingService: trackingService,
 		prFilter:        prFilter,
 		eventPublisher:  eventPublisher,
-		lastCheckTime:   time.Now(),
-		knownPRs:        make(map[string]bool),
-		knownReviews:    make(map[string]map[string]*pullrequest.Review),
 	}
 }
 
@@ -46,20 +57,21 @@ type PRCheckResult struct {
 	UserCreatedPRs     []*pullrequest.PullRequest
 }
 
-// Execute fetches PRs and detects new ones
-// Returns the fetched PRs for use by other use cases (activity tracking, display)
-func (uc *CheckNewPullRequestsUseCase) Execute(ctx context.Context) (*PRCheckResult, error) {
+// Execute fetches PRs and detects new ones.
+// It accepts the current inter-cycle state and returns the updated state for the
+// next cycle together with the fetched PRs for use by other use cases.
+func (uc *CheckNewPullRequestsUseCase) Execute(ctx context.Context, state CheckCycleState) (*PRCheckResult, CheckCycleState, error) {
 	// Fetch PRs from both sources
 	requestedReviewPRs, err := uc.prRepo.FetchRequestedReviews()
 	if err != nil {
 		log.Error().Err(err).Msg("Error fetching requested review PRs")
-		return nil, err
+		return nil, state, err
 	}
 
 	userCreatedPRs, err := uc.prRepo.FetchUserCreated()
 	if err != nil {
 		log.Error().Err(err).Msg("Error fetching user created PRs")
-		return nil, err
+		return nil, state, err
 	}
 
 	// Filter draft PRs if configured
@@ -68,44 +80,44 @@ func (uc *CheckNewPullRequestsUseCase) Execute(ctx context.Context) (*PRCheckRes
 
 	// Detect review state changes on all PRs (new and known)
 	// This must happen before processNewPRs to detect review changes on known PRs
-	uc.detectReviewStateChanges(requestedReviewPRs)
-	uc.detectReviewStateChanges(userCreatedPRs)
+	uc.detectReviewStateChanges(requestedReviewPRs, &state)
+	uc.detectReviewStateChanges(userCreatedPRs, &state)
 
 	// Process requested review PRs
-	if err := uc.processNewPRs(requestedReviewPRs, "requested review"); err != nil {
+	if err := uc.processNewPRs(requestedReviewPRs, "requested review", &state); err != nil {
 		log.Error().Err(err).Msg("Error processing requested review PRs")
 	}
 
 	// Process user created PRs
-	if err := uc.processNewPRs(userCreatedPRs, "user created"); err != nil {
+	if err := uc.processNewPRs(userCreatedPRs, "user created", &state); err != nil {
 		log.Error().Err(err).Msg("Error processing user created PRs")
 	}
 
-	// Update last check time
-	uc.lastCheckTime = time.Now()
+	// Advance the timestamp for the next cycle
+	state.LastCheckTime = time.Now()
 
 	return &PRCheckResult{
 		RequestedReviewPRs: requestedReviewPRs,
 		UserCreatedPRs:     userCreatedPRs,
-	}, nil
+	}, state, nil
 }
 
 // processNewPRs finds new PRs and emits appropriate events
-func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequest, category string) error {
+func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequest, category string, state *CheckCycleState) error {
 	// Find PRs that are genuinely new (never encountered before).
-	// We check both our own knownPRs set AND the seen repository.
-	// The knownPRs set prevents false re-detections that occur when the
+	// We check both our own KnownPRs set AND the seen repository.
+	// The KnownPRs set prevents false re-detections that occur when the
 	// activity tracking use case calls MarkPullRequestAsUnseen (which removes
 	// PRs from the seen repository so the UI can show asterisks for unread
 	// activity). The seen repository check handles app restarts where
-	// knownPRs is empty but the seen repo has persisted data.
+	// KnownPRs is empty but the seen repo has persisted data.
 	var newPRs []*pullrequest.PullRequest
 	for _, pr := range prs {
-		if !uc.knownPRs[pr.URL()] && !uc.trackingService.HasBeenSeen(pr.Identifier()) {
+		if !state.KnownPRs[pr.URL()] && !uc.trackingService.HasBeenSeen(pr.Identifier()) {
 			newPRs = append(newPRs, pr)
 		}
 		// Always track as known so MarkPullRequestAsUnseen can't cause re-detection
-		uc.knownPRs[pr.URL()] = true
+		state.KnownPRs[pr.URL()] = true
 	}
 
 	if len(newPRs) == 0 {
@@ -115,7 +127,7 @@ func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequ
 	log.Info().Msgf("Found %d new %s PRs", len(newPRs), category)
 
 	// Classify PRs: truly new vs. PRs with new activity
-	trulyNewPRs, prsWithActivity := pullrequest.ClassifyPRs(newPRs, uc.lastCheckTime)
+	trulyNewPRs, prsWithActivity := pullrequest.ClassifyPRs(newPRs, state.LastCheckTime)
 
 	// Mark truly new PRs as newly detected (raises domain events)
 	for _, pr := range trulyNewPRs {
@@ -146,14 +158,14 @@ func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequ
 // (which raises ReviewStateChanged events when the state actually changes), then collects
 // and publishes any resulting events.
 // For new PRs (first time seen), it just stores the reviews as the baseline.
-func (uc *CheckNewPullRequestsUseCase) detectReviewStateChanges(prs []*pullrequest.PullRequest) {
+func (uc *CheckNewPullRequestsUseCase) detectReviewStateChanges(prs []*pullrequest.PullRequest, state *CheckCycleState) {
 	for _, pr := range prs {
 		currentReviews := pr.Reviews()
-		knownReviews, exists := uc.knownReviews[pr.URL()]
+		knownReviews, exists := state.KnownReviews[pr.URL()]
 
 		if !exists {
 			// First time seeing this PR — save baseline, no events
-			uc.knownReviews[pr.URL()] = currentReviews
+			state.KnownReviews[pr.URL()] = currentReviews
 			continue
 		}
 
@@ -173,6 +185,6 @@ func (uc *CheckNewPullRequestsUseCase) detectReviewStateChanges(prs []*pullreque
 		}
 
 		// Update known reviews to current state
-		uc.knownReviews[pr.URL()] = pr.Reviews()
+		state.KnownReviews[pr.URL()] = pr.Reviews()
 	}
 }

@@ -19,6 +19,7 @@ type PullRequestOrchestrator struct {
 	trackActivityUseCase   *usecase.TrackPullRequestActivityUseCase
 	updateDisplayUseCase   *usecase.UpdatePullRequestDisplayUseCase
 	enableActivityTracking bool
+	checkCycleState        usecase.CheckCycleState
 }
 
 // NewPullRequestOrchestrator creates a new orchestrator
@@ -37,6 +38,7 @@ func NewPullRequestOrchestrator(
 		trackActivityUseCase:   trackActivityUseCase,
 		updateDisplayUseCase:   updateDisplayUseCase,
 		enableActivityTracking: enableActivityTracking,
+		checkCycleState:        usecase.NewCheckCycleState(),
 	}
 }
 
@@ -69,11 +71,12 @@ func (o *PullRequestOrchestrator) ExecuteInitialCheck(ctx context.Context) error
 // it is owned and threaded by the caller (e.g. the polling goroutine in main).
 func (o *PullRequestOrchestrator) ExecuteRegularCheck(ctx context.Context, lastCheckTime time.Time) error {
 	// Step 1: Fetch and check for new PRs (emits events)
-	result, err := o.checkNewPRsUseCase.Execute(ctx)
+	result, updatedState, err := o.checkNewPRsUseCase.Execute(ctx, o.checkCycleState)
 	if err != nil {
 		log.Error().Err(err).Msg("Error checking for new PRs")
 		return err
 	}
+	o.checkCycleState = updatedState
 
 	// Step 2: Detect merged/closed PRs
 	// Combine all current PRs to compare against tracked state
