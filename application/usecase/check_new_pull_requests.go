@@ -131,10 +131,7 @@ func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequ
 
 	// Mark truly new PRs as newly detected (raises domain events)
 	for _, pr := range trulyNewPRs {
-		pr.MarkAsNewlyDetected()
-
-		// Drain and publish events from the aggregate
-		for _, event := range pr.DrainEvents() {
+		for _, event := range pr.MarkAsNewlyDetected() {
 			if err := uc.eventPublisher.Publish(event); err != nil {
 				log.Error().Err(err).Msg("Error publishing new PR event")
 			}
@@ -172,13 +169,14 @@ func (uc *CheckNewPullRequestsUseCase) detectReviewStateChanges(prs []*pullreque
 		// Restore known reviews on the fresh PR object (without events)
 		pr.SetInitialReviews(knownReviews)
 
-		// Now apply each current review via AddReview (raises events on state change)
+		// Now apply each current review via AddReview (returns event on state change)
+		var reviewEvents []pullrequest.Event
 		for _, review := range currentReviews {
-			pr.AddReview(review)
+			reviewEvents = append(reviewEvents, pr.AddReview(review)...)
 		}
 
-		// Drain and publish events raised by AddReview.
-		for _, event := range pr.DrainEvents() {
+		// Publish events returned by AddReview.
+		for _, event := range reviewEvents {
 			if err := uc.eventPublisher.Publish(event); err != nil {
 				log.Error().Err(err).Msg("Error publishing review state changed event")
 			}

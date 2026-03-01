@@ -107,7 +107,6 @@ func ReconstitutePRFromSnapshot(s PRStateSnapshot) (*PullRequest, error) {
 		headCommitSHA:     s.HeadCommitSHA,
 		reviews:           make(map[string]*Review),
 		pipelineStatus:    s.PipelineStatus,
-		events:            make([]Event, 0),
 	}
 
 	for login, rs := range s.Reviews {

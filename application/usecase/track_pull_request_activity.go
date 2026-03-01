@@ -105,8 +105,9 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 
 	// Enrich PRs with activities since last check.
 	// This also updates the head-commit SHA and creates push activities if the
-	// head changed.
-	if err := uc.prRepo.EnrichWithActivities(prsToCheck, lastCheckTime); err != nil {
+	// head changed. Returns all domain events raised during enrichment.
+	enrichEvents, err := uc.prRepo.EnrichWithActivities(prsToCheck, lastCheckTime)
+	if err != nil {
 		log.Error().Err(err).Msg("Error enriching PRs with activities")
 		return err
 	}
@@ -143,13 +144,11 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 		log.Error().Err(saveErr).Msg("Activity tracker: failed to save updated snapshots")
 	}
 
-	// Collect and publish all domain events from enrichment.
-	// ActivityDetected events are raised by the aggregate when activities are added.
-	for _, pr := range prsToCheck {
-		for _, event := range pr.DrainEvents() {
-			if err := uc.eventPublisher.Publish(event); err != nil {
-				log.Error().Err(err).Msg("Error publishing activity event")
-			}
+	// Publish all domain events returned from enrichment.
+	// ActivityDetected, PipelineStatusChanged etc. are returned directly by the aggregate commands.
+	for _, event := range enrichEvents {
+		if err := uc.eventPublisher.Publish(event); err != nil {
+			log.Error().Err(err).Msg("Error publishing activity event")
 		}
 	}
 

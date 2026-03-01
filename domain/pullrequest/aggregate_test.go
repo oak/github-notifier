@@ -346,8 +346,7 @@ func TestPullRequest_MarkAsNewlyDetected_RaisesEvent(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 
 	// Act
-	pr.MarkAsNewlyDetected()
-	events := pr.DrainEvents()
+	events := pr.MarkAsNewlyDetected()
 
 	// Assert
 	require.Len(t, events, 1)
@@ -365,8 +364,7 @@ func TestPullRequest_AddActivity_RaisesActivityDetectedEvent(t *testing.T) {
 	activity := testutil.NewTestActivity(pullrequest.ActivityTypeComment, time.Now())
 
 	// Act
-	pr.AddActivity(activity)
-	events := pr.DrainEvents()
+	events := pr.AddActivity(activity)
 
 	// Assert
 	require.Len(t, events, 1)
@@ -383,8 +381,7 @@ func TestPullRequest_AddActivity_Nil_NoEvent(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 
 	// Act
-	pr.AddActivity(nil)
-	events := pr.DrainEvents()
+	events := pr.AddActivity(nil)
 
 	// Assert
 	assert.Len(t, events, 0, "Should not raise event for nil activity")
@@ -395,8 +392,7 @@ func TestPullRequest_Close_RaisesClosedEvent(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 
 	// Act
-	pr.Close()
-	events := pr.DrainEvents()
+	events := pr.Close()
 
 	// Assert
 	require.Len(t, events, 1)
@@ -411,8 +407,7 @@ func TestPullRequest_Merge_RaisesMergedEvent(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 
 	// Act
-	pr.Merge()
-	events := pr.DrainEvents()
+	events := pr.Merge()
 
 	// Assert
 	require.Len(t, events, 1)
@@ -425,12 +420,10 @@ func TestPullRequest_Merge_RaisesMergedEvent(t *testing.T) {
 func TestPullRequest_CloseAlreadyClosed_NoEvent(t *testing.T) {
 	// Arrange
 	pr := testutil.NewTestPullRequest(1)
-	pr.Close()
-	pr.DrainEvents() // Clear events
+	pr.Close() // first close — events discarded
 
 	// Act
-	pr.Close()
-	events := pr.DrainEvents()
+	events := pr.Close()
 
 	// Assert
 	assert.Len(t, events, 0, "Should not raise event when already closed")
@@ -439,29 +432,26 @@ func TestPullRequest_CloseAlreadyClosed_NoEvent(t *testing.T) {
 func TestPullRequest_MergeAlreadyMerged_NoEvent(t *testing.T) {
 	// Arrange
 	pr := testutil.NewTestPullRequest(1)
-	pr.Merge()
-	pr.DrainEvents() // Clear events
+	pr.Merge() // first merge — events discarded
 
 	// Act
-	pr.Merge()
-	events := pr.DrainEvents()
+	events := pr.Merge()
 
 	// Assert
 	assert.Len(t, events, 0, "Should not raise event when already merged")
 }
 
-func TestPullRequest_DrainEvents_ClearsEventList(t *testing.T) {
+func TestPullRequest_CloseIdempotent_SecondCallReturnsNil(t *testing.T) {
 	// Arrange
 	pr := testutil.NewTestPullRequest(1)
-	pr.MarkAsNewlyDetected()
 
 	// Act
-	events1 := pr.DrainEvents()
-	events2 := pr.DrainEvents()
+	events1 := pr.Close()
+	events2 := pr.Close()
 
 	// Assert
-	assert.Len(t, events1, 1, "First drain should have events")
-	assert.Len(t, events2, 0, "Second drain should be empty")
+	assert.Len(t, events1, 1, "First close should return an event")
+	assert.Len(t, events2, 0, "Second close should return nothing")
 }
 
 func TestPullRequest_MultipleEvents_CollectedInOrder(t *testing.T) {
@@ -469,11 +459,11 @@ func TestPullRequest_MultipleEvents_CollectedInOrder(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 	activity := testutil.NewTestActivity(pullrequest.ActivityTypeComment, time.Now())
 
-	// Act — AddActivity raises ActivityDetected automatically
-	pr.AddActivity(activity)
-	pr.MarkAsNewlyDetected()
-	pr.Close()
-	events := pr.DrainEvents()
+	// Act — each command returns its events; caller collects in order
+	e1 := pr.AddActivity(activity)
+	e2 := pr.MarkAsNewlyDetected()
+	e3 := pr.Close()
+	events := append(append(e1, e2...), e3...)
 
 	// Assert
 	require.Len(t, events, 3)
@@ -490,12 +480,12 @@ func TestPullRequest_RecordHeadCommitUpdate_FirstTime_InitializesWithoutActivity
 	pr := testutil.NewTestPullRequest(1)
 
 	// Act
-	pr.RecordHeadCommitUpdate("abc123")
+	events := pr.RecordHeadCommitUpdate("abc123")
 
 	// Assert
 	assert.Equal(t, "abc123", pr.HeadCommitSHA())
 	assert.Empty(t, pr.Activities(), "First time should not create push activity")
-	assert.Empty(t, pr.DrainEvents(), "First time should not raise events")
+	assert.Empty(t, events, "First time should not raise events")
 }
 
 func TestPullRequest_RecordHeadCommitUpdate_SameSHA_NoActivity(t *testing.T) {
@@ -504,11 +494,11 @@ func TestPullRequest_RecordHeadCommitUpdate_SameSHA_NoActivity(t *testing.T) {
 	pr.SetInitialHeadCommitSHA("abc123")
 
 	// Act
-	pr.RecordHeadCommitUpdate("abc123")
+	events := pr.RecordHeadCommitUpdate("abc123")
 
 	// Assert
 	assert.Empty(t, pr.Activities(), "Same SHA should not create push activity")
-	assert.Empty(t, pr.DrainEvents(), "Same SHA should not raise events")
+	assert.Empty(t, events, "Same SHA should not raise events")
 }
 
 func TestPullRequest_RecordHeadCommitUpdate_Changed_CreatesPushActivity(t *testing.T) {
@@ -565,10 +555,9 @@ func TestPullRequest_AddReview_RaisesReviewStateChangedEvent(t *testing.T) {
 	review := pullrequest.NewReview(reviewer, pullrequest.ReviewStateApproved, time.Now())
 
 	// Act
-	pr.AddReview(review)
+	events := pr.AddReview(review)
 
 	// Assert
-	events := pr.DrainEvents()
 	require.Len(t, events, 1)
 
 	reviewEvent, ok := events[0].(*pullrequest.ReviewStateChanged)
@@ -587,10 +576,9 @@ func TestPullRequest_AddReview_SameState_NoEvent(t *testing.T) {
 
 	// Act - add the same review state again
 	review := pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, time.Now())
-	pr.AddReview(review)
+	events := pr.AddReview(review)
 
 	// Assert - no events should be raised
-	events := pr.DrainEvents()
 	assert.Empty(t, events, "No event should be raised for same review state")
 }
 
@@ -604,10 +592,9 @@ func TestPullRequest_AddReview_StateChange_RaisesEvent(t *testing.T) {
 
 	// Act - reviewer now approves
 	review := pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, time.Now())
-	pr.AddReview(review)
+	events := pr.AddReview(review)
 
 	// Assert - event should be raised for the state change
-	events := pr.DrainEvents()
 	require.Len(t, events, 1)
 
 	reviewEvent, ok := events[0].(*pullrequest.ReviewStateChanged)
@@ -625,7 +612,7 @@ func TestPullRequest_AddReview_NilReview_DoesNothing(t *testing.T) {
 
 	// Assert
 	assert.Empty(t, pr.Reviews())
-	assert.Empty(t, pr.DrainEvents())
+	assert.Empty(t, pr.AddReview(nil))
 }
 
 func TestPullRequest_AddReview_MultipleReviewers(t *testing.T) {
@@ -633,9 +620,9 @@ func TestPullRequest_AddReview_MultipleReviewers(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 
 	// Act - multiple reviewers leave different reviews
-	pr.AddReview(pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, time.Now()))
-	pr.AddReview(pullrequest.NewReview(testutil.NewTestAuthor("alice"), pullrequest.ReviewStateChangesRequested, time.Now()))
-	pr.AddReview(pullrequest.NewReview(testutil.NewTestAuthor("bob"), pullrequest.ReviewStateCommented, time.Now()))
+	e1 := pr.AddReview(pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, time.Now()))
+	e2 := pr.AddReview(pullrequest.NewReview(testutil.NewTestAuthor("alice"), pullrequest.ReviewStateChangesRequested, time.Now()))
+	e3 := pr.AddReview(pullrequest.NewReview(testutil.NewTestAuthor("bob"), pullrequest.ReviewStateCommented, time.Now()))
 
 	// Assert
 	reviews := pr.Reviews()
@@ -645,7 +632,7 @@ func TestPullRequest_AddReview_MultipleReviewers(t *testing.T) {
 	assert.Equal(t, pullrequest.ReviewStateCommented, reviews["bob"].State())
 
 	// 3 events should have been raised (one per new review)
-	events := pr.DrainEvents()
+	events := append(append(e1, e2...), e3...)
 	assert.Len(t, events, 3)
 }
 
@@ -660,9 +647,7 @@ func TestPullRequest_SetInitialReviews_NoEvents(t *testing.T) {
 	// Act
 	pr.SetInitialReviews(reviews)
 
-	// Assert - no events should be raised for initial state
-	events := pr.DrainEvents()
-	assert.Empty(t, events)
+	// Assert - SetInitialReviews is a pure state setter; it never raises domain events.
 	assert.Len(t, pr.Reviews(), 2)
 }
 
@@ -734,10 +719,9 @@ func TestPullRequest_UpdatePipelineStatus_RaisesEvent_WhenStatusChanges(t *testi
 	pr := testutil.NewTestPullRequest(1)
 
 	// Act
-	pr.UpdatePipelineStatus(pullrequest.PipelineStatusRunning)
+	events := pr.UpdatePipelineStatus(pullrequest.PipelineStatusRunning)
 
 	// Assert
-	events := pr.DrainEvents()
 	require.Len(t, events, 1)
 
 	pipelineEvent, ok := events[0].(*pullrequest.PipelineStatusChanged)
@@ -749,14 +733,12 @@ func TestPullRequest_UpdatePipelineStatus_RaisesEvent_WhenStatusChanges(t *testi
 func TestPullRequest_UpdatePipelineStatus_NoEvent_WhenStatusUnchanged(t *testing.T) {
 	// Arrange
 	pr := testutil.NewTestPullRequest(1)
-	pr.UpdatePipelineStatus(pullrequest.PipelineStatusRunning)
-	pr.DrainEvents() // drain
+	pr.UpdatePipelineStatus(pullrequest.PipelineStatusRunning) // first change — events discarded
 
 	// Act - update with same status
-	pr.UpdatePipelineStatus(pullrequest.PipelineStatusRunning)
+	events := pr.UpdatePipelineStatus(pullrequest.PipelineStatusRunning)
 
 	// Assert
-	events := pr.DrainEvents()
 	assert.Empty(t, events)
 }
 
@@ -765,22 +747,21 @@ func TestPullRequest_UpdatePipelineStatus_MultipleTransitions(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 
 	// Act: unknown -> running -> success
-	pr.UpdatePipelineStatus(pullrequest.PipelineStatusRunning)
-	pr.UpdatePipelineStatus(pullrequest.PipelineStatusSuccess)
+	e1 := pr.UpdatePipelineStatus(pullrequest.PipelineStatusRunning)
+	e2 := pr.UpdatePipelineStatus(pullrequest.PipelineStatusSuccess)
+	events := append(e1, e2...)
 
 	// Assert
 	assert.Equal(t, pullrequest.PipelineStatusSuccess, pr.PipelineStatus())
-
-	events := pr.DrainEvents()
 	require.Len(t, events, 2)
 
-	e1 := events[0].(*pullrequest.PipelineStatusChanged)
-	assert.Equal(t, pullrequest.PipelineStatusUnknown, e1.OldStatus)
-	assert.Equal(t, pullrequest.PipelineStatusRunning, e1.NewStatus)
+	ev1 := events[0].(*pullrequest.PipelineStatusChanged)
+	assert.Equal(t, pullrequest.PipelineStatusUnknown, ev1.OldStatus)
+	assert.Equal(t, pullrequest.PipelineStatusRunning, ev1.NewStatus)
 
-	e2 := events[1].(*pullrequest.PipelineStatusChanged)
-	assert.Equal(t, pullrequest.PipelineStatusRunning, e2.OldStatus)
-	assert.Equal(t, pullrequest.PipelineStatusSuccess, e2.NewStatus)
+	ev2 := events[1].(*pullrequest.PipelineStatusChanged)
+	assert.Equal(t, pullrequest.PipelineStatusRunning, ev2.OldStatus)
+	assert.Equal(t, pullrequest.PipelineStatusSuccess, ev2.NewStatus)
 }
 
 func TestPullRequest_UpdatePipelineStatus_EventCarriesFullPR(t *testing.T) {
@@ -788,10 +769,9 @@ func TestPullRequest_UpdatePipelineStatus_EventCarriesFullPR(t *testing.T) {
 	pr := testutil.NewTestPullRequest(42)
 
 	// Act
-	pr.UpdatePipelineStatus(pullrequest.PipelineStatusFailed)
+	events := pr.UpdatePipelineStatus(pullrequest.PipelineStatusFailed)
 
 	// Assert
-	events := pr.DrainEvents()
 	require.Len(t, events, 1)
 
 	pipelineEvent := events[0].(*pullrequest.PipelineStatusChanged)

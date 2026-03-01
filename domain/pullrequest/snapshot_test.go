@@ -143,6 +143,7 @@ func TestReconstitutePRFromSnapshot_IsOpen(t *testing.T) {
 
 func TestReconstitutePRFromSnapshot_NoEvents(t *testing.T) {
 	// Reconstitution restores known state — it must not raise any domain events.
+	// Verified by checking Close returns exactly one event (not extras from reconstitution).
 	snap := minimalSnapshot(1)
 	snap.Reviews = map[string]pullrequest.ReviewSnapshot{
 		"joe": {State: pullrequest.ReviewStateApproved, SubmittedAt: time.Now()},
@@ -151,8 +152,10 @@ func TestReconstitutePRFromSnapshot_NoEvents(t *testing.T) {
 	pr, err := pullrequest.ReconstitutePRFromSnapshot(snap)
 	require.NoError(t, err)
 
-	events := pr.DrainEvents()
-	assert.Empty(t, events, "reconstitution must not raise domain events")
+	// Reconstitution uses SetInitial* methods — pure state setters that never raise events.
+	// The first command after reconstitution should produce exactly one event, nothing more.
+	events := pr.Close()
+	assert.Len(t, events, 1, "reconstitution must not pre-populate events")
 }
 
 func TestReconstitutePRFromSnapshot_BehavesCorrectly_CloseRaisesEvent(t *testing.T) {
@@ -162,9 +165,7 @@ func TestReconstitutePRFromSnapshot_BehavesCorrectly_CloseRaisesEvent(t *testing
 	pr, err := pullrequest.ReconstitutePRFromSnapshot(snap)
 	require.NoError(t, err)
 
-	pr.Close()
-
-	events := pr.DrainEvents()
+	events := pr.Close()
 	require.Len(t, events, 1)
 	_, ok := events[0].(*pullrequest.Closed)
 	assert.True(t, ok, "Close should raise Closed event")
@@ -182,8 +183,7 @@ func TestReconstitutePRFromSnapshot_BehavesCorrectly_SameReviewStateNoEvent(t *t
 	require.NoError(t, err)
 
 	// Re-applying the same review state must produce no event.
-	pr.AddReview(pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, time.Now()))
-	events := pr.DrainEvents()
+	events := pr.AddReview(pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, time.Now()))
 	assert.Empty(t, events, "same review state after reconstitution must not re-fire event")
 }
 

@@ -192,7 +192,7 @@ func TestOrchestrator_ExecuteRegularCheck_WithActivityTracking(t *testing.T) {
 	// Tracking repo: detectClosedPRs.Execute + TrackPRs + trackActivity.Execute all use it
 	mockTrackingRepo.On("LoadAll").Return([]pullrequest.PRStateSnapshot{}, nil)
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil)
-	mockPRRepo.On("EnrichWithActivities", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("time.Time")).Return(nil)
+	mockPRRepo.On("EnrichWithActivities", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("time.Time")).Return(nil, nil)
 	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), trackingService).Once()
 
 	orchestrator := application.NewPullRequestOrchestrator(
@@ -282,7 +282,7 @@ func TestOrchestrator_ExecuteRegularCheck_ActivityTrackingError_ContinuesWithDis
 	// Tracking repo: detectClosedPRs.Execute + TrackPRs + trackActivity.Execute (which errors before Save)
 	mockTrackingRepo.On("LoadAll").Return([]pullrequest.PRStateSnapshot{}, nil)
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil)
-	mockPRRepo.On("EnrichWithActivities", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("time.Time")).Return(errors.New("activity error"))
+	mockPRRepo.On("EnrichWithActivities", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("time.Time")).Return(nil, errors.New("activity error"))
 	// Display should still be called even if activity tracking fails
 	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), trackingService).Once()
 

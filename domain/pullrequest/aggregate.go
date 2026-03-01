@@ -19,7 +19,6 @@ type PullRequest struct {
 	headCommitSHA     string             // Latest commit SHA (head)
 	reviews           map[string]*Review // reviewer login -> latest review
 	pipelineStatus    PipelineStatus     // Latest CI/CD pipeline rollup status
-	events            []Event            // Domain events pending publication
 }
 
 // NewPullRequest creates a new pull request with validation
@@ -58,7 +57,6 @@ func NewPullRequest(
 		lastActivityCheck: time.Time{}, // Zero value - will be checked immediately on first run
 		reviews:           make(map[string]*Review),
 		pipelineStatus:    PipelineStatusUnknown,
-		events:            make([]Event, 0),
 	}, nil
 }
 
@@ -122,22 +120,26 @@ func (pr *PullRequest) AgeAt(now time.Time) time.Duration {
 	return now.Sub(pr.createdAt)
 }
 
-// Close marks the PR as closed and raises a Closed domain event
-func (pr *PullRequest) Close() {
+// Close marks the PR as closed and returns a Closed domain event.
+// Returns nil if the PR is already closed.
+func (pr *PullRequest) Close() []Event {
 	if pr.status != StatusClosed {
 		pr.status = StatusClosed
 		event := NewClosed(pr)
-		pr.raiseEvent(&event)
+		return []Event{&event}
 	}
+	return nil
 }
 
-// Merge marks the PR as merged and raises a Merged domain event
-func (pr *PullRequest) Merge() {
+// Merge marks the PR as merged and returns a Merged domain event.
+// Returns nil if the PR is already merged.
+func (pr *PullRequest) Merge() []Event {
 	if pr.status != StatusMerged {
 		pr.status = StatusMerged
 		event := NewMerged(pr)
-		pr.raiseEvent(&event)
+		return []Event{&event}
 	}
+	return nil
 }
 
 // RepositoryName returns the repository name with owner
@@ -155,12 +157,13 @@ func (pr *PullRequest) Equals(other *PullRequest) bool {
 	return pr.identifier.Equals(other.identifier)
 }
 
-// AddActivity adds a new activity to the PR and raises an ActivityDetected event.
+// AddActivity adds a new activity to the PR and returns an ActivityDetected event.
 // This maintains the aggregate's consistency boundary and follows the same pattern
 // as Close/Merge which raise StatusChanged events.
-func (pr *PullRequest) AddActivity(activity *Activity) {
+// Returns nil for a nil activity.
+func (pr *PullRequest) AddActivity(activity *Activity) []Event {
 	if activity == nil {
-		return
+		return nil
 	}
 
 	pr.activities = append(pr.activities, activity)
@@ -170,16 +173,18 @@ func (pr *PullRequest) AddActivity(activity *Activity) {
 		pr.lastActivityAt = activity.CreatedAt()
 	}
 
-	// Raise domain event — activity is a domain fact
+	// Return domain event — activity is a domain fact
 	event := NewActivityDetected(pr, activity)
-	pr.raiseEvent(&event)
+	return []Event{&event}
 }
 
-// AddActivities adds multiple activities at once
-func (pr *PullRequest) AddActivities(activities []*Activity) {
+// AddActivities adds multiple activities at once and returns all resulting events.
+func (pr *PullRequest) AddActivities(activities []*Activity) []Event {
+	var all []Event
 	for _, activity := range activities {
-		pr.AddActivity(activity)
+		all = append(all, pr.AddActivity(activity)...)
 	}
+	return all
 }
 
 // SetInitialActivities hydrates the PR with activities during reconstruction (e.g. from the
@@ -263,19 +268,19 @@ func (pr *PullRequest) SetInitialPipelineStatus(status PipelineStatus) {
 }
 
 // RecordHeadCommitUpdateAt detects if the head commit has changed and, if so,
-// creates a push activity on the aggregate (which raises an ActivityDetected event).
+// creates a push activity on the aggregate and returns an ActivityDetected event.
 // The aggregate records all domain facts; notification filtering (e.g. suppressing
 // self-pushes) is handled by the notification event handler.
 // First-time initialization (empty current SHA) records the SHA without creating activity.
-func (pr *PullRequest) RecordHeadCommitUpdateAt(newHeadSHA string, now time.Time) {
+func (pr *PullRequest) RecordHeadCommitUpdateAt(newHeadSHA string, now time.Time) []Event {
 	if pr.headCommitSHA == "" {
 		// First time seeing this PR - initialize but don't create activity
 		pr.headCommitSHA = newHeadSHA
-		return
+		return nil
 	}
 
 	if pr.headCommitSHA == newHeadSHA {
-		return // No change
+		return nil // No change
 	}
 
 	pr.headCommitSHA = newHeadSHA
@@ -288,42 +293,31 @@ func (pr *PullRequest) RecordHeadCommitUpdateAt(newHeadSHA string, now time.Time
 		now,
 		newHeadSHA,
 	)
-	pr.AddActivity(pushActivity)
+	return pr.AddActivity(pushActivity)
 }
 
 // RecordHeadCommitUpdate detects if the head commit has changed and, if so,
-// creates a push activity on the aggregate (which raises an ActivityDetected event).
+// creates a push activity on the aggregate and returns an ActivityDetected event.
 // The aggregate records all domain facts; notification filtering (e.g. suppressing
 // self-pushes) is handled by the notification event handler.
 // First-time initialization (empty current SHA) records the SHA without creating activity.
-func (pr *PullRequest) RecordHeadCommitUpdate(newHeadSHA string) {
-	pr.RecordHeadCommitUpdateAt(newHeadSHA, time.Now())
+func (pr *PullRequest) RecordHeadCommitUpdate(newHeadSHA string) []Event {
+	return pr.RecordHeadCommitUpdateAt(newHeadSHA, time.Now())
 }
 
-// DrainEvents returns all pending domain events and clears the internal event list
-func (pr *PullRequest) DrainEvents() []Event {
-	events := pr.events
-	pr.events = make([]Event, 0)
-	return events
-}
-
-// raiseEvent adds a domain event to the internal event list
-func (pr *PullRequest) raiseEvent(event Event) {
-	pr.events = append(pr.events, event)
-}
-
-// MarkAsNewlyDetected marks this PR as newly detected and raises the appropriate event
-func (pr *PullRequest) MarkAsNewlyDetected() {
+// MarkAsNewlyDetected marks this PR as newly detected and returns the appropriate event.
+func (pr *PullRequest) MarkAsNewlyDetected() []Event {
 	event := NewNewPullRequestDetected(pr)
-	pr.raiseEvent(&event)
+	return []Event{&event}
 }
 
 // AddReview adds or updates a review for a specific reviewer.
 // If the reviewer already has a review with the same state, this is a no-op.
-// If the state changed, it raises a ReviewStateChanged event.
-func (pr *PullRequest) AddReview(review *Review) {
+// If the state changed, it returns a ReviewStateChanged event.
+// Returns nil for a nil review or when the state is unchanged.
+func (pr *PullRequest) AddReview(review *Review) []Event {
 	if review == nil {
-		return
+		return nil
 	}
 
 	login := review.Reviewer().Login()
@@ -331,15 +325,15 @@ func (pr *PullRequest) AddReview(review *Review) {
 
 	if exists && existing.State() == review.State() {
 		// Same state — no change, no event
-		return
+		return nil
 	}
 
 	// Update or add the review
 	pr.reviews[login] = review
 
-	// Raise domain event for state change
+	// Return domain event for state change
 	event := NewReviewStateChanged(pr, review.Reviewer(), review.State())
-	pr.raiseEvent(&event)
+	return []Event{&event}
 }
 
 // SetInitialReviews sets reviews without raising events.
@@ -362,18 +356,18 @@ func (pr *PullRequest) PipelineStatus() PipelineStatus {
 	return pr.pipelineStatus
 }
 
-// UpdatePipelineStatus updates the pipeline status and raises a PipelineStatusChanged event
-// if the status has changed. No-op if the status is the same.
-func (pr *PullRequest) UpdatePipelineStatus(newStatus PipelineStatus) {
+// UpdatePipelineStatus updates the pipeline status and returns a PipelineStatusChanged event
+// if the status has changed. Returns nil when the status is unchanged.
+func (pr *PullRequest) UpdatePipelineStatus(newStatus PipelineStatus) []Event {
 	if pr.pipelineStatus == newStatus {
-		return
+		return nil
 	}
 
 	oldStatus := pr.pipelineStatus
 	pr.pipelineStatus = newStatus
 
 	event := NewPipelineStatusChanged(pr, oldStatus, newStatus)
-	pr.raiseEvent(&event)
+	return []Event{&event}
 }
 
 // ReviewSummary returns a ReviewSummary for display purposes

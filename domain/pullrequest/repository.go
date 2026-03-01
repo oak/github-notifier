@@ -14,9 +14,11 @@ type PullRequestRepository interface {
 	// FetchUserCreated fetches PRs created by the user
 	FetchUserCreated() ([]*PullRequest, error)
 
-	// EnrichWithActivities populates PRs with their activities since the given time
-	// This modifies the aggregate by calling AddActivity through the proper aggregate methods
-	EnrichWithActivities(prs []*PullRequest, since time.Time) error
+	// EnrichWithActivities populates PRs with their activities since the given time.
+	// Returns all domain events raised by the aggregate during enrichment
+	// (ActivityDetected, PipelineStatusChanged, etc.) so callers can publish them
+	// without needing to drain an internal event queue.
+	EnrichWithActivities(prs []*PullRequest, since time.Time) ([]Event, error)
 
 	// FetchPRStatus fetches the current status of a specific PR (open, merged, closed).
 	// Used to determine the final status of PRs that have disappeared from the open PR list.

@@ -133,14 +133,20 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 		switch status {
 		case pullrequest.StatusMerged:
 			log.Info().Msgf("PR %s was merged", pr.URL())
-			pr.Merge()
-			uc.publishEvents(pr)
+			for _, event := range pr.Merge() {
+				if err := uc.eventPublisher.Publish(event); err != nil {
+					log.Error().Err(err).Msgf("Error publishing event for PR %s", pr.URL())
+				}
+			}
 			processedURLs[snap.URL] = true
 
 		case pullrequest.StatusClosed:
 			log.Info().Msgf("PR %s was closed", pr.URL())
-			pr.Close()
-			uc.publishEvents(pr)
+			for _, event := range pr.Close() {
+				if err := uc.eventPublisher.Publish(event); err != nil {
+					log.Error().Err(err).Msgf("Error publishing event for PR %s", pr.URL())
+				}
+			}
 			processedURLs[snap.URL] = true
 
 		case pullrequest.StatusOpen:
@@ -167,13 +173,4 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 	}
 
 	return nil
-}
-
-// publishEvents drains and publishes all pending domain events from the PR aggregate.
-func (uc *DetectClosedPullRequestsUseCase) publishEvents(pr *pullrequest.PullRequest) {
-	for _, event := range pr.DrainEvents() {
-		if err := uc.eventPublisher.Publish(event); err != nil {
-			log.Error().Err(err).Msgf("Error publishing event for PR %s", pr.URL())
-		}
-	}
 }

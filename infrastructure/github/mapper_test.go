@@ -393,11 +393,8 @@ func TestToDomain_WithReviews(t *testing.T) {
 
 	// Assert
 	require.NoError(t, err)
+	// SetInitialReviews is a pure state setter — it never raises domain events.
 	reviews := pr.Reviews()
 	assert.Len(t, reviews, 1)
 	assert.Equal(t, pullrequest.ReviewStateApproved, reviews["joe"].State())
-
-	// SetInitialReviews should not raise events
-	events := pr.DrainEvents()
-	assert.Empty(t, events)
 }
