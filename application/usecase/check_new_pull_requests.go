@@ -15,7 +15,7 @@ import (
 type CheckNewPullRequestsUseCase struct {
 	prRepo          pullrequest.PullRequestRepository
 	trackingService *pullrequest.TrackingService
-	prFilter        *pullrequest.PRFilter
+	prFilter        pullrequest.FilterFn
 	eventPublisher  port.EventPublisher
 	lastCheckTime   time.Time
 	knownPRs        map[string]bool                           // Tracks all PRs ever encountered by URL, independent of seen repository
@@ -26,7 +26,7 @@ type CheckNewPullRequestsUseCase struct {
 func NewCheckNewPullRequestsUseCase(
 	prRepo pullrequest.PullRequestRepository,
 	trackingService *pullrequest.TrackingService,
-	prFilter *pullrequest.PRFilter,
+	prFilter pullrequest.FilterFn,
 	eventPublisher port.EventPublisher,
 ) *CheckNewPullRequestsUseCase {
 	return &CheckNewPullRequestsUseCase{
@@ -63,8 +63,8 @@ func (uc *CheckNewPullRequestsUseCase) Execute(ctx context.Context) (*PRCheckRes
 	}
 
 	// Filter draft PRs if configured
-	requestedReviewPRs = uc.prFilter.FilterDrafts(requestedReviewPRs)
-	userCreatedPRs = uc.prFilter.FilterDrafts(userCreatedPRs)
+	requestedReviewPRs = uc.prFilter(requestedReviewPRs)
+	userCreatedPRs = uc.prFilter(userCreatedPRs)
 
 	// Detect review state changes on all PRs (new and known)
 	// This must happen before processNewPRs to detect review changes on known PRs

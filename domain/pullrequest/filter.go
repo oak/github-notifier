@@ -1,30 +1,22 @@
 package pullrequest
 
-// PRFilter provides filtering capabilities for pull requests
-type PRFilter struct {
-	includeDrafts bool
-}
+// FilterFn is a pure function from PR slice → filtered PR slice.
+type FilterFn func([]*PullRequest) []*PullRequest
 
-// NewPRFilter creates a new PR filter
-func NewPRFilter(includeDrafts bool) *PRFilter {
-	return &PRFilter{
-		includeDrafts: includeDrafts,
+// NewDraftFilter returns the appropriate FilterFn based on configuration.
+// When includeDrafts is true, the returned function is a no-op passthrough.
+// When includeDrafts is false, the returned function strips all draft PRs.
+func NewDraftFilter(includeDrafts bool) FilterFn {
+	if includeDrafts {
+		return func(prs []*PullRequest) []*PullRequest { return prs }
 	}
-}
-
-// FilterDrafts filters out draft PRs if configured to do so
-// Returns a new slice with non-draft PRs only (if includeDrafts is false)
-// Otherwise returns the original slice unchanged
-func (f *PRFilter) FilterDrafts(prs []*PullRequest) []*PullRequest {
-	if f.includeDrafts {
-		return prs
-	}
-
-	filtered := make([]*PullRequest, 0, len(prs))
-	for _, pr := range prs {
-		if !pr.IsDraft() {
-			filtered = append(filtered, pr)
+	return func(prs []*PullRequest) []*PullRequest {
+		out := make([]*PullRequest, 0, len(prs))
+		for _, pr := range prs {
+			if !pr.IsDraft() {
+				out = append(out, pr)
+			}
 		}
+		return out
 	}
-	return filtered
 }

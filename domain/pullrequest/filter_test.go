@@ -8,70 +8,70 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestPRFilter_FilterDrafts_IncludeDraftsTrue(t *testing.T) {
+func TestNewDraftFilter_IncludeDraftsTrue(t *testing.T) {
 	// Arrange
-	filter := pullrequest.NewPRFilter(true)
+	filter := pullrequest.NewDraftFilter(true)
 	prs := testutil.CreateTestPRs(2, 3) // 2 regular, 3 drafts
 
 	// Act
-	result := filter.FilterDrafts(prs)
+	result := filter(prs)
 
 	// Assert
 	assert.Len(t, result, 5, "Should include all PRs when includeDrafts is true")
 	testutil.AssertPRSlicesEqual(t, prs, result)
 }
 
-func TestPRFilter_FilterDrafts_IncludeDraftsFalse(t *testing.T) {
+func TestNewDraftFilter_IncludeDraftsFalse(t *testing.T) {
 	// Arrange
-	filter := pullrequest.NewPRFilter(false)
+	filter := pullrequest.NewDraftFilter(false)
 	prs := testutil.CreateTestPRs(2, 3) // 2 regular, 3 drafts
 
 	// Act
-	result := filter.FilterDrafts(prs)
+	result := filter(prs)
 
 	// Assert
 	assert.Len(t, result, 2, "Should exclude draft PRs when includeDrafts is false")
 	testutil.AssertNoDrafts(t, result)
 }
 
-func TestPRFilter_FilterDrafts_EmptyInput(t *testing.T) {
+func TestNewDraftFilter_EmptyInput(t *testing.T) {
 	// Arrange
-	filter := pullrequest.NewPRFilter(false)
+	filter := pullrequest.NewDraftFilter(false)
 	var prs []*pullrequest.PullRequest
 
 	// Act
-	result := filter.FilterDrafts(prs)
+	result := filter(prs)
 
 	// Assert
 	assert.Empty(t, result, "Should return empty slice for empty input")
 }
 
-func TestPRFilter_FilterDrafts_OnlyDrafts(t *testing.T) {
+func TestNewDraftFilter_OnlyDrafts(t *testing.T) {
 	// Arrange
-	filter := pullrequest.NewPRFilter(false)
+	filter := pullrequest.NewDraftFilter(false)
 	prs := testutil.CreateTestPRs(0, 3) // 0 regular, 3 drafts
 
 	// Act
-	result := filter.FilterDrafts(prs)
+	result := filter(prs)
 
 	// Assert
 	assert.Empty(t, result, "Should return empty slice when all PRs are drafts and includeDrafts is false")
 }
 
-func TestPRFilter_FilterDrafts_OnlyRegular(t *testing.T) {
+func TestNewDraftFilter_OnlyRegular(t *testing.T) {
 	// Arrange
-	filter := pullrequest.NewPRFilter(false)
+	filter := pullrequest.NewDraftFilter(false)
 	prs := testutil.CreateTestPRs(3, 0) // 3 regular, 0 drafts
 
 	// Act
-	result := filter.FilterDrafts(prs)
+	result := filter(prs)
 
 	// Assert
 	assert.Len(t, result, 3, "Should return all PRs when none are drafts")
 	testutil.AssertPRSlicesEqual(t, prs, result)
 }
 
-func TestPRFilter_FilterDrafts_TableDriven(t *testing.T) {
+func TestNewDraftFilter_TableDriven(t *testing.T) {
 	tests := []struct {
 		name             string
 		includeDrafts    bool
@@ -133,11 +133,11 @@ func TestPRFilter_FilterDrafts_TableDriven(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			filter := pullrequest.NewPRFilter(tt.includeDrafts)
+			filter := pullrequest.NewDraftFilter(tt.includeDrafts)
 			prs := testutil.CreateTestPRs(tt.regularCount, tt.draftCount)
 
 			// Act
-			result := filter.FilterDrafts(prs)
+			result := filter(prs)
 
 			// Assert
 			assert.Len(t, result, tt.expectedCount, "Result should have expected count")

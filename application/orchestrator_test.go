@@ -23,7 +23,7 @@ func TestOrchestrator_ExecuteInitialCheck_FirstRun(t *testing.T) {
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockUIPort := mocks.NewUIPort(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
 	// Create use cases
@@ -74,7 +74,7 @@ func TestOrchestrator_ExecuteInitialCheck_NotFirstRun(t *testing.T) {
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockUIPort := mocks.NewUIPort(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
 	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
@@ -123,7 +123,7 @@ func TestOrchestrator_ExecuteRegularCheck_WithoutActivityTracking(t *testing.T) 
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockUIPort := mocks.NewUIPort(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
 	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
@@ -172,7 +172,7 @@ func TestOrchestrator_ExecuteRegularCheck_WithActivityTracking(t *testing.T) {
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockUIPort := mocks.NewUIPort(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
 	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
@@ -220,7 +220,7 @@ func TestOrchestrator_ExecuteRegularCheck_CheckNewPRsError(t *testing.T) {
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockUIPort := mocks.NewUIPort(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
 	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
@@ -262,7 +262,7 @@ func TestOrchestrator_ExecuteRegularCheck_ActivityTrackingError_ContinuesWithDis
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockUIPort := mocks.NewUIPort(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
 	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)

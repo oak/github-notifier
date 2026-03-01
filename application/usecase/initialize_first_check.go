@@ -14,7 +14,7 @@ import (
 type InitializeFirstCheckUseCase struct {
 	prRepo          pullrequest.PullRequestRepository
 	trackingService *pullrequest.TrackingService
-	prFilter        *pullrequest.PRFilter
+	prFilter        pullrequest.FilterFn
 	uiPort          port.UIPort
 }
 
@@ -22,7 +22,7 @@ type InitializeFirstCheckUseCase struct {
 func NewInitializeFirstCheckUseCase(
 	prRepo pullrequest.PullRequestRepository,
 	trackingService *pullrequest.TrackingService,
-	prFilter *pullrequest.PRFilter,
+	prFilter pullrequest.FilterFn,
 	uiPort port.UIPort,
 ) *InitializeFirstCheckUseCase {
 	return &InitializeFirstCheckUseCase{
@@ -63,8 +63,8 @@ func (uc *InitializeFirstCheckUseCase) Execute(ctx context.Context) (bool, []*pu
 	}
 
 	// Filter draft PRs if configured
-	requestedReviewPRs = uc.prFilter.FilterDrafts(requestedReviewPRs)
-	userCreatedPRs = uc.prFilter.FilterDrafts(userCreatedPRs)
+	requestedReviewPRs = uc.prFilter(requestedReviewPRs)
+	userCreatedPRs = uc.prFilter(userCreatedPRs)
 
 	// Mark all existing PRs as seen (no notifications, no asterisks on first run)
 	uc.trackingService.MarkPullRequestsAsSeen(requestedReviewPRs)

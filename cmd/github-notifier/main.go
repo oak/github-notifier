@@ -194,7 +194,7 @@ func (app *App) startWithConfig(cfg *config.Config) {
 	app.menuAdapter.Setup()
 
 	// Initialize domain services
-	prFilter := pullrequest.NewPRFilter(cfg.IncludeDraftPRs)
+	prFilter := pullrequest.NewDraftFilter(cfg.IncludeDraftPRs)
 	activityScheduler := pullrequest.NewActivityCheckScheduler(
 		cfg.RecentPRThresholdHours,
 		cfg.StalePRCheckIntervalMin,

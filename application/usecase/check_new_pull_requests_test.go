@@ -21,7 +21,7 @@ func TestCheckNewPRs_NoNewPRs(t *testing.T) {
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 
 	requestedPRs := testutil.CreateTestPRs(2, 0)
 	userPRs := []*pullrequest.PullRequest{
@@ -59,7 +59,7 @@ func TestCheckNewPRs_TrulyNewPRs_EmitsEvents(t *testing.T) {
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 
 	requestedPRs := testutil.CreateTestPRs(2, 0)
 	userPRs := []*pullrequest.PullRequest{
@@ -97,7 +97,7 @@ func TestCheckNewPRs_PRsWithActivity(t *testing.T) {
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 
 	// Create use case first to establish lastCheckTime
 	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, mockEventPublisher)
@@ -145,7 +145,7 @@ func TestCheckNewPRs_MixedNewAndActivity(t *testing.T) {
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 
 	// Create use case first
 	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, mockEventPublisher)
@@ -201,7 +201,7 @@ func TestCheckNewPRs_FetchRequestedReviewsError(t *testing.T) {
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 
 	expectedErr := errors.New("github api error")
 
@@ -226,7 +226,7 @@ func TestCheckNewPRs_FetchUserCreatedError(t *testing.T) {
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 
 	requestedPRs := testutil.CreateTestPRs(2, 0)
 	expectedErr := errors.New("github api error")
@@ -252,7 +252,7 @@ func TestCheckNewPRs_FiltersDrafts(t *testing.T) {
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
-	prFilter := pullrequest.NewPRFilter(false) // exclude drafts
+	prFilter := pullrequest.NewDraftFilter(false) // exclude drafts
 
 	// 2 regular, 2 drafts
 	requestedPRs := testutil.CreateTestPRs(2, 2)
@@ -284,7 +284,7 @@ func TestCheckNewPRs_PublishEventError_ContinuesProcessing(t *testing.T) {
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 
 	newPRs := []*pullrequest.PullRequest{
 		testutil.NewTestPullRequest(1, testutil.WithURL("https://github.com/owner/repo/pull/1")),

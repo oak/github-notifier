@@ -20,7 +20,7 @@ func TestInitializeFirstCheck_FirstRunEver(t *testing.T) {
 	mockSeenRepo := mocks.NewSeenRepository(t)
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockUIPort := mocks.NewUIPort(t)
-	prFilter := pullrequest.NewPRFilter(false) // exclude drafts
+	prFilter := pullrequest.NewDraftFilter(false) // exclude drafts
 
 	requestedPRs := testutil.CreateTestPRs(2, 1) // 2 regular, 1 draft
 	userPRs := testutil.CreateTestPRs(1, 1)      // 1 regular, 1 draft
@@ -58,7 +58,7 @@ func TestInitializeFirstCheck_NotFirstRun(t *testing.T) {
 	mockSeenRepo := mocks.NewSeenRepository(t)
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockUIPort := mocks.NewUIPort(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 
 	// Mock expectations
 	mockSeenRepo.On("IsEmpty").Return(false)
@@ -85,7 +85,7 @@ func TestInitializeFirstCheck_FetchRequestedReviewsError(t *testing.T) {
 	mockSeenRepo := mocks.NewSeenRepository(t)
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockUIPort := mocks.NewUIPort(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 
 	expectedErr := errors.New("github api error")
 
@@ -114,7 +114,7 @@ func TestInitializeFirstCheck_FetchUserCreatedError(t *testing.T) {
 	mockSeenRepo := mocks.NewSeenRepository(t)
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockUIPort := mocks.NewUIPort(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 
 	requestedPRs := testutil.CreateTestPRs(2, 0)
 	expectedErr := errors.New("github api error")
@@ -144,7 +144,7 @@ func TestInitializeFirstCheck_IncludeDrafts(t *testing.T) {
 	mockSeenRepo := mocks.NewSeenRepository(t)
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockUIPort := mocks.NewUIPort(t)
-	prFilter := pullrequest.NewPRFilter(true) // include drafts
+	prFilter := pullrequest.NewDraftFilter(true) // include drafts
 
 	requestedPRs := testutil.CreateTestPRs(2, 1) // 2 regular, 1 draft
 	userPRs := testutil.CreateTestPRs(1, 1)      // 1 regular, 1 draft
@@ -177,7 +177,7 @@ func TestInitializeFirstCheck_NoPRs(t *testing.T) {
 	mockSeenRepo := mocks.NewSeenRepository(t)
 	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockUIPort := mocks.NewUIPort(t)
-	prFilter := pullrequest.NewPRFilter(false)
+	prFilter := pullrequest.NewDraftFilter(false)
 
 	emptyPRs := []*pullrequest.PullRequest{} // empty slice, not nil
 
