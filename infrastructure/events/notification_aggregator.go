@@ -64,176 +64,142 @@ func NewNotificationAggregator(flushInterval time.Duration, onFlush func(notific
 	}
 }
 
-// AddEvent adds an event to the aggregator
+// AddEvent adds an event to the aggregator. It is a thin concurrency wrapper
+// around the pure accumulateEvent fold function.
 func (a *NotificationAggregator) AddEvent(event pullrequest.Event) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-
-	switch e := event.(type) {
-	case *pullrequest.NewPullRequestDetected:
-		a.addNewPREvent(e)
-	case *pullrequest.ActivityDetected:
-		a.addActivityEvent(e)
-	case *pullrequest.ReviewStateChanged:
-		a.addReviewStateChangedEvent(e)
-	case *pullrequest.Merged:
-		a.addMergedEvent(e)
-	case *pullrequest.Closed:
-		a.addClosedEvent(e)
-	case *pullrequest.PipelineStatusChanged:
-		a.addPipelineStatusChangedEvent(e)
-	}
-
-	// Reset or start the flush timer
+	a.pendingEvents = accumulateEvent(a.pendingEvents, event, a.authenticatedUser)
 	a.resetFlushTimer()
 }
 
-// addNewPREvent adds a new PR detected event
-func (a *NotificationAggregator) addNewPREvent(event *pullrequest.NewPullRequestDetected) {
-	url := event.PullRequestID.URL()
-
-	notification, exists := a.pendingEvents[url]
-	if !exists {
-		notification = &PRNotification{
-			PullRequest: event.PullRequest,
-			Activities:  []ActivityInfo{},
+// accumulateEvent is a pure fold function that incorporates a single domain event
+// into the current per-PR notification batch. It has no I/O, no mutex, and no
+// timer dependency, which makes it directly unit-testable without goroutines.
+//
+// The caller is responsible for synchronisation (see AddEvent).
+func accumulateEvent(
+	batch map[string]*PRNotification,
+	event pullrequest.Event,
+	authenticatedUser string,
+) map[string]*PRNotification {
+	switch e := event.(type) {
+	case *pullrequest.NewPullRequestDetected:
+		url := e.PullRequestID.URL()
+		notification, exists := batch[url]
+		if !exists {
+			notification = &PRNotification{
+				PullRequest: e.PullRequest,
+				Activities:  []ActivityInfo{},
+			}
+			batch[url] = notification
 		}
-		a.pendingEvents[url] = notification
-	}
+		notification.IsNew = true
 
-	notification.IsNew = true
-}
-
-// addActivityEvent adds activity to the existing PR notification.
-// Filters out activities authored by the authenticated user — those are domain facts
-// recorded by the aggregate, but not worth notifying the user about.
-func (a *NotificationAggregator) addActivityEvent(event *pullrequest.ActivityDetected) {
-	// Filter out self-authored activities — not notification-worthy
-	if a.authenticatedUser != "" && event.Activity.Author().Login() == a.authenticatedUser {
-		return
-	}
-
-	url := event.PullRequestID.URL()
-
-	notification, exists := a.pendingEvents[url]
-	if !exists {
-		notification = &PRNotification{
-			PullRequest: event.PullRequest,
-			Activities:  []ActivityInfo{},
-		}
-		a.pendingEvents[url] = notification
-	}
-
-	activityType := event.Activity.Type()
-
-	// Check if this activity type already exists
-	found := false
-	for i, existing := range notification.Activities {
-		if existing.Type == activityType {
-			notification.Activities[i].Count++
-			found = true
+	case *pullrequest.ActivityDetected:
+		// Filter out self-authored activities — domain facts, not notification-worthy.
+		if authenticatedUser != "" && e.Activity.Author().Login() == authenticatedUser {
 			break
 		}
-	}
-	if !found {
-		notification.Activities = append(notification.Activities, ActivityInfo{
-			Type:  activityType,
-			Count: 1,
+		url := e.PullRequestID.URL()
+		notification, exists := batch[url]
+		if !exists {
+			notification = &PRNotification{
+				PullRequest: e.PullRequest,
+				Activities:  []ActivityInfo{},
+			}
+			batch[url] = notification
+		}
+		activityType := e.Activity.Type()
+		found := false
+		for i, existing := range notification.Activities {
+			if existing.Type == activityType {
+				notification.Activities[i].Count++
+				found = true
+				break
+			}
+		}
+		if !found {
+			notification.Activities = append(notification.Activities, ActivityInfo{
+				Type:  activityType,
+				Count: 1,
+			})
+		}
+
+	case *pullrequest.ReviewStateChanged:
+		// Filter out self-authored review state changes — not notification-worthy.
+		if authenticatedUser != "" && e.Reviewer.Login() == authenticatedUser {
+			break
+		}
+		url := e.PullRequestID.URL()
+		notification, exists := batch[url]
+		if !exists {
+			notification = &PRNotification{
+				PullRequest:   e.PullRequest,
+				Activities:    []ActivityInfo{},
+				ReviewChanges: []ReviewChange{},
+			}
+			batch[url] = notification
+		}
+		notification.ReviewChanges = append(notification.ReviewChanges, ReviewChange{
+			Reviewer: e.Reviewer.Login(),
+			State:    e.State,
 		})
-	}
-}
 
-// addReviewStateChangedEvent adds a review state change to the existing PR notification.
-// Filters out self-authored reviews — not notification-worthy.
-func (a *NotificationAggregator) addReviewStateChangedEvent(event *pullrequest.ReviewStateChanged) {
-	// Filter out self-authored review state changes
-	if a.authenticatedUser != "" && event.Reviewer.Login() == a.authenticatedUser {
-		return
-	}
-
-	url := event.PullRequestID.URL()
-
-	notification, exists := a.pendingEvents[url]
-	if !exists {
-		notification = &PRNotification{
-			PullRequest:   event.PullRequest,
-			Activities:    []ActivityInfo{},
-			ReviewChanges: []ReviewChange{},
+	case *pullrequest.Merged:
+		url := e.PullRequestID.URL()
+		notification, exists := batch[url]
+		if !exists {
+			notification = &PRNotification{
+				PullRequest:   e.PullRequest,
+				Activities:    []ActivityInfo{},
+				StatusChanges: []StatusChange{},
+			}
+			batch[url] = notification
 		}
-		a.pendingEvents[url] = notification
-	}
+		notification.StatusChanges = append(notification.StatusChanges, StatusChange{
+			EventType: pullrequest.StatusChangeMerged,
+		})
 
-	notification.ReviewChanges = append(notification.ReviewChanges, ReviewChange{
-		Reviewer: event.Reviewer.Login(),
-		State:    event.State,
-	})
-}
-
-// addMergedEvent adds a merged status change
-func (a *NotificationAggregator) addMergedEvent(event *pullrequest.Merged) {
-	url := event.PullRequestID.URL()
-
-	notification, exists := a.pendingEvents[url]
-	if !exists {
-		// Create a new notification entry — the event now carries the full PR
-		notification = &PRNotification{
-			PullRequest:   event.PullRequest,
-			Activities:    []ActivityInfo{},
-			StatusChanges: []StatusChange{},
+	case *pullrequest.Closed:
+		url := e.PullRequestID.URL()
+		notification, exists := batch[url]
+		if !exists {
+			notification = &PRNotification{
+				PullRequest:   e.PullRequest,
+				Activities:    []ActivityInfo{},
+				StatusChanges: []StatusChange{},
+			}
+			batch[url] = notification
 		}
-		a.pendingEvents[url] = notification
-	}
+		notification.StatusChanges = append(notification.StatusChanges, StatusChange{
+			EventType: pullrequest.StatusChangeClosed,
+		})
 
-	notification.StatusChanges = append(notification.StatusChanges, StatusChange{
-		EventType: pullrequest.StatusChangeMerged,
-	})
-}
-
-// addClosedEvent adds a closed status change
-func (a *NotificationAggregator) addClosedEvent(event *pullrequest.Closed) {
-	url := event.PullRequestID.URL()
-
-	notification, exists := a.pendingEvents[url]
-	if !exists {
-		// Create a new notification entry — the event now carries the full PR
-		notification = &PRNotification{
-			PullRequest:   event.PullRequest,
-			Activities:    []ActivityInfo{},
-			StatusChanges: []StatusChange{},
+	case *pullrequest.PipelineStatusChanged:
+		url := e.PullRequestID.URL()
+		notification, exists := batch[url]
+		if !exists {
+			notification = &PRNotification{
+				PullRequest: e.PullRequest,
+				Activities:  []ActivityInfo{},
+			}
+			batch[url] = notification
 		}
-		a.pendingEvents[url] = notification
-	}
-
-	notification.StatusChanges = append(notification.StatusChanges, StatusChange{
-		EventType: pullrequest.StatusChangeClosed,
-	})
-}
-
-// addPipelineStatusChangedEvent records a pipeline status transition.
-// Only the latest transition is kept — older ones are overwritten.
-func (a *NotificationAggregator) addPipelineStatusChangedEvent(event *pullrequest.PipelineStatusChanged) {
-	url := event.PullRequestID.URL()
-
-	notification, exists := a.pendingEvents[url]
-	if !exists {
-		notification = &PRNotification{
-			PullRequest: event.PullRequest,
-			Activities:  []ActivityInfo{},
+		// Keep only the latest transition: preserve OldStatus from the first event
+		// in this flush window so the user sees the full transition.
+		if notification.PipelineChange == nil {
+			notification.PipelineChange = &PipelineStatusChange{
+				OldStatus: e.OldStatus,
+				NewStatus: e.NewStatus,
+			}
+		} else {
+			// Update only the NewStatus — the OldStatus stays as the starting point.
+			notification.PipelineChange.NewStatus = e.NewStatus
 		}
-		a.pendingEvents[url] = notification
 	}
 
-	// Keep only the latest transition: preserve OldStatus from the first event
-	// in this flush window so the user sees the full transition
-	if notification.PipelineChange == nil {
-		notification.PipelineChange = &PipelineStatusChange{
-			OldStatus: event.OldStatus,
-			NewStatus: event.NewStatus,
-		}
-	} else {
-		// Update only the NewStatus — the OldStatus stays as the starting point
-		notification.PipelineChange.NewStatus = event.NewStatus
-	}
+	return batch
 }
 
 // resetFlushTimer resets the flush timer
