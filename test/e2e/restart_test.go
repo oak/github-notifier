@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,7 +40,7 @@ func TestE2E_Restart_NoDuplicateNotifications(t *testing.T) {
 	run1.ClearNotifications()
 
 	// Do one regular check so state is persisted via TrackPRs.
-	err = run1.orchestrator.ExecuteRegularCheck(run1.ctx)
+	err = run1.orchestrator.ExecuteRegularCheck(run1.ctx, time.Now())
 	require.NoError(t, err)
 	run1.FlushNotifications()
 
@@ -78,7 +79,7 @@ func TestE2E_Restart_PipelineChangeAfterRestart_Notifies(t *testing.T) {
 	run1.FlushNotifications()
 	run1.ClearNotifications()
 
-	err = run1.orchestrator.ExecuteRegularCheck(run1.ctx)
+	err = run1.orchestrator.ExecuteRegularCheck(run1.ctx, time.Now())
 	require.NoError(t, err)
 	run1.FlushNotifications()
 	run1.ClearNotifications()
@@ -94,7 +95,7 @@ func TestE2E_Restart_PipelineChangeAfterRestart_Notifies(t *testing.T) {
 	require.NoError(t, err)
 	run2.FlushNotifications()
 
-	err = run2.orchestrator.ExecuteRegularCheck(run2.ctx)
+	err = run2.orchestrator.ExecuteRegularCheck(run2.ctx, time.Now())
 	require.NoError(t, err)
 	run2.FlushNotifications()
 
@@ -128,7 +129,7 @@ func TestE2E_Restart_ClosedPRAfterRestart_Notifies(t *testing.T) {
 	run1.FlushNotifications()
 	run1.ClearNotifications()
 
-	err = run1.orchestrator.ExecuteRegularCheck(run1.ctx)
+	err = run1.orchestrator.ExecuteRegularCheck(run1.ctx, time.Now())
 	require.NoError(t, err)
 	run1.FlushNotifications()
 	run1.ClearNotifications()
@@ -148,7 +149,7 @@ func TestE2E_Restart_ClosedPRAfterRestart_Notifies(t *testing.T) {
 	require.NoError(t, err)
 	run2.FlushNotifications()
 
-	err = run2.orchestrator.ExecuteRegularCheck(run2.ctx)
+	err = run2.orchestrator.ExecuteRegularCheck(run2.ctx, time.Now())
 	require.NoError(t, err)
 	run2.FlushNotifications()
 
@@ -181,7 +182,7 @@ func TestE2E_Restart_NewPRAfterRestart_Notifies(t *testing.T) {
 	run1.FlushNotifications()
 	run1.ClearNotifications()
 
-	err = run1.orchestrator.ExecuteRegularCheck(run1.ctx)
+	err = run1.orchestrator.ExecuteRegularCheck(run1.ctx, time.Now())
 	require.NoError(t, err)
 	run1.FlushNotifications()
 	run1.ClearNotifications()
@@ -200,7 +201,7 @@ func TestE2E_Restart_NewPRAfterRestart_Notifies(t *testing.T) {
 	require.NoError(t, err)
 	run2.FlushNotifications()
 
-	err = run2.orchestrator.ExecuteRegularCheck(run2.ctx)
+	err = run2.orchestrator.ExecuteRegularCheck(run2.ctx, time.Now())
 	require.NoError(t, err)
 	run2.FlushNotifications()
 

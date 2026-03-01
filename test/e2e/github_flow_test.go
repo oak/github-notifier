@@ -27,7 +27,7 @@ func TestE2E_NewPRDetection_SendsNotification(t *testing.T) {
 	})
 
 	// When: A regular check runs (simulating detecting a new PR)
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 
 	// Then: A notification should be sent
@@ -59,7 +59,7 @@ func TestE2E_MultiplePRs_SendsMultipleNotifications(t *testing.T) {
 	})
 
 	// When: Regular check runs
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 
 	// Then: Should get notifications for review PRs and own PR
@@ -93,7 +93,7 @@ func TestE2E_DraftPR_NotIncluded(t *testing.T) {
 	})
 
 	// When: Regular check runs
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 
 	// Then: Only the non-draft PR should trigger notification
@@ -116,7 +116,8 @@ func TestE2E_ActivityTracking_DetectsNewComments(t *testing.T) {
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
 	// Regular check to start tracking
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	lastCheck := time.Now()
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
 	require.NoError(t, err)
 
 	// Clear initial notification
@@ -133,7 +134,7 @@ func TestE2E_ActivityTracking_DetectsNewComments(t *testing.T) {
 	})
 
 	// And: Regular check runs
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
 	require.NoError(t, err)
 
 	// Then: MUST receive notification for other user's comment
@@ -168,7 +169,8 @@ func TestE2E_ActivityTracking_DetectsNewReview(t *testing.T) {
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
 	// Regular check
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	lastCheck := time.Now()
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
 	suite.ClearNotifications()
 
 	// Small delay
@@ -183,7 +185,7 @@ func TestE2E_ActivityTracking_DetectsNewReview(t *testing.T) {
 	})
 
 	// Regular check
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
 	require.NoError(t, err)
 
 	// Then: MUST receive notification for other user's review
@@ -224,7 +226,8 @@ func TestE2E_ActivityTracking_DetectsNewReaction(t *testing.T) {
 	})
 
 	// Regular check to start tracking
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	lastCheck := time.Now()
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
 	require.NoError(t, err)
 	suite.ClearNotifications()
 
@@ -239,7 +242,7 @@ func TestE2E_ActivityTracking_DetectsNewReaction(t *testing.T) {
 	})
 
 	// Regular check
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
 	require.NoError(t, err)
 
 	// Then: MUST receive notification for reaction
@@ -272,7 +275,7 @@ func TestE2E_ActivityTracking_IgnoresSelfActivity(t *testing.T) {
 	}
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	suite.ClearNotifications()
 
 	// When: The authenticated user (testuser) comments on the PR
@@ -282,7 +285,7 @@ func TestE2E_ActivityTracking_IgnoresSelfActivity(t *testing.T) {
 	})
 
 	// Regular check
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 
 	// Then: MUST NOT send notification for own activity (critical feature!)
 	suite.FlushNotifications()
@@ -315,13 +318,13 @@ func TestE2E_MergedPR_SendsMergedNotification(t *testing.T) {
 	}
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	suite.ClearNotifications()
 
 	// When: PR is merged (state changes; search query filters out non-open PRs)
 	suite.mockGitHub.MergePR(999)
 
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 
 	// Then: Should receive a merged notification
@@ -358,13 +361,13 @@ func TestE2E_ClosedPR_SendsClosedNotification(t *testing.T) {
 	}
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	suite.ClearNotifications()
 
 	// When: PR is closed without merging
 	suite.mockGitHub.ClosePR(888)
 
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 
 	// Then: Should receive a closed notification
@@ -401,13 +404,13 @@ func TestE2E_MergedPR_NotRedetectedOnNextCheck(t *testing.T) {
 	}
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	suite.ClearNotifications()
 
 	// Merge the PR
 	suite.mockGitHub.MergePR(777)
 
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -423,7 +426,7 @@ func TestE2E_MergedPR_NotRedetectedOnNextCheck(t *testing.T) {
 	// When: Another check runs (PR is still merged, not in open list)
 	suite.ClearNotifications()
 
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -442,7 +445,7 @@ func TestE2E_NoNewPRs_NoNotifications(t *testing.T) {
 	suite.mockGitHub.SetupPRs([]MockPR{})
 
 	// When: Regular check runs
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 
 	// Then: No notifications should be sent
@@ -469,14 +472,14 @@ func TestE2E_SeenPRs_NotRenotified(t *testing.T) {
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
 	// First check - should notify
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	suite.FlushNotifications()
 
 	initialCount := len(suite.notifications.GetNotifications())
 	assert.Greater(t, initialCount, 0, "Should notify on first check")
 
 	// When: Same PR appears in second check
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 
 	// Then: Should not send duplicate notification
@@ -494,7 +497,7 @@ func TestE2E_ErrorRecovery_GitHubAPIDown(t *testing.T) {
 	suite.mockGitHub.SetError(503, "Service Unavailable")
 
 	// When: Check runs
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 
 	// Then: Should return error gracefully (not panic)
 	assert.Error(t, err)
@@ -506,7 +509,7 @@ func TestE2E_ErrorRecovery_GitHubAPIDown(t *testing.T) {
 	})
 
 	// Then: Next check should succeed
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	assert.NoError(t, err)
 
 	// And: Should process the PR
@@ -528,7 +531,7 @@ func TestE2E_FullLifecycle_NewPRToActivity(t *testing.T) {
 	}
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 
 	// Verify initial notification
@@ -547,7 +550,7 @@ func TestE2E_FullLifecycle_NewPRToActivity(t *testing.T) {
 		CreatedAt: time.Now().Add(-1 * time.Second),
 	})
 
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 
 	// System processes activity
@@ -562,7 +565,7 @@ func TestE2E_FullLifecycle_NewPRToActivity(t *testing.T) {
 		CreatedAt: time.Now().Add(-1 * time.Second),
 	})
 
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 
 	// Verify PR still in menu throughout
@@ -587,7 +590,8 @@ func TestE2E_ActivityOnSeenPR_StillNotifies(t *testing.T) {
 	}
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	lastCheck := time.Now()
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -604,7 +608,9 @@ func TestE2E_ActivityOnSeenPR_StillNotifies(t *testing.T) {
 		CreatedAt: time.Now(),
 	})
 
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	now := time.Now()
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
+	lastCheck = now
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -622,7 +628,9 @@ func TestE2E_ActivityOnSeenPR_StillNotifies(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Cycle 3: No new activity → should get NO notification
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	now = time.Now()
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
+	lastCheck = now
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -638,7 +646,7 @@ func TestE2E_ActivityOnSeenPR_StillNotifies(t *testing.T) {
 		CreatedAt: time.Now(),
 	})
 
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -669,7 +677,7 @@ func TestE2E_MenuUpdates_ReflectCurrentState(t *testing.T) {
 	})
 
 	// Regular check
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 
 	initialPRs := suite.menuAdapter.GetPRs()
 	assert.Len(t, initialPRs, 2)
@@ -679,7 +687,7 @@ func TestE2E_MenuUpdates_ReflectCurrentState(t *testing.T) {
 		{Title: "PR 1", Number: 1, Author: "alice"}, // Only PR 1 remains
 	})
 
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 
 	// Then: Menu should reflect the change
 	updatedPRs := suite.menuAdapter.GetPRs()
@@ -701,7 +709,7 @@ func TestE2E_CommitActivity_DetectsNewPush(t *testing.T) {
 	}
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	suite.ClearNotifications()
 
 	// When: New commit is pushed (head SHA changes)
@@ -710,7 +718,7 @@ func TestE2E_CommitActivity_DetectsNewPush(t *testing.T) {
 		Author: "alice",
 	})
 
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 
 	suite.FlushNotifications()
@@ -742,7 +750,7 @@ func TestE2E_OwnerSelfComment_NoNotification(t *testing.T) {
 	}
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	suite.ClearNotifications()
 	time.Sleep(100 * time.Millisecond)
 
@@ -753,7 +761,7 @@ func TestE2E_OwnerSelfComment_NoNotification(t *testing.T) {
 		CreatedAt: time.Now(),
 	})
 
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -773,7 +781,8 @@ func TestE2E_ReviewerCommentOnMyPR_Notifies(t *testing.T) {
 	}
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	lastCheck := time.Now()
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
 	suite.ClearNotifications()
 	time.Sleep(100 * time.Millisecond)
 
@@ -784,7 +793,7 @@ func TestE2E_ReviewerCommentOnMyPR_Notifies(t *testing.T) {
 		CreatedAt: time.Now(),
 	})
 
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -821,7 +830,8 @@ func TestE2E_ReviewerReactsToOwnerComment_Notifies(t *testing.T) {
 		CreatedAt: time.Now().Add(-2 * time.Hour),
 	})
 
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	lastCheck := time.Now()
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
 	suite.ClearNotifications()
 	time.Sleep(500 * time.Millisecond)
 
@@ -831,7 +841,7 @@ func TestE2E_ReviewerReactsToOwnerComment_Notifies(t *testing.T) {
 		User:    "reviewer1",
 	})
 
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -868,7 +878,7 @@ func TestE2E_OwnerReactsToReviewerComment_NoNotification(t *testing.T) {
 		CreatedAt: time.Now().Add(-2 * time.Hour),
 	})
 
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	suite.ClearNotifications()
 	time.Sleep(500 * time.Millisecond)
 
@@ -878,7 +888,7 @@ func TestE2E_OwnerReactsToReviewerComment_NoNotification(t *testing.T) {
 		User:    "testuser", // Authenticated user reacts
 	})
 
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -899,7 +909,7 @@ func TestE2E_OwnerPushesOwnPR_NoNotification(t *testing.T) {
 	}
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	suite.ClearNotifications()
 
 	// When: Owner pushes a new commit
@@ -908,7 +918,7 @@ func TestE2E_OwnerPushesOwnPR_NoNotification(t *testing.T) {
 		Author: "testuser",
 	})
 
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -928,7 +938,8 @@ func TestE2E_SomeoneApprovesMyPR_Notifies(t *testing.T) {
 	}
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	lastCheck := time.Now()
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
 	suite.ClearNotifications()
 	time.Sleep(100 * time.Millisecond)
 
@@ -940,7 +951,7 @@ func TestE2E_SomeoneApprovesMyPR_Notifies(t *testing.T) {
 		CreatedAt: time.Now(),
 	})
 
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -972,7 +983,7 @@ func TestE2E_SomeoneRequestsMyReview_Notifies(t *testing.T) {
 	})
 
 	// When: Regular check detects the PR
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -994,7 +1005,7 @@ func TestE2E_ICommentOnSomeoneElsePR_NoNotification(t *testing.T) {
 	}
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	suite.ClearNotifications()
 	time.Sleep(100 * time.Millisecond)
 
@@ -1005,7 +1016,7 @@ func TestE2E_ICommentOnSomeoneElsePR_NoNotification(t *testing.T) {
 		CreatedAt: time.Now(),
 	})
 
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1032,7 +1043,8 @@ func TestE2E_SomeoneReactsToMyCommentOnOthersPR_Notifies(t *testing.T) {
 		CreatedAt: time.Now().Add(-2 * time.Hour),
 	})
 
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	lastCheck := time.Now()
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
 	suite.ClearNotifications()
 	time.Sleep(500 * time.Millisecond)
 
@@ -1042,7 +1054,7 @@ func TestE2E_SomeoneReactsToMyCommentOnOthersPR_Notifies(t *testing.T) {
 		User:    "colleague",
 	})
 
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, lastCheck)
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1073,7 +1085,7 @@ func TestE2E_NewCommitOnPRImReviewing_Notifies(t *testing.T) {
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
 	// First check - detect and track PR
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.ClearNotifications()
 
@@ -1083,7 +1095,7 @@ func TestE2E_NewCommitOnPRImReviewing_Notifies(t *testing.T) {
 		Author: "colleague",
 	})
 
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1113,7 +1125,7 @@ func TestE2E_IApproveAPR_NoNotification(t *testing.T) {
 	}
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
-	suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	suite.ClearNotifications()
 	time.Sleep(100 * time.Millisecond)
 
@@ -1125,7 +1137,7 @@ func TestE2E_IApproveAPR_NoNotification(t *testing.T) {
 		CreatedAt: time.Now(),
 	})
 
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1148,7 +1160,7 @@ func TestE2E_ReviewStateApproval_SendsReviewNotification(t *testing.T) {
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
 	// First check: detect the PR (no reviews yet)
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.ClearNotifications()
 
@@ -1157,7 +1169,7 @@ func TestE2E_ReviewStateApproval_SendsReviewNotification(t *testing.T) {
 		{Author: "bob", State: "APPROVED", SubmittedAt: time.Now()},
 	})
 
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1191,7 +1203,7 @@ func TestE2E_ReviewStateChangesRequested_SendsReviewNotification(t *testing.T) {
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
 	// First check: detect the PR
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.ClearNotifications()
 
@@ -1200,7 +1212,7 @@ func TestE2E_ReviewStateChangesRequested_SendsReviewNotification(t *testing.T) {
 		{Author: "charlie", State: "CHANGES_REQUESTED", SubmittedAt: time.Now()},
 	})
 
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1234,7 +1246,7 @@ func TestE2E_ReviewStateChange_ChangesRequestedToApproved(t *testing.T) {
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
 	// First check: detect the PR
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.ClearNotifications()
 
@@ -1243,7 +1255,7 @@ func TestE2E_ReviewStateChange_ChangesRequestedToApproved(t *testing.T) {
 		{Author: "bob", State: "CHANGES_REQUESTED", SubmittedAt: time.Now()},
 	})
 
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1256,7 +1268,7 @@ func TestE2E_ReviewStateChange_ChangesRequestedToApproved(t *testing.T) {
 		{Author: "bob", State: "APPROVED", SubmittedAt: time.Now()},
 	})
 
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1289,7 +1301,7 @@ func TestE2E_SelfReview_NoReviewNotification(t *testing.T) {
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
 	// First check
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.ClearNotifications()
 
@@ -1298,7 +1310,7 @@ func TestE2E_SelfReview_NoReviewNotification(t *testing.T) {
 		{Author: "testuser", State: "APPROVED", SubmittedAt: time.Now()},
 	})
 
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1330,12 +1342,12 @@ func TestE2E_ReviewStateSameState_NoNotification(t *testing.T) {
 		{Author: "bob", State: "APPROVED", SubmittedAt: time.Now()},
 	})
 
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.ClearNotifications()
 
 	// When: Same review state appears again (no change)
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1363,7 +1375,7 @@ func TestE2E_MultipleReviewers_DetectsAllStateChanges(t *testing.T) {
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
 	// First check: detect PR
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.ClearNotifications()
 
@@ -1373,7 +1385,7 @@ func TestE2E_MultipleReviewers_DetectsAllStateChanges(t *testing.T) {
 		{Author: "charlie", State: "CHANGES_REQUESTED", SubmittedAt: time.Now()},
 	})
 
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1413,7 +1425,7 @@ func TestE2E_MenuDisplaysReviewStates(t *testing.T) {
 	})
 
 	// When: Check runs and display is updated
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 
 	// Then: PRs in the menu should have review data available
@@ -1448,7 +1460,7 @@ func TestE2E_PipelineInitialStatus_ShownInMenuImmediately(t *testing.T) {
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
 	// When: first check runs
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 
 	// Then: menu should immediately show the pipeline emoji, no second check needed
@@ -1472,14 +1484,14 @@ func TestE2E_PipelineSuccess_SendsNotificationAndUpdatesMenu(t *testing.T) {
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
 	// First check: detect the PR
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.ClearNotifications()
 
 	// When: CI completes successfully
 	suite.mockGitHub.SetPipelineStatus(2000, "SUCCESS")
 
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1518,14 +1530,14 @@ func TestE2E_PipelineFailure_SendsNotificationAndUpdatesMenu(t *testing.T) {
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
 	// First check: detect the PR with running pipeline
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.ClearNotifications()
 
 	// When: CI fails
 	suite.mockGitHub.SetPipelineStatus(2100, "FAILURE")
 
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1563,14 +1575,14 @@ func TestE2E_PipelineRunning_SendsNotification(t *testing.T) {
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
 	// First check: detect the PR
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.ClearNotifications()
 
 	// When: CI starts running
 	suite.mockGitHub.SetPipelineStatus(2200, "IN_PROGRESS")
 
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1608,12 +1620,12 @@ func TestE2E_PipelineSameStatus_NoNotification(t *testing.T) {
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
 	// First check: detect PR with success status
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.ClearNotifications()
 
 	// When: Same status on next check (no change)
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1638,13 +1650,13 @@ func TestE2E_PipelineRunningToSuccess_SendsTwoNotifications(t *testing.T) {
 	suite.mockGitHub.SetupPRs([]MockPR{pr})
 
 	// First check: detect PR
-	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.ClearNotifications()
 
 	// Cycle 2: pipeline starts
 	suite.mockGitHub.SetPipelineStatus(2400, "IN_PROGRESS")
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1654,7 +1666,7 @@ func TestE2E_PipelineRunningToSuccess_SendsTwoNotifications(t *testing.T) {
 
 	// Cycle 3: pipeline succeeds
 	suite.mockGitHub.SetPipelineStatus(2400, "SUCCESS")
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1719,7 +1731,7 @@ func TestE2E_FirstRun_NoPipelineNoise(t *testing.T) {
 	suite.ClearNotifications()
 
 	// And: Immediately running a second check with unchanged statuses also produces no noise
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 
@@ -1753,7 +1765,7 @@ func TestE2E_FirstRun_PipelineChangeAfterInit_StillNotifies(t *testing.T) {
 	// When: The pipeline subsequently fails
 	suite.mockGitHub.SetPipelineStatus(3100, "FAILURE")
 
-	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx)
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
 	require.NoError(t, err)
 	suite.FlushNotifications()
 

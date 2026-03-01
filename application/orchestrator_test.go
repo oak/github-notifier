@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/oak3/github-notifier/application"
 	"github.com/oak3/github-notifier/application/usecase"
@@ -154,7 +155,7 @@ func TestOrchestrator_ExecuteRegularCheck_WithoutActivityTracking(t *testing.T) 
 	)
 
 	// Act
-	err := orchestrator.ExecuteRegularCheck(context.Background())
+	err := orchestrator.ExecuteRegularCheck(context.Background(), time.Now())
 
 	// Assert
 	require.NoError(t, err)
@@ -204,7 +205,7 @@ func TestOrchestrator_ExecuteRegularCheck_WithActivityTracking(t *testing.T) {
 	)
 
 	// Act
-	err := orchestrator.ExecuteRegularCheck(context.Background())
+	err := orchestrator.ExecuteRegularCheck(context.Background(), time.Now())
 
 	// Assert
 	require.NoError(t, err)
@@ -244,7 +245,7 @@ func TestOrchestrator_ExecuteRegularCheck_CheckNewPRsError(t *testing.T) {
 	)
 
 	// Act
-	err := orchestrator.ExecuteRegularCheck(context.Background())
+	err := orchestrator.ExecuteRegularCheck(context.Background(), time.Now())
 
 	// Assert
 	assert.Error(t, err)
@@ -295,7 +296,7 @@ func TestOrchestrator_ExecuteRegularCheck_ActivityTrackingError_ContinuesWithDis
 	)
 
 	// Act
-	err := orchestrator.ExecuteRegularCheck(context.Background())
+	err := orchestrator.ExecuteRegularCheck(context.Background(), time.Now())
 
 	// Assert
 	require.NoError(t, err) // Orchestrator doesn't fail on activity tracking error

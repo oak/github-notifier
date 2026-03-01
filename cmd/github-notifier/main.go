@@ -270,21 +270,26 @@ func (app *App) startWithConfig(cfg *config.Config) {
 		log.Error().Err(err).Msg("Error during initial check")
 	}
 
-	// Setup periodic checks with context cancellation
+	// Setup periodic checks with context cancellation.
+	// lastCheck is captured before each call so ExecuteRegularCheck receives the
+	// start-of-cycle timestamp rather than the end of the previous cycle.
 	app.checkTicker = time.NewTicker(time.Duration(cfg.CheckInterval) * time.Minute)
 	app.wg.Add(1)
 	go func() {
 		defer app.wg.Done()
+		lastCheck := time.Now()
 		for {
 			select {
 			case <-app.ctx.Done():
 				log.Debug().Msg("Check goroutine received cancellation signal")
 				return
 			case <-app.checkTicker.C:
+				now := time.Now()
 				log.Info().Msg("Checking for PR updates")
-				if err := app.orchestrator.ExecuteRegularCheck(app.ctx); err != nil {
+				if err := app.orchestrator.ExecuteRegularCheck(app.ctx, lastCheck); err != nil {
 					log.Error().Err(err).Msg("Error checking PRs")
 				}
+				lastCheck = now
 			}
 		}
 	}()

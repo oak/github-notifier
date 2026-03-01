@@ -19,7 +19,6 @@ type PullRequestOrchestrator struct {
 	trackActivityUseCase   *usecase.TrackPullRequestActivityUseCase
 	updateDisplayUseCase   *usecase.UpdatePullRequestDisplayUseCase
 	enableActivityTracking bool
-	lastCheckTime          time.Time
 }
 
 // NewPullRequestOrchestrator creates a new orchestrator
@@ -38,7 +37,6 @@ func NewPullRequestOrchestrator(
 		trackActivityUseCase:   trackActivityUseCase,
 		updateDisplayUseCase:   updateDisplayUseCase,
 		enableActivityTracking: enableActivityTracking,
-		lastCheckTime:          time.Now(),
 	}
 }
 
@@ -63,11 +61,13 @@ func (o *PullRequestOrchestrator) ExecuteInitialCheck(ctx context.Context) error
 
 	// Not first run - execute regular check
 	log.Info().Msg("Existing state detected - checking for updates")
-	return o.ExecuteRegularCheck(ctx)
+	return o.ExecuteRegularCheck(ctx, time.Now())
 }
 
-// ExecuteRegularCheck runs a regular periodic check for PR updates
-func (o *PullRequestOrchestrator) ExecuteRegularCheck(ctx context.Context) error {
+// ExecuteRegularCheck runs a regular periodic check for PR updates.
+// lastCheckTime is the timestamp captured before the previous cycle ran;
+// it is owned and threaded by the caller (e.g. the polling goroutine in main).
+func (o *PullRequestOrchestrator) ExecuteRegularCheck(ctx context.Context, lastCheckTime time.Time) error {
 	// Step 1: Fetch and check for new PRs (emits events)
 	result, err := o.checkNewPRsUseCase.Execute(ctx)
 	if err != nil {
@@ -90,7 +90,7 @@ func (o *PullRequestOrchestrator) ExecuteRegularCheck(ctx context.Context) error
 
 	// Step 3: Track activity if enabled
 	if o.enableActivityTracking {
-		if err := o.trackActivityUseCase.Execute(ctx, allCurrentPRs, o.lastCheckTime); err != nil {
+		if err := o.trackActivityUseCase.Execute(ctx, allCurrentPRs, lastCheckTime); err != nil {
 			log.Error().Err(err).Msg("Error tracking activity")
 			// Don't return error - continue with display update
 		}
@@ -103,9 +103,6 @@ func (o *PullRequestOrchestrator) ExecuteRegularCheck(ctx context.Context) error
 		log.Error().Err(err).Msg("Error updating display")
 		return err
 	}
-
-	// Update last check time for next iteration
-	o.lastCheckTime = time.Now()
 
 	return nil
 }
