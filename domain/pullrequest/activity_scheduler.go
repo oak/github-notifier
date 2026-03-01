@@ -4,25 +4,91 @@ import (
 	"time"
 )
 
-// ActivityCheckScheduler implements a two-tier scheduling strategy for checking PR activities
-// Recent PRs (younger than threshold) are checked frequently
-// Stale PRs (older than threshold) are checked less frequently
-type ActivityCheckScheduler struct {
-	recentThreshold    time.Duration // PRs younger than this are "recent"
-	staleCheckInterval time.Duration // How often to check stale PRs
-	lastCheckMap       map[string]time.Time
+// SchedulerConfig holds the immutable configuration for the two-tier scheduling strategy.
+type SchedulerConfig struct {
+	RecentThreshold    time.Duration // PRs younger than this are "recent"
+	StaleCheckInterval time.Duration // How often to check stale PRs
 }
 
-// NewActivityCheckScheduler creates a new activity check scheduler
+// DetermineChecks is a pure function that determines which PRs need activity checks.
+// No I/O — same inputs always produce the same output.
+// Returns the PRs to check plus per-tier counts (recent, stale, skipped).
+//
+// Two-tier logic:
+//   - Recent PRs (age < cfg.RecentThreshold): always check
+//   - Stale PRs (age >= cfg.RecentThreshold): check only if cfg.StaleCheckInterval has elapsed
+//     since the last entry in lastChecked (a missing entry is treated as never checked)
+func DetermineChecks(
+	prs []*PullRequest,
+	lastChecked map[string]time.Time,
+	cfg SchedulerConfig,
+	now time.Time,
+) (toCheck []*PullRequest, recentN, staleN, skippedN int) {
+	toCheck = make([]*PullRequest, 0, len(prs))
+
+	for _, pr := range prs {
+		prAge := now.Sub(pr.CreatedAt())
+		shouldCheck := false
+
+		if prAge < cfg.RecentThreshold {
+			// Recent PR: always check
+			shouldCheck = true
+			recentN++
+		} else {
+			// Stale PR: check only if enough time has passed since last check
+			timeSinceLastCheck := now.Sub(lastChecked[pr.URL()])
+			if timeSinceLastCheck >= cfg.StaleCheckInterval {
+				shouldCheck = true
+				staleN++
+			}
+		}
+
+		if shouldCheck {
+			toCheck = append(toCheck, pr)
+		}
+	}
+
+	skippedN = len(prs) - len(toCheck)
+	return
+}
+
+// RecordChecked is a pure function that returns a new map with the given PRs
+// recorded as checked at now. The input map is never mutated.
+func RecordChecked(
+	lastChecked map[string]time.Time,
+	prs []*PullRequest,
+	now time.Time,
+) map[string]time.Time {
+	updated := make(map[string]time.Time, len(lastChecked)+len(prs))
+	for k, v := range lastChecked {
+		updated[k] = v
+	}
+	for _, pr := range prs {
+		updated[pr.URL()] = now
+	}
+	return updated
+}
+
+// ActivityCheckScheduler is a thin stateful wrapper around the pure DetermineChecks
+// and RecordChecked functions. It owns lastCheckMap and supplies the current time
+// so that call sites in use cases remain unchanged.
+type ActivityCheckScheduler struct {
+	cfg          SchedulerConfig
+	lastCheckMap map[string]time.Time
+}
+
+// NewActivityCheckScheduler creates a new activity check scheduler.
 func NewActivityCheckScheduler(recentThresholdHours int, staleCheckIntervalMin int) *ActivityCheckScheduler {
 	return &ActivityCheckScheduler{
-		recentThreshold:    time.Duration(recentThresholdHours) * time.Hour,
-		staleCheckInterval: time.Duration(staleCheckIntervalMin) * time.Minute,
-		lastCheckMap:       make(map[string]time.Time),
+		cfg: SchedulerConfig{
+			RecentThreshold:    time.Duration(recentThresholdHours) * time.Hour,
+			StaleCheckInterval: time.Duration(staleCheckIntervalMin) * time.Minute,
+		},
+		lastCheckMap: make(map[string]time.Time),
 	}
 }
 
-// ScheduleResult contains the results of scheduling determination
+// ScheduleResult contains the results of scheduling determination.
 type ScheduleResult struct {
 	PRsToCheck   []*PullRequest
 	RecentCount  int
@@ -30,63 +96,30 @@ type ScheduleResult struct {
 	SkippedCount int
 }
 
-// DeterminePRsToCheckAt implements the two-tier scheduling logic at the given time.
-// Returns which PRs should be checked for activity based on:
-// - Recent PRs (age < recentThreshold): Always check
-// - Stale PRs (age >= recentThreshold): Check only if staleCheckInterval has passed since last check
+// DeterminePRsToCheckAt returns which PRs should be checked for activity at the given time.
+// Thin wrapper around DetermineChecks using the scheduler's owned state.
 func (s *ActivityCheckScheduler) DeterminePRsToCheckAt(now time.Time, prs []*PullRequest) *ScheduleResult {
-	result := &ScheduleResult{
-		PRsToCheck: make([]*PullRequest, 0, len(prs)),
+	toCheck, recentN, staleN, skippedN := DetermineChecks(prs, s.lastCheckMap, s.cfg, now)
+	return &ScheduleResult{
+		PRsToCheck:   toCheck,
+		RecentCount:  recentN,
+		StaleCount:   staleN,
+		SkippedCount: skippedN,
 	}
-
-	for _, pr := range prs {
-		prURL := pr.URL()
-		prAge := now.Sub(pr.CreatedAt())
-		lastCheck := s.lastCheckMap[prURL]
-
-		shouldCheck := false
-
-		if prAge < s.recentThreshold {
-			// Recent PR: always check
-			shouldCheck = true
-			result.RecentCount++
-		} else {
-			// Stale PR: check only if enough time passed since last check
-			timeSinceLastCheck := now.Sub(lastCheck)
-			if timeSinceLastCheck >= s.staleCheckInterval {
-				shouldCheck = true
-				result.StaleCount++
-			}
-		}
-
-		if shouldCheck {
-			result.PRsToCheck = append(result.PRsToCheck, pr)
-		}
-	}
-
-	result.SkippedCount = len(prs) - len(result.PRsToCheck)
-
-	return result
 }
 
-// DeterminePRsToCheck implements the two-tier scheduling logic.
-// Returns which PRs should be checked for activity based on:
-// - Recent PRs (age < recentThreshold): Always check
-// - Stale PRs (age >= recentThreshold): Check only if staleCheckInterval has passed since last check
+// DeterminePRsToCheck calls DeterminePRsToCheckAt with the current time.
 func (s *ActivityCheckScheduler) DeterminePRsToCheck(prs []*PullRequest) *ScheduleResult {
 	return s.DeterminePRsToCheckAt(time.Now(), prs)
 }
 
 // MarkCheckedAt records that the given PRs were checked at the given time.
-// This is used to track when stale PRs were last checked.
+// Thin wrapper around RecordChecked using the scheduler's owned state.
 func (s *ActivityCheckScheduler) MarkCheckedAt(now time.Time, prs []*PullRequest) {
-	for _, pr := range prs {
-		s.lastCheckMap[pr.URL()] = now
-	}
+	s.lastCheckMap = RecordChecked(s.lastCheckMap, prs, now)
 }
 
 // MarkChecked records that the given PRs were checked at the current time.
-// This is used to track when stale PRs were last checked.
 func (s *ActivityCheckScheduler) MarkChecked(prs []*PullRequest) {
 	s.MarkCheckedAt(time.Now(), prs)
 }
