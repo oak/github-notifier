@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak3/github-notifier/infrastructure/ui"
 )
 
 func TestE2E_NewPRDetection_SendsNotification(t *testing.T) {
@@ -1437,7 +1438,7 @@ func TestE2E_MenuDisplaysReviewStates(t *testing.T) {
 	assert.False(t, reviewSummary.IsEmpty(), "PR should have review summary")
 
 	// Verify menu format includes review state info
-	formatted := reviewSummary.FormatForMenu()
+	formatted := ui.FormatReviewSummaryForMenu(reviewSummary)
 	assert.NotEmpty(t, formatted, "Review summary should produce formatted output")
 	assert.Contains(t, formatted, "✅", "Should show approval emoji")
 	assert.Contains(t, formatted, "❌", "Should show changes requested emoji")

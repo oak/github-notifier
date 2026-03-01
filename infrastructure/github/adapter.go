@@ -466,7 +466,7 @@ func (a *Adapter) fetchBatchedTimelines(prs []*pullrequest.PullRequest, since ti
 							if commit, ok := lastNode["commit"].(map[string]interface{}); ok {
 								if rollup, ok := commit["statusCheckRollup"].(map[string]interface{}); ok {
 									if state, ok := rollup["state"].(string); ok {
-										pipelineStatus := pullrequest.PipelineStatusFromRollup(state)
+										pipelineStatus := pipelineStatusFromRollup(state)
 										batchEvents = append(batchEvents, info.pr.UpdatePipelineStatus(pipelineStatus)...)
 									}
 								}

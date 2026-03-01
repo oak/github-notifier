@@ -421,31 +421,3 @@ func TestPipelineStatus_Emoji(t *testing.T) {
 		})
 	}
 }
-
-func TestPipelineStatusFromRollup(t *testing.T) {
-	tests := []struct {
-		state    string
-		expected pullrequest.PipelineStatus
-	}{
-		{"PENDING", pullrequest.PipelineStatusRunning},
-		{"IN_PROGRESS", pullrequest.PipelineStatusRunning},
-		{"WAITING", pullrequest.PipelineStatusRunning},
-		{"QUEUED", pullrequest.PipelineStatusRunning},
-		{"SUCCESS", pullrequest.PipelineStatusSuccess},
-		{"NEUTRAL", pullrequest.PipelineStatusSuccess},
-		{"SKIPPED", pullrequest.PipelineStatusSuccess},
-		{"FAILURE", pullrequest.PipelineStatusFailed},
-		{"ERROR", pullrequest.PipelineStatusFailed},
-		{"CANCELLED", pullrequest.PipelineStatusFailed},
-		{"TIMED_OUT", pullrequest.PipelineStatusFailed},
-		{"", pullrequest.PipelineStatusUnknown},
-		{"SOME_FUTURE_STATE", pullrequest.PipelineStatusUnknown},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.state, func(t *testing.T) {
-			result := pullrequest.PipelineStatusFromRollup(tt.state)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}

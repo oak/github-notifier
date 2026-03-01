@@ -665,7 +665,8 @@ func TestPullRequest_ReviewSummary(t *testing.T) {
 
 	// Assert
 	assert.False(t, summary.IsEmpty())
-	assert.Equal(t, "(✅ Joe | ❌ Alice)", summary.FormatForMenu())
+	assert.Len(t, summary.ReviewersByState(pullrequest.ReviewStateApproved), 1)
+	assert.Len(t, summary.ReviewersByState(pullrequest.ReviewStateChangesRequested), 1)
 }
 
 func TestPullRequest_ReviewSummary_Empty(t *testing.T) {
@@ -677,7 +678,7 @@ func TestPullRequest_ReviewSummary_Empty(t *testing.T) {
 
 	// Assert
 	assert.True(t, summary.IsEmpty())
-	assert.Equal(t, "", summary.FormatForMenu())
+	assert.Empty(t, summary.ReviewersByState(pullrequest.ReviewStateApproved))
 }
 
 func TestPullRequest_Reviews_ReturnsCopy(t *testing.T) {

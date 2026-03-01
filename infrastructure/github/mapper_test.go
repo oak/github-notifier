@@ -398,3 +398,59 @@ func TestToDomain_WithReviews(t *testing.T) {
 	assert.Len(t, reviews, 1)
 	assert.Equal(t, pullrequest.ReviewStateApproved, reviews["joe"].State())
 }
+
+// --- GitHub API conversion function tests ---
+
+func TestReviewStateFromString(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected pullrequest.ReviewState
+		ok       bool
+	}{
+		{"APPROVED", pullrequest.ReviewStateApproved, true},
+		{"CHANGES_REQUESTED", pullrequest.ReviewStateChangesRequested, true},
+		{"COMMENTED", pullrequest.ReviewStateCommented, true},
+		{"DISMISSED", pullrequest.ReviewStateDismissed, true},
+		{"UNKNOWN", 0, false},
+		{"", 0, false},
+		{"approved", 0, false}, // Case-sensitive
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			state, ok := reviewStateFromString(tt.input)
+			assert.Equal(t, tt.ok, ok)
+			if ok {
+				assert.Equal(t, tt.expected, state)
+			}
+		})
+	}
+}
+
+func TestPipelineStatusFromRollup(t *testing.T) {
+	tests := []struct {
+		state    string
+		expected pullrequest.PipelineStatus
+	}{
+		{"PENDING", pullrequest.PipelineStatusRunning},
+		{"IN_PROGRESS", pullrequest.PipelineStatusRunning},
+		{"WAITING", pullrequest.PipelineStatusRunning},
+		{"QUEUED", pullrequest.PipelineStatusRunning},
+		{"SUCCESS", pullrequest.PipelineStatusSuccess},
+		{"NEUTRAL", pullrequest.PipelineStatusSuccess},
+		{"SKIPPED", pullrequest.PipelineStatusSuccess},
+		{"FAILURE", pullrequest.PipelineStatusFailed},
+		{"ERROR", pullrequest.PipelineStatusFailed},
+		{"CANCELLED", pullrequest.PipelineStatusFailed},
+		{"TIMED_OUT", pullrequest.PipelineStatusFailed},
+		{"", pullrequest.PipelineStatusUnknown},
+		{"SOME_FUTURE_STATE", pullrequest.PipelineStatusUnknown},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.state, func(t *testing.T) {
+			result := pipelineStatusFromRollup(tt.state)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

@@ -1,9 +1,6 @@
 package pullrequest
 
 import (
-	"fmt"
-	"sort"
-	"strings"
 	"time"
 )
 
@@ -53,47 +50,8 @@ func (rs *ReviewSummary) IsEmpty() bool {
 	return len(rs.reviews) == 0
 }
 
-// FormatForMenu returns a formatted string for display in the system tray menu.
-// Groups reviewers by state:
-//   - (✅ Joe, Mike | ❌ Alice) — approved and changes requested
-//   - (✅ Joe) — only approved
-//   - (💬 Bob) — only commented
-func (rs *ReviewSummary) FormatForMenu() string {
-	if rs.IsEmpty() {
-		return ""
-	}
-
-	// Group reviewers by state (only show approved and changes_requested in compact view)
-	approved := rs.reviewersByState(ReviewStateApproved)
-	changesRequested := rs.reviewersByState(ReviewStateChangesRequested)
-	commented := rs.reviewersByState(ReviewStateCommented)
-
-	var parts []string
-
-	if len(approved) > 0 {
-		sort.Strings(approved)
-		parts = append(parts, fmt.Sprintf("✅ %s", strings.Join(approved, ", ")))
-	}
-
-	if len(commented) > 0 {
-		sort.Strings(commented)
-		parts = append(parts, fmt.Sprintf("💬 %s", strings.Join(commented, ", ")))
-	}
-
-	if len(changesRequested) > 0 {
-		sort.Strings(changesRequested)
-		parts = append(parts, fmt.Sprintf("❌ %s", strings.Join(changesRequested, ", ")))
-	}
-
-	if len(parts) == 0 {
-		return ""
-	}
-
-	return fmt.Sprintf("(%s)", strings.Join(parts, " | "))
-}
-
-// reviewersByState returns sorted reviewer logins for a given state
-func (rs *ReviewSummary) reviewersByState(state ReviewState) []string {
+// ReviewersByState returns reviewer logins for a given state
+func (rs *ReviewSummary) ReviewersByState(state ReviewState) []string {
 	var logins []string
 	for login, review := range rs.reviews {
 		if review.State() == state {

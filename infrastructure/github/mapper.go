@@ -7,6 +7,36 @@ import (
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
+// reviewStateFromString converts a GitHub API review state string to a domain ReviewState.
+func reviewStateFromString(s string) (pullrequest.ReviewState, bool) {
+	switch s {
+	case "APPROVED":
+		return pullrequest.ReviewStateApproved, true
+	case "CHANGES_REQUESTED":
+		return pullrequest.ReviewStateChangesRequested, true
+	case "COMMENTED":
+		return pullrequest.ReviewStateCommented, true
+	case "DISMISSED":
+		return pullrequest.ReviewStateDismissed, true
+	default:
+		return 0, false
+	}
+}
+
+// pipelineStatusFromRollup converts a GitHub statusCheckRollup state string to a domain PipelineStatus.
+func pipelineStatusFromRollup(state string) pullrequest.PipelineStatus {
+	switch state {
+	case "PENDING", "IN_PROGRESS", "WAITING", "QUEUED", "ACTION_REQUIRED", "STALE":
+		return pullrequest.PipelineStatusRunning
+	case "SUCCESS", "NEUTRAL", "SKIPPED":
+		return pullrequest.PipelineStatusSuccess
+	case "FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "STARTUP_FAILURE":
+		return pullrequest.PipelineStatusFailed
+	default:
+		return pullrequest.PipelineStatusUnknown
+	}
+}
+
 // toDomain converts a GitHub DTO to a domain PullRequest
 func toDomain(dto PullRequestDTO) (*pullrequest.PullRequest, error) {
 	repo, err := pullrequest.NewRepository(dto.Repository.NameWithOwner)
@@ -43,7 +73,7 @@ func toDomain(dto PullRequestDTO) (*pullrequest.PullRequest, error) {
 	if dto.Commits != nil && len(dto.Commits.Nodes) > 0 {
 		last := dto.Commits.Nodes[len(dto.Commits.Nodes)-1]
 		if last.Commit.StatusCheckRollup != nil {
-			status := pullrequest.PipelineStatusFromRollup(last.Commit.StatusCheckRollup.State)
+			status := pipelineStatusFromRollup(last.Commit.StatusCheckRollup.State)
 			// Set initial pipeline status without raising events (this is initial state, not a change)
 			pr.SetInitialPipelineStatus(status)
 		}
@@ -79,7 +109,7 @@ func toReviews(dtos []ReviewDTO) map[string]*pullrequest.Review {
 			continue
 		}
 
-		state, ok := pullrequest.ReviewStateFromString(dto.State)
+		state, ok := reviewStateFromString(dto.State)
 		if !ok {
 			continue
 		}

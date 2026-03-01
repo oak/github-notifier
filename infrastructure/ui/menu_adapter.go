@@ -480,7 +480,7 @@ func (m *MenuAdapter) formatPRTitle(pr *pullrequest.PullRequest) string {
 	reviewSuffix := ""
 	summary := pr.ReviewSummary()
 	if !summary.IsEmpty() {
-		reviewSuffix = " " + summary.FormatForMenu()
+		reviewSuffix = " " + FormatReviewSummaryForMenu(summary)
 	}
 
 	pipelinePrefix := ""
