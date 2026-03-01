@@ -69,7 +69,6 @@ func SetupSuite(t *testing.T) *TestSuite {
 
 	// Setup domain services
 	prFilter := pullrequest.NewPRFilter(false) // Don't include drafts by default
-	prClassifier := pullrequest.NewPRClassifier()
 	activityScheduler := pullrequest.NewActivityCheckScheduler(
 		72, // Recent PR threshold hours (default)
 		15, // Stale PR check interval minutes (default)
@@ -87,7 +86,6 @@ func SetupSuite(t *testing.T) *TestSuite {
 		githubAdapter,
 		trackingService,
 		prFilter,
-		prClassifier,
 		eventBus,
 	)
 
@@ -171,11 +169,10 @@ func SetupSuiteFromStateFile(t *testing.T, stateFilePath string) *TestSuite {
 	eventBus.Subscribe(pullrequest.EventPipelineStatusChanged, trackingHandler)
 
 	prFilter := pullrequest.NewPRFilter(false)
-	prClassifier := pullrequest.NewPRClassifier()
 	activityScheduler := pullrequest.NewActivityCheckScheduler(72, 15)
 
 	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(githubAdapter, trackingService, prFilter, menuAdapter)
-	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(githubAdapter, trackingService, prFilter, prClassifier, eventBus)
+	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(githubAdapter, trackingService, prFilter, eventBus)
 	detectClosedPRsUseCase := usecase.NewDetectClosedPullRequestsUseCase(githubAdapter, stateRepo, eventBus)
 	trackActivityUseCase := usecase.NewTrackPullRequestActivityUseCase(githubAdapter, stateRepo, activityScheduler, trackingService, eventBus, githubAdapter.AuthenticatedUser())
 	updateDisplayUseCase := usecase.NewUpdatePullRequestDisplayUseCase(menuAdapter, trackingService)
@@ -234,11 +231,10 @@ func SetupSuiteOnMockServer(t *testing.T, mockGitHub *MockGitHubServer, stateFil
 	eventBus.Subscribe(pullrequest.EventPipelineStatusChanged, trackingHandler)
 
 	prFilter := pullrequest.NewPRFilter(false)
-	prClassifier := pullrequest.NewPRClassifier()
 	activityScheduler := pullrequest.NewActivityCheckScheduler(72, 15)
 
 	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(githubAdapter, trackingService, prFilter, menuAdapter)
-	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(githubAdapter, trackingService, prFilter, prClassifier, eventBus)
+	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(githubAdapter, trackingService, prFilter, eventBus)
 	detectClosedPRsUseCase := usecase.NewDetectClosedPullRequestsUseCase(githubAdapter, stateRepo, eventBus)
 	trackActivityUseCase := usecase.NewTrackPullRequestActivityUseCase(githubAdapter, stateRepo, activityScheduler, trackingService, eventBus, githubAdapter.AuthenticatedUser())
 	updateDisplayUseCase := usecase.NewUpdatePullRequestDisplayUseCase(menuAdapter, trackingService)

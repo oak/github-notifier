@@ -30,19 +30,18 @@ func NewUpdatePullRequestDisplayUseCase(
 func (uc *UpdatePullRequestDisplayUseCase) Execute(ctx context.Context, requestedReviewPRs []*pullrequest.PullRequest,
 	userCreatedPRs []*pullrequest.PullRequest,
 ) error {
-	// Sort PRs by creation date (oldest first)
-	uc.sortPRsByCreatedAt(requestedReviewPRs)
-	uc.sortPRsByCreatedAt(userCreatedPRs)
-
-	// Update UI with sorted PRs and tracking state
-	uc.uiPort.UpdateDisplay(requestedReviewPRs, userCreatedPRs, uc.trackingService)
+	// Sort PRs by creation date (oldest first) — original slices are not modified
+	uc.uiPort.UpdateDisplay(sortedByCreatedAt(requestedReviewPRs), sortedByCreatedAt(userCreatedPRs), uc.trackingService)
 
 	return nil
 }
 
-// sortPRsByCreatedAt sorts pull requests by creation date (oldest first)
-func (uc *UpdatePullRequestDisplayUseCase) sortPRsByCreatedAt(prs []*pullrequest.PullRequest) {
-	sort.Slice(prs, func(i, j int) bool {
-		return prs[i].CreatedAt().Before(prs[j].CreatedAt())
+// sortedByCreatedAt returns a new slice sorted by creation date (oldest first)
+func sortedByCreatedAt(prs []*pullrequest.PullRequest) []*pullrequest.PullRequest {
+	out := make([]*pullrequest.PullRequest, len(prs))
+	copy(out, prs)
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].CreatedAt().Before(out[j].CreatedAt())
 	})
+	return out
 }

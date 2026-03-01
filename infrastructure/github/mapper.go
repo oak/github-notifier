@@ -7,16 +7,8 @@ import (
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
-// Mapper converts between DTOs and domain models
-type Mapper struct{}
-
-// NewMapper creates a new mapper
-func NewMapper() *Mapper {
-	return &Mapper{}
-}
-
-// ToDomain converts a GitHub DTO to a domain PullRequest
-func (m *Mapper) ToDomain(dto PullRequestDTO) (*pullrequest.PullRequest, error) {
+// toDomain converts a GitHub DTO to a domain PullRequest
+func toDomain(dto PullRequestDTO) (*pullrequest.PullRequest, error) {
 	repo, err := pullrequest.NewRepository(dto.Repository.NameWithOwner)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create repository: %w", err)
@@ -42,7 +34,7 @@ func (m *Mapper) ToDomain(dto PullRequestDTO) (*pullrequest.PullRequest, error) 
 
 	// Map reviews if present
 	if dto.LatestReviews != nil {
-		reviews := m.ToReviews(dto.LatestReviews.Nodes)
+		reviews := toReviews(dto.LatestReviews.Nodes)
 		// Set initial reviews without raising events (this is initial state, not a change)
 		pr.SetInitialReviews(reviews)
 	}
@@ -60,12 +52,12 @@ func (m *Mapper) ToDomain(dto PullRequestDTO) (*pullrequest.PullRequest, error) 
 	return pr, nil
 }
 
-// ToDomainList converts a list of DTOs to domain PullRequests
-func (m *Mapper) ToDomainList(dtos []PullRequestDTO) ([]*pullrequest.PullRequest, error) {
+// toDomainList converts a list of DTOs to domain PullRequests
+func toDomainList(dtos []PullRequestDTO) ([]*pullrequest.PullRequest, error) {
 	prs := make([]*pullrequest.PullRequest, 0, len(dtos))
 
 	for _, dto := range dtos {
-		pr, err := m.ToDomain(dto)
+		pr, err := toDomain(dto)
 		if err != nil {
 			// Log error but continue with other PRs
 			continue
@@ -76,10 +68,10 @@ func (m *Mapper) ToDomainList(dtos []PullRequestDTO) ([]*pullrequest.PullRequest
 	return prs, nil
 }
 
-// ToReviews converts a list of ReviewDTOs to a map of reviewer login -> latest Review.
+// toReviews converts a list of ReviewDTOs to a map of reviewer login -> latest Review.
 // GitHub's latestReviews connection returns the most recent review per reviewer,
 // so we map each one directly.
-func (m *Mapper) ToReviews(dtos []ReviewDTO) map[string]*pullrequest.Review {
+func toReviews(dtos []ReviewDTO) map[string]*pullrequest.Review {
 	reviews := make(map[string]*pullrequest.Review)
 
 	for _, dto := range dtos {
@@ -103,8 +95,8 @@ func (m *Mapper) ToReviews(dtos []ReviewDTO) map[string]*pullrequest.Review {
 	return reviews
 }
 
-// ToActivity converts a single timeline item DTO to a domain activity
-func (m *Mapper) ToActivity(pr *pullrequest.PullRequest, dto TimelineItemDTO) *pullrequest.Activity {
+// toActivity converts a single timeline item DTO to a domain activity
+func toActivity(pr *pullrequest.PullRequest, dto TimelineItemDTO) *pullrequest.Activity {
 	switch dto.Typename {
 	case "IssueComment":
 		if dto.Author == nil {
@@ -166,15 +158,15 @@ func (m *Mapper) ToActivity(pr *pullrequest.PullRequest, dto TimelineItemDTO) *p
 	return nil
 }
 
-// ToActivityList converts timeline item DTOs to domain activities, filtering by time.
+// toActivityList converts timeline item DTOs to domain activities, filtering by time.
 // All activities are recorded as domain facts; notification filtering (e.g. suppressing
 // self-authored activities) is handled by the notification event handler.
-func (m *Mapper) ToActivityList(pr *pullrequest.PullRequest, dtos []TimelineItemDTO, since time.Time) []*pullrequest.Activity {
+func toActivityList(pr *pullrequest.PullRequest, dtos []TimelineItemDTO, since time.Time) []*pullrequest.Activity {
 	var activities []*pullrequest.Activity
 
 	for _, dto := range dtos {
 		// Check for reactions on this timeline item (even if the item itself is old)
-		reactionActivities := m.ToReactionActivities(pr, dto, since)
+		reactionActivities := toReactionActivities(pr, dto, since)
 		activities = append(activities, reactionActivities...)
 
 		// Skip items older than since time for regular activities
@@ -182,7 +174,7 @@ func (m *Mapper) ToActivityList(pr *pullrequest.PullRequest, dtos []TimelineItem
 			continue
 		}
 
-		activity := m.ToActivity(pr, dto)
+		activity := toActivity(pr, dto)
 		if activity != nil {
 			activities = append(activities, activity)
 		}
@@ -191,10 +183,10 @@ func (m *Mapper) ToActivityList(pr *pullrequest.PullRequest, dtos []TimelineItem
 	return activities
 }
 
-// ToReactionActivities extracts reaction activities from a timeline item (comment or review).
+// toReactionActivities extracts reaction activities from a timeline item (comment or review).
 // All reactions are recorded as domain facts; notification filtering (e.g. suppressing
 // self-reactions) is handled by the notification event handler.
-func (m *Mapper) ToReactionActivities(pr *pullrequest.PullRequest, dto TimelineItemDTO, since time.Time) []*pullrequest.Activity {
+func toReactionActivities(pr *pullrequest.PullRequest, dto TimelineItemDTO, since time.Time) []*pullrequest.Activity {
 	var activities []*pullrequest.Activity
 
 	// Only process reactions for comments and reviews

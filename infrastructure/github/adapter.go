@@ -12,7 +12,6 @@ import (
 // Adapter implements the pullrequest.PullRequestRepository interface
 type Adapter struct {
 	client            *Client
-	mapper            *Mapper
 	authenticatedUser string // GitHub login of authenticated user
 }
 
@@ -31,7 +30,6 @@ func NewAdapter(token string) *Adapter {
 
 	return &Adapter{
 		client:            client,
-		mapper:            NewMapper(),
 		authenticatedUser: authenticatedUser,
 	}
 }
@@ -51,7 +49,6 @@ func NewAdapterWithURL(baseURL string) *Adapter {
 
 	return &Adapter{
 		client:            client,
-		mapper:            NewMapper(),
 		authenticatedUser: authenticatedUser,
 	}
 }
@@ -291,7 +288,7 @@ func (a *Adapter) fetchPaginatedPRs(query string) ([]*pullrequest.PullRequest, e
 			return nil, fmt.Errorf("failed to fetch PRs: %w", err)
 		}
 
-		prs, err := a.mapper.ToDomainList(response.Data.Search.Nodes)
+		prs, err := toDomainList(response.Data.Search.Nodes)
 		if err != nil {
 			return nil, fmt.Errorf("failed to map PRs to domain: %w", err)
 		}
@@ -486,7 +483,7 @@ func (a *Adapter) fetchBatchedTimelines(prs []*pullrequest.PullRequest, since ti
 						}
 
 						// Map to domain activities
-						activities := a.mapper.ToActivityList(info.pr, dtos, since)
+						activities := toActivityList(info.pr, dtos, since)
 						result[info.pr.URL()] = activities
 					}
 				}

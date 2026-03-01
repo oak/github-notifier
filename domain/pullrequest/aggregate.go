@@ -314,8 +314,8 @@ func (pr *PullRequest) RecordHeadCommitUpdate(newHeadSHA string) {
 	pr.AddActivity(pushActivity)
 }
 
-// CollectEvents returns all pending domain events and clears the internal event list
-func (pr *PullRequest) CollectEvents() []Event {
+// DrainEvents returns all pending domain events and clears the internal event list
+func (pr *PullRequest) DrainEvents() []Event {
 	events := pr.events
 	pr.events = make([]Event, 0)
 	return events

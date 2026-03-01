@@ -195,7 +195,6 @@ func (app *App) startWithConfig(cfg *config.Config) {
 
 	// Initialize domain services
 	prFilter := pullrequest.NewPRFilter(cfg.IncludeDraftPRs)
-	prClassifier := pullrequest.NewPRClassifier()
 	activityScheduler := pullrequest.NewActivityCheckScheduler(
 		cfg.RecentPRThresholdHours,
 		cfg.StalePRCheckIntervalMin,
@@ -233,7 +232,6 @@ func (app *App) startWithConfig(cfg *config.Config) {
 		githubAdapter,
 		trackingService,
 		prFilter,
-		prClassifier,
 		eventBus,
 	)
 

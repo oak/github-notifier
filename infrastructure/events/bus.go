@@ -3,7 +3,6 @@ package events
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	"github.com/rs/zerolog/log"
 
@@ -28,13 +27,13 @@ func NewInMemoryEventBus() *InMemoryEventBus {
 // eventType should be the concrete type name (e.g., "NewPullRequestDetected")
 func (bus *InMemoryEventBus) Subscribe(eventType string, handler port.EventHandler) {
 	bus.handlers[eventType] = append(bus.handlers[eventType], handler)
-	log.Info().Msgf("Event handler registered for: %s by %s", eventType, reflect.TypeOf(handler).Elem().Name())
+	log.Info().Msgf("Event handler registered for: %s by %T", eventType, handler)
 }
 
 // Publish dispatches an event to all registered handlers for that event type
 // Implements the EventPublisher port interface
 func (bus *InMemoryEventBus) Publish(event pullrequest.Event) error {
-	eventType := reflect.TypeOf(event).Elem().Name()
+	eventType := event.Name()
 
 	handlers, exists := bus.handlers[eventType]
 	if !exists || len(handlers) == 0 {

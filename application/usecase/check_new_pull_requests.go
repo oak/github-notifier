@@ -16,7 +16,6 @@ type CheckNewPullRequestsUseCase struct {
 	prRepo          pullrequest.PullRequestRepository
 	trackingService *pullrequest.TrackingService
 	prFilter        *pullrequest.PRFilter
-	prClassifier    *pullrequest.PRClassifier
 	eventPublisher  port.EventPublisher
 	lastCheckTime   time.Time
 	knownPRs        map[string]bool                           // Tracks all PRs ever encountered by URL, independent of seen repository
@@ -28,14 +27,12 @@ func NewCheckNewPullRequestsUseCase(
 	prRepo pullrequest.PullRequestRepository,
 	trackingService *pullrequest.TrackingService,
 	prFilter *pullrequest.PRFilter,
-	prClassifier *pullrequest.PRClassifier,
 	eventPublisher port.EventPublisher,
 ) *CheckNewPullRequestsUseCase {
 	return &CheckNewPullRequestsUseCase{
 		prRepo:          prRepo,
 		trackingService: trackingService,
 		prFilter:        prFilter,
-		prClassifier:    prClassifier,
 		eventPublisher:  eventPublisher,
 		lastCheckTime:   time.Now(),
 		knownPRs:        make(map[string]bool),
@@ -118,14 +115,14 @@ func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequ
 	log.Info().Msgf("Found %d new %s PRs", len(newPRs), category)
 
 	// Classify PRs: truly new vs. PRs with new activity
-	trulyNewPRs, prsWithActivity := uc.prClassifier.ClassifyPRs(newPRs, uc.lastCheckTime)
+	trulyNewPRs, prsWithActivity := pullrequest.ClassifyPRs(newPRs, uc.lastCheckTime)
 
 	// Mark truly new PRs as newly detected (raises domain events)
 	for _, pr := range trulyNewPRs {
 		pr.MarkAsNewlyDetected()
 
-		// Collect and publish events from the aggregate
-		for _, event := range pr.CollectEvents() {
+		// Drain and publish events from the aggregate
+		for _, event := range pr.DrainEvents() {
 			if err := uc.eventPublisher.Publish(event); err != nil {
 				log.Error().Err(err).Msg("Error publishing new PR event")
 			}
@@ -168,8 +165,8 @@ func (uc *CheckNewPullRequestsUseCase) detectReviewStateChanges(prs []*pullreque
 			pr.AddReview(review)
 		}
 
-		// Collect and publish events raised by AddReview.
-		for _, event := range pr.CollectEvents() {
+		// Drain and publish events raised by AddReview.
+		for _, event := range pr.DrainEvents() {
 			if err := uc.eventPublisher.Publish(event); err != nil {
 				log.Error().Err(err).Msg("Error publishing review state changed event")
 			}

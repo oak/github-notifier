@@ -1,22 +1,20 @@
-package github_test
+package github
 
 import (
 	"testing"
 	"time"
 
 	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/oak3/github-notifier/infrastructure/github"
 	"github.com/oak3/github-notifier/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestMapper_ToDomain_ValidDTO(t *testing.T) {
+func TestToDomain_ValidDTO(t *testing.T) {
 	// Arrange
-	mapper := github.NewMapper()
 	now := time.Now()
 
-	dto := github.PullRequestDTO{
+	dto := PullRequestDTO{
 		Title:     "Test PR",
 		URL:       "https://github.com/owner/repo/pull/1",
 		Number:    1,
@@ -27,7 +25,7 @@ func TestMapper_ToDomain_ValidDTO(t *testing.T) {
 	dto.Author.Login = "testuser"
 
 	// Act
-	pr, err := mapper.ToDomain(dto)
+	pr, err := toDomain(dto)
 
 	// Assert
 	require.NoError(t, err)
@@ -39,11 +37,9 @@ func TestMapper_ToDomain_ValidDTO(t *testing.T) {
 	assert.False(t, pr.IsDraft())
 }
 
-func TestMapper_ToDomain_InvalidRepository(t *testing.T) {
+func TestToDomain_InvalidRepository(t *testing.T) {
 	// Arrange
-	mapper := github.NewMapper()
-
-	dto := github.PullRequestDTO{
+	dto := PullRequestDTO{
 		Title:  "Test PR",
 		URL:    "https://github.com/owner/repo/pull/1",
 		Number: 1,
@@ -52,7 +48,7 @@ func TestMapper_ToDomain_InvalidRepository(t *testing.T) {
 	dto.Author.Login = "testuser"
 
 	// Act
-	pr, err := mapper.ToDomain(dto)
+	pr, err := toDomain(dto)
 
 	// Assert
 	assert.Error(t, err)
@@ -60,11 +56,9 @@ func TestMapper_ToDomain_InvalidRepository(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to create repository")
 }
 
-func TestMapper_ToDomain_InvalidAuthor(t *testing.T) {
+func TestToDomain_InvalidAuthor(t *testing.T) {
 	// Arrange
-	mapper := github.NewMapper()
-
-	dto := github.PullRequestDTO{
+	dto := PullRequestDTO{
 		Title:  "Test PR",
 		URL:    "https://github.com/owner/repo/pull/1",
 		Number: 1,
@@ -73,7 +67,7 @@ func TestMapper_ToDomain_InvalidAuthor(t *testing.T) {
 	dto.Author.Login = "" // Invalid
 
 	// Act
-	pr, err := mapper.ToDomain(dto)
+	pr, err := toDomain(dto)
 
 	// Assert
 	assert.Error(t, err)
@@ -81,15 +75,13 @@ func TestMapper_ToDomain_InvalidAuthor(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to create author")
 }
 
-func TestMapper_ToDomainList_ValidDTOs(t *testing.T) {
+func TestToDomainList_ValidDTOs(t *testing.T) {
 	// Arrange
-	mapper := github.NewMapper()
-
 	dto1 := createValidDTO(1, "PR 1")
 	dto2 := createValidDTO(2, "PR 2")
 
 	// Act
-	prs, err := mapper.ToDomainList([]github.PullRequestDTO{dto1, dto2})
+	prs, err := toDomainList([]PullRequestDTO{dto1, dto2})
 
 	// Assert
 	require.NoError(t, err)
@@ -98,15 +90,13 @@ func TestMapper_ToDomainList_ValidDTOs(t *testing.T) {
 	assert.Equal(t, 2, prs[1].Number())
 }
 
-func TestMapper_ToDomainList_SkipsInvalidDTOs(t *testing.T) {
+func TestToDomainList_SkipsInvalidDTOs(t *testing.T) {
 	// Arrange
-	mapper := github.NewMapper()
-
 	validDTO := createValidDTO(1, "Valid PR")
-	invalidDTO := github.PullRequestDTO{} // Missing required fields
+	invalidDTO := PullRequestDTO{} // Missing required fields
 
 	// Act
-	prs, err := mapper.ToDomainList([]github.PullRequestDTO{validDTO, invalidDTO})
+	prs, err := toDomainList([]PullRequestDTO{validDTO, invalidDTO})
 
 	// Assert
 	require.NoError(t, err)
@@ -114,13 +104,12 @@ func TestMapper_ToDomainList_SkipsInvalidDTOs(t *testing.T) {
 	assert.Equal(t, 1, prs[0].Number())
 }
 
-func TestMapper_ToActivity_Comment(t *testing.T) {
+func TestToActivity_Comment(t *testing.T) {
 	// Arrange
-	mapper := github.NewMapper()
 	pr := testutil.NewTestPullRequest(1)
 	now := time.Now()
 
-	dto := github.TimelineItemDTO{
+	dto := TimelineItemDTO{
 		Typename:  "IssueComment",
 		CreatedAt: now,
 		Body:      "Test comment",
@@ -130,7 +119,7 @@ func TestMapper_ToActivity_Comment(t *testing.T) {
 	}{Login: "commenter"}
 
 	// Act
-	activity := mapper.ToActivity(pr, dto)
+	activity := toActivity(pr, dto)
 
 	// Assert
 	require.NotNil(t, activity)
@@ -139,12 +128,11 @@ func TestMapper_ToActivity_Comment(t *testing.T) {
 	assert.Equal(t, "Test comment", activity.Body())
 }
 
-func TestMapper_ToActivity_Review_WithBody(t *testing.T) {
+func TestToActivity_Review_WithBody(t *testing.T) {
 	// Arrange
-	mapper := github.NewMapper()
 	pr := testutil.NewTestPullRequest(1)
 
-	dto := github.TimelineItemDTO{
+	dto := TimelineItemDTO{
 		Typename:  "PullRequestReview",
 		CreatedAt: time.Now(),
 		Body:      "Looks good!",
@@ -155,7 +143,7 @@ func TestMapper_ToActivity_Review_WithBody(t *testing.T) {
 	}{Login: "reviewer"}
 
 	// Act
-	activity := mapper.ToActivity(pr, dto)
+	activity := toActivity(pr, dto)
 
 	// Assert
 	require.NotNil(t, activity)
@@ -163,12 +151,11 @@ func TestMapper_ToActivity_Review_WithBody(t *testing.T) {
 	assert.Equal(t, "reviewer", activity.Author().Login())
 }
 
-func TestMapper_ToActivity_Review_Approved(t *testing.T) {
+func TestToActivity_Review_Approved(t *testing.T) {
 	// Arrange
-	mapper := github.NewMapper()
 	pr := testutil.NewTestPullRequest(1)
 
-	dto := github.TimelineItemDTO{
+	dto := TimelineItemDTO{
 		Typename:  "PullRequestReview",
 		CreatedAt: time.Now(),
 		Body:      "",
@@ -179,19 +166,18 @@ func TestMapper_ToActivity_Review_Approved(t *testing.T) {
 	}{Login: "reviewer"}
 
 	// Act
-	activity := mapper.ToActivity(pr, dto)
+	activity := toActivity(pr, dto)
 
 	// Assert
 	require.NotNil(t, activity)
 	assert.Equal(t, pullrequest.ActivityTypeReview, activity.Type())
 }
 
-func TestMapper_ToActivity_Review_ChangesRequested(t *testing.T) {
+func TestToActivity_Review_ChangesRequested(t *testing.T) {
 	// Arrange
-	mapper := github.NewMapper()
 	pr := testutil.NewTestPullRequest(1)
 
-	dto := github.TimelineItemDTO{
+	dto := TimelineItemDTO{
 		Typename:  "PullRequestReview",
 		CreatedAt: time.Now(),
 		Body:      "",
@@ -202,19 +188,18 @@ func TestMapper_ToActivity_Review_ChangesRequested(t *testing.T) {
 	}{Login: "reviewer"}
 
 	// Act
-	activity := mapper.ToActivity(pr, dto)
+	activity := toActivity(pr, dto)
 
 	// Assert
 	require.NotNil(t, activity)
 	assert.Equal(t, pullrequest.ActivityTypeReview, activity.Type())
 }
 
-func TestMapper_ToActivity_Review_EmptyBodyNoState_ReturnsNil(t *testing.T) {
+func TestToActivity_Review_EmptyBodyNoState_ReturnsNil(t *testing.T) {
 	// Arrange
-	mapper := github.NewMapper()
 	pr := testutil.NewTestPullRequest(1)
 
-	dto := github.TimelineItemDTO{
+	dto := TimelineItemDTO{
 		Typename:  "PullRequestReview",
 		CreatedAt: time.Now(),
 		Body:      "",
@@ -225,19 +210,18 @@ func TestMapper_ToActivity_Review_EmptyBodyNoState_ReturnsNil(t *testing.T) {
 	}{Login: "reviewer"}
 
 	// Act
-	activity := mapper.ToActivity(pr, dto)
+	activity := toActivity(pr, dto)
 
 	// Assert
 	assert.Nil(t, activity) // No body and not approved/changes requested
 }
 
-func TestMapper_ToActivity_Commit(t *testing.T) {
+func TestToActivity_Commit(t *testing.T) {
 	// Arrange
-	mapper := github.NewMapper()
 	pr := testutil.NewTestPullRequest(1)
 	now := time.Now()
 
-	dto := github.TimelineItemDTO{
+	dto := TimelineItemDTO{
 		Typename:  "PullRequestCommit",
 		CreatedAt: now,
 	}
@@ -263,7 +247,7 @@ func TestMapper_ToActivity_Commit(t *testing.T) {
 	}{Login: "committer"}
 
 	// Act
-	activity := mapper.ToActivity(pr, dto)
+	activity := toActivity(pr, dto)
 
 	// Assert
 	require.NotNil(t, activity)
@@ -272,12 +256,11 @@ func TestMapper_ToActivity_Commit(t *testing.T) {
 	assert.Equal(t, "abcdef1", activity.Body()) // Short SHA
 }
 
-func TestMapper_ToActivity_Comment_NoAuthor_ReturnsNil(t *testing.T) {
+func TestToActivity_Comment_NoAuthor_ReturnsNil(t *testing.T) {
 	// Arrange
-	mapper := github.NewMapper()
 	pr := testutil.NewTestPullRequest(1)
 
-	dto := github.TimelineItemDTO{
+	dto := TimelineItemDTO{
 		Typename:  "IssueComment",
 		CreatedAt: time.Now(),
 		Body:      "Test comment",
@@ -285,15 +268,15 @@ func TestMapper_ToActivity_Comment_NoAuthor_ReturnsNil(t *testing.T) {
 	}
 
 	// Act
-	activity := mapper.ToActivity(pr, dto)
+	activity := toActivity(pr, dto)
 
 	// Assert
 	assert.Nil(t, activity)
 }
 
 // Helper function to create a valid DTO
-func createValidDTO(number int, title string) github.PullRequestDTO {
-	dto := github.PullRequestDTO{
+func createValidDTO(number int, title string) PullRequestDTO {
+	dto := PullRequestDTO{
 		Title:     title,
 		URL:       "https://github.com/owner/repo/pull/" + string(rune(number)),
 		Number:    number,
@@ -307,12 +290,11 @@ func createValidDTO(number int, title string) github.PullRequestDTO {
 
 // --- Review mapping tests ---
 
-func TestMapper_ToReviews_ValidReviews(t *testing.T) {
+func TestToReviews_ValidReviews(t *testing.T) {
 	// Arrange
-	mapper := github.NewMapper()
 	now := time.Now()
 
-	dtos := []github.ReviewDTO{
+	dtos := []ReviewDTO{
 		{
 			State:       "APPROVED",
 			SubmittedAt: now,
@@ -326,7 +308,7 @@ func TestMapper_ToReviews_ValidReviews(t *testing.T) {
 	dtos[1].Author.Login = "alice"
 
 	// Act
-	reviews := mapper.ToReviews(dtos)
+	reviews := toReviews(dtos)
 
 	// Assert
 	assert.Len(t, reviews, 2)
@@ -334,37 +316,33 @@ func TestMapper_ToReviews_ValidReviews(t *testing.T) {
 	assert.Equal(t, pullrequest.ReviewStateChangesRequested, reviews["alice"].State())
 }
 
-func TestMapper_ToReviews_UnknownState_Skipped(t *testing.T) {
+func TestToReviews_UnknownState_Skipped(t *testing.T) {
 	// Arrange
-	mapper := github.NewMapper()
-
-	dto1 := github.ReviewDTO{
+	dto1 := ReviewDTO{
 		State:       "APPROVED",
 		SubmittedAt: time.Now(),
 	}
 	dto1.Author.Login = "joe"
 
-	dto2 := github.ReviewDTO{
+	dto2 := ReviewDTO{
 		State:       "PENDING",
 		SubmittedAt: time.Now(),
 	}
 	dto2.Author.Login = "bob"
 
-	dtos := []github.ReviewDTO{dto1, dto2}
+	dtos := []ReviewDTO{dto1, dto2}
 
 	// Act
-	reviews := mapper.ToReviews(dtos)
+	reviews := toReviews(dtos)
 
 	// Assert
 	assert.Len(t, reviews, 1)
 	assert.NotNil(t, reviews["joe"])
 }
 
-func TestMapper_ToReviews_EmptyAuthor_Skipped(t *testing.T) {
+func TestToReviews_EmptyAuthor_Skipped(t *testing.T) {
 	// Arrange
-	mapper := github.NewMapper()
-
-	dtos := []github.ReviewDTO{
+	dtos := []ReviewDTO{
 		{
 			State:       "APPROVED",
 			SubmittedAt: time.Now(),
@@ -373,49 +351,45 @@ func TestMapper_ToReviews_EmptyAuthor_Skipped(t *testing.T) {
 	// Author.Login is empty by default
 
 	// Act
-	reviews := mapper.ToReviews(dtos)
+	reviews := toReviews(dtos)
 
 	// Assert
 	assert.Empty(t, reviews)
 }
 
-func TestMapper_ToReviews_Empty(t *testing.T) {
-	// Arrange
-	mapper := github.NewMapper()
-
+func TestToReviews_Empty(t *testing.T) {
 	// Act
-	reviews := mapper.ToReviews(nil)
+	reviews := toReviews(nil)
 
 	// Assert
 	assert.Empty(t, reviews)
 }
 
-func TestMapper_ToDomain_WithReviews(t *testing.T) {
+func TestToDomain_WithReviews(t *testing.T) {
 	// Arrange
-	mapper := github.NewMapper()
 	now := time.Now()
 
-	reviewDTO := github.ReviewDTO{
+	reviewDTO := ReviewDTO{
 		State:       "APPROVED",
 		SubmittedAt: now,
 	}
 	reviewDTO.Author.Login = "joe"
 
-	dto := github.PullRequestDTO{
+	dto := PullRequestDTO{
 		Title:     "Test PR",
 		URL:       "https://github.com/owner/repo/pull/1",
 		Number:    1,
 		CreatedAt: now,
 		IsDraft:   false,
-		LatestReviews: &github.LatestReviewsDTO{
-			Nodes: []github.ReviewDTO{reviewDTO},
+		LatestReviews: &LatestReviewsDTO{
+			Nodes: []ReviewDTO{reviewDTO},
 		},
 	}
 	dto.Repository.NameWithOwner = "owner/repo"
 	dto.Author.Login = "testuser"
 
 	// Act
-	pr, err := mapper.ToDomain(dto)
+	pr, err := toDomain(dto)
 
 	// Assert
 	require.NoError(t, err)
@@ -424,6 +398,6 @@ func TestMapper_ToDomain_WithReviews(t *testing.T) {
 	assert.Equal(t, pullrequest.ReviewStateApproved, reviews["joe"].State())
 
 	// SetInitialReviews should not raise events
-	events := pr.CollectEvents()
+	events := pr.DrainEvents()
 	assert.Empty(t, events)
 }

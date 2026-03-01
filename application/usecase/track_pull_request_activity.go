@@ -146,7 +146,7 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 	// Collect and publish all domain events from enrichment.
 	// ActivityDetected events are raised by the aggregate when activities are added.
 	for _, pr := range prsToCheck {
-		for _, event := range pr.CollectEvents() {
+		for _, event := range pr.DrainEvents() {
 			if err := uc.eventPublisher.Publish(event); err != nil {
 				log.Error().Err(err).Msg("Error publishing activity event")
 			}

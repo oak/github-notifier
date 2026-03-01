@@ -151,7 +151,7 @@ func TestReconstitutePRFromSnapshot_NoEvents(t *testing.T) {
 	pr, err := pullrequest.ReconstitutePRFromSnapshot(snap)
 	require.NoError(t, err)
 
-	events := pr.CollectEvents()
+	events := pr.DrainEvents()
 	assert.Empty(t, events, "reconstitution must not raise domain events")
 }
 
@@ -164,7 +164,7 @@ func TestReconstitutePRFromSnapshot_BehavesCorrectly_CloseRaisesEvent(t *testing
 
 	pr.Close()
 
-	events := pr.CollectEvents()
+	events := pr.DrainEvents()
 	require.Len(t, events, 1)
 	_, ok := events[0].(*pullrequest.Closed)
 	assert.True(t, ok, "Close should raise Closed event")
@@ -183,7 +183,7 @@ func TestReconstitutePRFromSnapshot_BehavesCorrectly_SameReviewStateNoEvent(t *t
 
 	// Re-applying the same review state must produce no event.
 	pr.AddReview(pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, time.Now()))
-	events := pr.CollectEvents()
+	events := pr.DrainEvents()
 	assert.Empty(t, events, "same review state after reconstitution must not re-fire event")
 }
 

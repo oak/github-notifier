@@ -61,7 +61,12 @@ func TestUpdateDisplay_EmptyPRs(t *testing.T) {
 
 	var emptyPRs []*pullrequest.PullRequest
 
-	mockUIPort.On("UpdateDisplay", emptyPRs, emptyPRs, trackingService).Return()
+	// sortedByCreatedAt always returns a new (non-nil) empty slice
+	mockUIPort.On("UpdateDisplay",
+		mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool { return len(prs) == 0 }),
+		mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool { return len(prs) == 0 }),
+		trackingService,
+	).Return()
 
 	uc := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
 
@@ -155,7 +160,7 @@ func TestUpdateDisplay_PreservesOriginalSlice(t *testing.T) {
 
 	// Assert
 	require.NoError(t, err)
-	// Original slice is sorted in place (this is expected behavior)
-	assert.Equal(t, 2, originalOrder[0].Number(), "Slice is sorted in place (oldest first)")
-	assert.Equal(t, 1, originalOrder[1].Number())
+	// Original slice must NOT be modified (sortedByCreatedAt returns a copy)
+	assert.Equal(t, 1, originalOrder[0].Number(), "Original slice must preserve insertion order")
+	assert.Equal(t, 2, originalOrder[1].Number())
 }

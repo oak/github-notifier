@@ -9,41 +9,38 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestPRClassifier_ClassifyPRs_AllNew(t *testing.T) {
+func TestClassifyPRs_AllNew(t *testing.T) {
 	// Arrange
-	classifier := pullrequest.NewPRClassifier()
 	since := time.Now().Add(-1 * time.Hour)
 
 	// Create PRs without activities
 	prs := testutil.CreateTestPRs(3, 0)
 
 	// Act
-	trulyNew, withActivity := classifier.ClassifyPRs(prs, since)
+	trulyNew, withActivity := pullrequest.ClassifyPRs(prs, since)
 
 	// Assert
 	assert.Len(t, trulyNew, 3, "All PRs should be classified as truly new")
 	assert.Empty(t, withActivity, "No PRs should have activity")
 }
 
-func TestPRClassifier_ClassifyPRs_AllWithActivity(t *testing.T) {
+func TestClassifyPRs_AllWithActivity(t *testing.T) {
 	// Arrange
-	classifier := pullrequest.NewPRClassifier()
 	since := time.Now().Add(-1 * time.Hour)
 
 	// Create PRs with recent activities (30 minutes ago)
 	prs := testutil.CreateTestPRsWithActivities(3, 2, 30*time.Minute)
 
 	// Act
-	trulyNew, withActivity := classifier.ClassifyPRs(prs, since)
+	trulyNew, withActivity := pullrequest.ClassifyPRs(prs, since)
 
 	// Assert
 	assert.Empty(t, trulyNew, "No PRs should be classified as truly new")
 	assert.Len(t, withActivity, 3, "All PRs should have activity")
 }
 
-func TestPRClassifier_ClassifyPRs_Mixed(t *testing.T) {
+func TestClassifyPRs_Mixed(t *testing.T) {
 	// Arrange
-	classifier := pullrequest.NewPRClassifier()
 	since := time.Now().Add(-1 * time.Hour)
 
 	// Create 2 PRs without activities
@@ -55,46 +52,43 @@ func TestPRClassifier_ClassifyPRs_Mixed(t *testing.T) {
 	allPRs := append(newPRs, activePRs...)
 
 	// Act
-	trulyNew, withActivity := classifier.ClassifyPRs(allPRs, since)
+	trulyNew, withActivity := pullrequest.ClassifyPRs(allPRs, since)
 
 	// Assert
 	assert.Len(t, trulyNew, 2, "Should have 2 truly new PRs")
 	assert.Len(t, withActivity, 3, "Should have 3 PRs with activity")
 }
 
-func TestPRClassifier_ClassifyPRs_EmptyInput(t *testing.T) {
+func TestClassifyPRs_EmptyInput(t *testing.T) {
 	// Arrange
-	classifier := pullrequest.NewPRClassifier()
 	since := time.Now().Add(-1 * time.Hour)
 	var prs []*pullrequest.PullRequest
 
 	// Act
-	trulyNew, withActivity := classifier.ClassifyPRs(prs, since)
+	trulyNew, withActivity := pullrequest.ClassifyPRs(prs, since)
 
 	// Assert
 	assert.Empty(t, trulyNew, "Should have no truly new PRs")
 	assert.Empty(t, withActivity, "Should have no PRs with activity")
 }
 
-func TestPRClassifier_ClassifyPRs_OldActivities(t *testing.T) {
+func TestClassifyPRs_OldActivities(t *testing.T) {
 	// Arrange
-	classifier := pullrequest.NewPRClassifier()
 	since := time.Now().Add(-1 * time.Hour)
 
 	// Create PRs with old activities (2 hours ago, before "since" time)
 	prs := testutil.CreateTestPRsWithActivities(3, 2, 2*time.Hour)
 
 	// Act
-	trulyNew, withActivity := classifier.ClassifyPRs(prs, since)
+	trulyNew, withActivity := pullrequest.ClassifyPRs(prs, since)
 
 	// Assert
 	assert.Len(t, trulyNew, 3, "PRs with only old activities should be classified as truly new")
 	assert.Empty(t, withActivity, "No PRs should have recent activity")
 }
 
-func TestPRClassifier_ClassifyPRs_SinceBoundary(t *testing.T) {
+func TestClassifyPRs_SinceBoundary(t *testing.T) {
 	// Arrange
-	classifier := pullrequest.NewPRClassifier()
 	now := time.Now()
 	since := now.Add(-1 * time.Hour)
 
@@ -108,7 +102,7 @@ func TestPRClassifier_ClassifyPRs_SinceBoundary(t *testing.T) {
 	pr.AddActivities([]*pullrequest.Activity{activity})
 
 	// Act
-	trulyNew, withActivity := classifier.ClassifyPRs([]*pullrequest.PullRequest{pr}, since)
+	trulyNew, withActivity := pullrequest.ClassifyPRs([]*pullrequest.PullRequest{pr}, since)
 
 	// Assert
 	// Activity exactly at "since" time is not included (After, not AfterOrEqual)
@@ -116,7 +110,7 @@ func TestPRClassifier_ClassifyPRs_SinceBoundary(t *testing.T) {
 	assert.Empty(t, withActivity, "PR should not have activity at exact boundary (After, not AfterOrEqual)")
 }
 
-func TestPRClassifier_ClassifyPRs_TableDriven(t *testing.T) {
+func TestClassifyPRs_TableDriven(t *testing.T) {
 	tests := []struct {
 		name                string
 		newPRCount          int
@@ -167,7 +161,6 @@ func TestPRClassifier_ClassifyPRs_TableDriven(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			classifier := pullrequest.NewPRClassifier()
 			since := time.Now().Add(-tt.sinceAge)
 
 			newPRs := testutil.CreateTestPRs(tt.newPRCount, 0)
@@ -175,7 +168,7 @@ func TestPRClassifier_ClassifyPRs_TableDriven(t *testing.T) {
 			allPRs := append(newPRs, activePRs...)
 
 			// Act
-			trulyNew, withActivity := classifier.ClassifyPRs(allPRs, since)
+			trulyNew, withActivity := pullrequest.ClassifyPRs(allPRs, since)
 
 			// Assert
 			assert.Len(t, trulyNew, tt.expectedNewCount, "Should have expected count of truly new PRs")
