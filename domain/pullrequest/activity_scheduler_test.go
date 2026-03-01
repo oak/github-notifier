@@ -22,7 +22,7 @@ func TestActivityCheckScheduler_DeterminePRsToCheck_AllRecent(t *testing.T) {
 	}
 
 	// Act
-	result := scheduler.DeterminePRsToCheck(prs)
+	result := scheduler.DeterminePRsToCheckAt(now, prs)
 
 	// Assert
 	assert.Len(t, result.PRsToCheck, 3, "All recent PRs should be checked")
@@ -43,7 +43,7 @@ func TestActivityCheckScheduler_DeterminePRsToCheck_AllStaleFirstCheck(t *testin
 	}
 
 	// Act
-	result := scheduler.DeterminePRsToCheck(prs)
+	result := scheduler.DeterminePRsToCheckAt(now, prs)
 
 	// Assert
 	assert.Len(t, result.PRsToCheck, 2, "All stale PRs should be checked on first check")
@@ -61,12 +61,12 @@ func TestActivityCheckScheduler_DeterminePRsToCheck_StaleRecentlyChecked(t *test
 	pr := testutil.NewTestPullRequest(1, testutil.WithCreatedAt(now.Add(-72*time.Hour)))
 	prs := []*pullrequest.PullRequest{pr}
 
-	// Mark as checked 5 minutes ago
-	scheduler.MarkChecked(prs)
+	// Mark as checked at now
+	scheduler.MarkCheckedAt(now, prs)
 
-	// Wait is simulated by testing immediately (less than 15min interval)
+	// Determine at the same now — interval hasn't elapsed, so stale PR is not yet due
 	// Act
-	result := scheduler.DeterminePRsToCheck(prs)
+	result := scheduler.DeterminePRsToCheckAt(now, prs)
 
 	// Assert
 	assert.Empty(t, result.PRsToCheck, "Stale PR checked recently should be skipped")
@@ -89,7 +89,7 @@ func TestActivityCheckScheduler_DeterminePRsToCheck_Mixed(t *testing.T) {
 	prs := []*pullrequest.PullRequest{recentPR1, recentPR2, stalePR1, stalePR2}
 
 	// Act
-	result := scheduler.DeterminePRsToCheck(prs)
+	result := scheduler.DeterminePRsToCheckAt(now, prs)
 
 	// Assert
 	assert.Len(t, result.PRsToCheck, 4, "All PRs should be checked (recent always + stale first time)")
@@ -111,7 +111,7 @@ func TestActivityCheckScheduler_DeterminePRsToCheck_RecentThresholdBoundary(t *t
 	prs := []*pullrequest.PullRequest{prAtBoundary, prJustBefore, prJustAfter}
 
 	// Act
-	result := scheduler.DeterminePRsToCheck(prs)
+	result := scheduler.DeterminePRsToCheckAt(now, prs)
 
 	// Assert
 	assert.Len(t, result.PRsToCheck, 3, "All PRs should be checked on first check")
@@ -126,15 +126,15 @@ func TestActivityCheckScheduler_MarkChecked_UpdatesLastCheckTime(t *testing.T) {
 	stalePR := testutil.NewTestPullRequest(1, testutil.WithCreatedAt(now.Add(-72*time.Hour)))
 	prs := []*pullrequest.PullRequest{stalePR}
 
-	// Act - First check should include the PR
-	result1 := scheduler.DeterminePRsToCheck(prs)
+	// Act - First check at now should include the PR
+	result1 := scheduler.DeterminePRsToCheckAt(now, prs)
 	assert.Len(t, result1.PRsToCheck, 1, "First check should include stale PR")
 
-	// Mark as checked
-	scheduler.MarkChecked(prs)
+	// Mark as checked at now
+	scheduler.MarkCheckedAt(now, prs)
 
-	// Immediately check again
-	result2 := scheduler.DeterminePRsToCheck(prs)
+	// Check again at the same now — interval hasn't elapsed, PR should be skipped
+	result2 := scheduler.DeterminePRsToCheckAt(now, prs)
 
 	// Assert
 	assert.Empty(t, result2.PRsToCheck, "PR should be skipped after marking as checked")
@@ -144,10 +144,11 @@ func TestActivityCheckScheduler_MarkChecked_UpdatesLastCheckTime(t *testing.T) {
 func TestActivityCheckScheduler_EmptyInput(t *testing.T) {
 	// Arrange
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
+	now := time.Now()
 	var prs []*pullrequest.PullRequest
 
 	// Act
-	result := scheduler.DeterminePRsToCheck(prs)
+	result := scheduler.DeterminePRsToCheckAt(now, prs)
 
 	// Assert
 	assert.Empty(t, result.PRsToCheck, "Should return empty result for empty input")
@@ -219,7 +220,7 @@ func TestActivityCheckScheduler_TableDriven(t *testing.T) {
 			}
 
 			// Act - First determination
-			result1 := scheduler.DeterminePRsToCheck(prs)
+			result1 := scheduler.DeterminePRsToCheckAt(now, prs)
 			assert.Len(t, result1.PRsToCheck, tt.expectedFirstCheck, "First check should match expected")
 
 			// Mark specified PRs as checked
@@ -227,10 +228,10 @@ func TestActivityCheckScheduler_TableDriven(t *testing.T) {
 			for i, idx := range tt.markCheckedIndexes {
 				toMark[i] = prs[idx]
 			}
-			scheduler.MarkChecked(toMark)
+			scheduler.MarkCheckedAt(now, toMark)
 
-			// Act - Second determination (immediately after)
-			result2 := scheduler.DeterminePRsToCheck(prs)
+			// Act - Second determination (at same now — stale PRs already checked, recent always included)
+			result2 := scheduler.DeterminePRsToCheckAt(now, prs)
 
 			// Assert
 			assert.Len(t, result2.PRsToCheck, tt.expectedSecondCheck, "Second check should match expected")

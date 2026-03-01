@@ -30,16 +30,14 @@ type ScheduleResult struct {
 	SkippedCount int
 }
 
-// DeterminePRsToCheck implements the two-tier scheduling logic
+// DeterminePRsToCheckAt implements the two-tier scheduling logic at the given time.
 // Returns which PRs should be checked for activity based on:
 // - Recent PRs (age < recentThreshold): Always check
 // - Stale PRs (age >= recentThreshold): Check only if staleCheckInterval has passed since last check
-func (s *ActivityCheckScheduler) DeterminePRsToCheck(prs []*PullRequest) *ScheduleResult {
+func (s *ActivityCheckScheduler) DeterminePRsToCheckAt(now time.Time, prs []*PullRequest) *ScheduleResult {
 	result := &ScheduleResult{
 		PRsToCheck: make([]*PullRequest, 0, len(prs)),
 	}
-
-	now := time.Now()
 
 	for _, pr := range prs {
 		prURL := pr.URL()
@@ -71,13 +69,26 @@ func (s *ActivityCheckScheduler) DeterminePRsToCheck(prs []*PullRequest) *Schedu
 	return result
 }
 
-// MarkChecked records that the given PRs were checked at the current time
-// This is used to track when stale PRs were last checked
-func (s *ActivityCheckScheduler) MarkChecked(prs []*PullRequest) {
-	now := time.Now()
+// DeterminePRsToCheck implements the two-tier scheduling logic.
+// Returns which PRs should be checked for activity based on:
+// - Recent PRs (age < recentThreshold): Always check
+// - Stale PRs (age >= recentThreshold): Check only if staleCheckInterval has passed since last check
+func (s *ActivityCheckScheduler) DeterminePRsToCheck(prs []*PullRequest) *ScheduleResult {
+	return s.DeterminePRsToCheckAt(time.Now(), prs)
+}
+
+// MarkCheckedAt records that the given PRs were checked at the given time.
+// This is used to track when stale PRs were last checked.
+func (s *ActivityCheckScheduler) MarkCheckedAt(now time.Time, prs []*PullRequest) {
 	for _, pr := range prs {
 		s.lastCheckMap[pr.URL()] = now
 	}
+}
+
+// MarkChecked records that the given PRs were checked at the current time.
+// This is used to track when stale PRs were last checked.
+func (s *ActivityCheckScheduler) MarkChecked(prs []*PullRequest) {
+	s.MarkCheckedAt(time.Now(), prs)
 }
 
 // SeedLastChecked pre-populates the last-check timestamp for a single PR URL.

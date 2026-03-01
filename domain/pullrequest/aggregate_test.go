@@ -262,9 +262,9 @@ func TestPullRequest_IsStale(t *testing.T) {
 
 	threshold := 48 * time.Hour
 
-	// Act & Assert
-	assert.True(t, oldPR.IsStale(threshold))
-	assert.False(t, recentPR.IsStale(threshold))
+	// Act & Assert — use fixed now via IsStaleAt for deterministic evaluation
+	assert.True(t, oldPR.IsStaleAt(now, threshold))
+	assert.False(t, recentPR.IsStaleAt(now, threshold))
 }
 
 func TestPullRequest_Age(t *testing.T) {
@@ -272,12 +272,11 @@ func TestPullRequest_Age(t *testing.T) {
 	now := time.Now()
 	pr := testutil.NewTestPullRequest(1, testutil.WithCreatedAt(now.Add(-24*time.Hour)))
 
-	// Act
-	age := pr.Age()
+	// Act — use fixed now via AgeAt for a deterministic, exact assertion
+	age := pr.AgeAt(now)
 
 	// Assert
-	assert.True(t, age >= 23*time.Hour, "Age should be at least 23 hours")
-	assert.True(t, age <= 25*time.Hour, "Age should be at most 25 hours")
+	assert.Equal(t, 24*time.Hour, age)
 }
 
 func TestPullRequest_Equals(t *testing.T) {

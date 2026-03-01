@@ -51,8 +51,8 @@ func TestTrackActivity_NoPRsDueForCheck(t *testing.T) {
 	pr2 := testutil.NewTestPullRequest(2, testutil.WithCreatedAt(now.Add(-96*time.Hour)))
 	prs := []*pullrequest.PullRequest{pr1, pr2}
 
-	// Mark them as already checked
-	scheduler.MarkChecked(prs)
+	// Mark them as already checked at now
+	scheduler.MarkCheckedAt(now, prs)
 
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, trackingService, mockEventPublisher, "")
 

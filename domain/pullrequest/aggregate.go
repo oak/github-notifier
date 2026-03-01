@@ -112,14 +112,14 @@ func (pr *PullRequest) IsOpen() bool {
 	return pr.status.IsOpen()
 }
 
-// IsStale returns true if the PR is older than the given threshold
-func (pr *PullRequest) IsStale(threshold time.Duration) bool {
-	return time.Since(pr.createdAt) > threshold
+// IsStaleAt returns true if the PR is older than the given threshold at the given time.
+func (pr *PullRequest) IsStaleAt(now time.Time, threshold time.Duration) bool {
+	return now.Sub(pr.createdAt) > threshold
 }
 
-// Age returns how long ago the PR was created
-func (pr *PullRequest) Age() time.Duration {
-	return time.Since(pr.createdAt)
+// AgeAt returns how long ago the PR was created, relative to the given time.
+func (pr *PullRequest) AgeAt(now time.Time) time.Duration {
+	return now.Sub(pr.createdAt)
 }
 
 // Close marks the PR as closed and raises a Closed domain event
@@ -232,29 +232,6 @@ func (pr *PullRequest) ClearActivities() {
 	pr.lastActivityAt = pr.createdAt
 }
 
-// ShouldCheckForActivities determines if we should fetch activities for this PR
-// Uses a two-tier approach:
-// - Recent PRs (< recentThreshold old): always check
-// - Stale PRs (≥ recentThreshold old): check only if enough time has passed since last check
-func (pr *PullRequest) ShouldCheckForActivities(recentThreshold, staleCheckInterval time.Duration) bool {
-	now := time.Now()
-	prAge := now.Sub(pr.createdAt)
-
-	// Recent PRs: always check
-	if prAge < recentThreshold {
-		return true
-	}
-
-	// Stale PRs: check if enough time passed since last check
-	timeSinceLastCheck := now.Sub(pr.lastActivityCheck)
-	return timeSinceLastCheck >= staleCheckInterval
-}
-
-// UpdateLastActivityCheck updates the timestamp when we last checked for activities
-func (pr *PullRequest) UpdateLastActivityCheck() {
-	pr.lastActivityCheck = time.Now()
-}
-
 // SetInitialLastActivityCheck sets the last-activity-check timestamp without
 // raising any events. Used to restore known state from a previous cycle when
 // hydrating a fresh PR object retrieved from the GitHub API.
@@ -285,12 +262,12 @@ func (pr *PullRequest) SetInitialPipelineStatus(status PipelineStatus) {
 	pr.pipelineStatus = status
 }
 
-// RecordHeadCommitUpdate detects if the head commit has changed and, if so,
+// RecordHeadCommitUpdateAt detects if the head commit has changed and, if so,
 // creates a push activity on the aggregate (which raises an ActivityDetected event).
 // The aggregate records all domain facts; notification filtering (e.g. suppressing
 // self-pushes) is handled by the notification event handler.
 // First-time initialization (empty current SHA) records the SHA without creating activity.
-func (pr *PullRequest) RecordHeadCommitUpdate(newHeadSHA string) {
+func (pr *PullRequest) RecordHeadCommitUpdateAt(newHeadSHA string, now time.Time) {
 	if pr.headCommitSHA == "" {
 		// First time seeing this PR - initialize but don't create activity
 		pr.headCommitSHA = newHeadSHA
@@ -308,10 +285,19 @@ func (pr *PullRequest) RecordHeadCommitUpdate(newHeadSHA string) {
 		pr.identifier,
 		ActivityTypePush,
 		pr.author,
-		time.Now(),
+		now,
 		newHeadSHA,
 	)
 	pr.AddActivity(pushActivity)
+}
+
+// RecordHeadCommitUpdate detects if the head commit has changed and, if so,
+// creates a push activity on the aggregate (which raises an ActivityDetected event).
+// The aggregate records all domain facts; notification filtering (e.g. suppressing
+// self-pushes) is handled by the notification event handler.
+// First-time initialization (empty current SHA) records the SHA without creating activity.
+func (pr *PullRequest) RecordHeadCommitUpdate(newHeadSHA string) {
+	pr.RecordHeadCommitUpdateAt(newHeadSHA, time.Now())
 }
 
 // DrainEvents returns all pending domain events and clears the internal event list
