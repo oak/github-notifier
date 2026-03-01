@@ -213,6 +213,65 @@ func TestOrchestrator_ExecuteRegularCheck_WithActivityTracking(t *testing.T) {
 	mockUIPort.AssertExpectations(t)
 }
 
+// TestOrchestrator_ExecuteRegularCheck_AllPRsClosed_UpdatesDisplayWithEmptyLists
+// reproduces the OAK-44 scenario: PRs existed in a previous cycle and are now
+// all gone (closed/merged). The orchestrator must still call UpdateDisplay with
+// empty slices so the UI can show the "(empty)" placeholder.
+func TestOrchestrator_ExecuteRegularCheck_AllPRsClosed_UpdatesDisplayWithEmptyLists(t *testing.T) {
+	// Arrange
+	mockPRRepo := mocks.NewPullRequestRepository(t)
+	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+	mockUIPort := mocks.NewUIPort(t)
+	mockEventPublisher := mocks.NewEventPublisher(t)
+	prFilter := pullrequest.NewDraftFilter(false)
+	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
+
+	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
+	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, mockEventPublisher)
+	detectClosedPRsUC := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockEventPublisher)
+	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, trackingService, mockEventPublisher, "")
+	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
+
+	// GitHub now returns no open PRs (all have been merged/closed)
+	mockPRRepo.On("FetchRequestedReviews").Return([]*pullrequest.PullRequest{}, nil)
+	mockPRRepo.On("FetchUserCreated").Return([]*pullrequest.PullRequest{}, nil)
+	// Tracking repo holds snapshots of PRs from the previous cycle
+	previousSnapshot := testutil.NewTestPullRequest(1).ToSnapshot()
+	mockTrackingRepo.On("LoadAll").Return([]pullrequest.PRStateSnapshot{previousSnapshot}, nil)
+	// DetectClosedPRs will query GitHub for the status of the missing PR
+	mockPRRepo.On("FetchPRStatus", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("int")).
+		Return(pullrequest.StatusMerged, nil)
+	mockEventPublisher.On("Publish", mock.Anything).Return(nil)
+	mockTrackingRepo.On("Save", mock.Anything).Return(nil)
+
+	// KEY ASSERTION: UpdateDisplay must be called with empty slices so the
+	// MenuAdapter can display the "(empty)" placeholder in both sections.
+	mockUIPort.On("UpdateDisplay",
+		mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool { return len(prs) == 0 }),
+		mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool { return len(prs) == 0 }),
+		trackingService,
+	).Once()
+
+	orchestrator := application.NewPullRequestOrchestrator(
+		initUC,
+		checkNewPRsUC,
+		detectClosedPRsUC,
+		trackActivityUC,
+		updateDisplayUC,
+		false,
+	)
+
+	// Act
+	err := orchestrator.ExecuteRegularCheck(context.Background(), time.Now())
+
+	// Assert
+	require.NoError(t, err)
+	mockUIPort.AssertExpectations(t)
+	mockPRRepo.AssertExpectations(t)
+}
+
 func TestOrchestrator_ExecuteRegularCheck_CheckNewPRsError(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)

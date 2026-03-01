@@ -42,6 +42,7 @@ type MenuAdapter struct {
 	menuItemCancelsMu         sync.RWMutex                             // Protects menuItemCancels
 	ctx                       context.Context
 	cancel                    context.CancelFunc
+	menuInitialized           bool
 }
 
 // ThemeProvider provides the current system theme
@@ -145,9 +146,64 @@ func (m *MenuAdapter) applyThemeIcon() {
 	}
 }
 
+// initializeMenuStructure pre-creates all systray menu items on the first
+// UpdateDisplay call.  On Linux, dbusmenu/appindicator stacks do not reliably
+// display items added after the initial menu layout, so every possible slot
+// (section titles, "(empty)" placeholders, repo parents, and PR children)
+// must exist in the widget tree from the start.  After initialisation only
+// Show / Hide / SetTitle are used — never another AddSubMenuItem.
+func (m *MenuAdapter) initializeMenuStructure() {
+	if m.menuInitialized {
+		return
+	}
+	m.menuInitialized = true
+
+	// Authenticated user label
+	if m.authenticatedUser != "" {
+		m.userMenuItem = systray.AddMenuItem("@"+m.authenticatedUser+"   ", "Signed in as "+m.authenticatedUser)
+		m.userMenuItem.Disable()
+		systray.AddSeparator()
+	}
+
+	// ── Requested-reviews section ──
+	m.requestedPRsTitleMenuItem = systray.AddMenuItem("PRs Requested Reviews: 0   ", "")
+	m.requestedPRsEmptyItem = m.requestedPRsTitleMenuItem.AddSubMenuItem("(empty)   ", "")
+	m.requestedPRsEmptyItem.Disable()
+	for i := 0; i < m.maxNumberOfRepos; i++ {
+		m.requestedPRsMenuItems[i].Parent = m.requestedPRsTitleMenuItem.AddSubMenuItem("", "")
+		m.requestedPRsMenuItems[i].Parent.Hide()
+		for j := 0; j < m.maxNumberOfPRs; j++ {
+			m.requestedPRsMenuItems[i].Children[j] = m.requestedPRsMenuItems[i].Parent.AddSubMenuItem("", "")
+			m.requestedPRsMenuItems[i].Children[j].Hide()
+		}
+	}
+
+	// ── User PRs section ──
+	m.userPRsTitleMenuItem = systray.AddMenuItem("Your PRs: 0   ", "")
+	m.userPRsEmptyItem = m.userPRsTitleMenuItem.AddSubMenuItem("(empty)   ", "")
+	m.userPRsEmptyItem.Disable()
+	for i := 0; i < m.maxNumberOfRepos; i++ {
+		m.userPRsMenuItems[i].Parent = m.userPRsTitleMenuItem.AddSubMenuItem("", "")
+		m.userPRsMenuItems[i].Parent.Hide()
+		for j := 0; j < m.maxNumberOfPRs; j++ {
+			m.userPRsMenuItems[i].Children[j] = m.userPRsMenuItems[i].Parent.AddSubMenuItem("", "")
+			m.userPRsMenuItems[i].Children[j].Hide()
+		}
+	}
+
+	// ── Quit ──
+	systray.AddSeparator()
+	m.quitMenuItem = systray.AddMenuItem("Quit", "Quit the app")
+	go m.handleQuitClick()
+}
+
 // UpdateDisplay implements the UIPort interface for systray menu display
 // This adapter specifically renders PRs as a system tray menu with dropdowns
 func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullrequest.PullRequest, trackingService *pullrequest.TrackingService) {
+	// Pre-create all menu item slots on the first call so the
+	// dbusmenu/appindicator model contains every node from the start.
+	m.initializeMenuStructure()
+
 	// Store tracking service and PR lists for use in menu item formatting
 	m.trackingService = trackingService
 	m.requestedReviewPRs = requestedReviewPRs
@@ -182,47 +238,25 @@ func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullre
 	}
 	m.clickedPRsMu.Unlock()
 
-	// Show authenticated user as first inactive menu item
-	if m.authenticatedUser != "" {
-		if m.userMenuItem == nil {
-			m.userMenuItem = systray.AddMenuItem("@"+m.authenticatedUser+"   ", "Signed in as "+m.authenticatedUser)
-			m.userMenuItem.Disable()
-			systray.AddSeparator()
-		}
-	}
-
-	// Add asterisk to section title if it contains unseen PRs
+	// Update section titles (already created by initializeMenuStructure)
 	requestedReviewTitle := fmt.Sprintf("PRs Requested Reviews: %d", len(requestedReviewPRs))
 	if m.hasUnseenPRs(requestedReviewPRs) {
 		requestedReviewTitle = "* " + requestedReviewTitle
 	}
-	m.requestedPRsTitleMenuItem = m.addOrUpdateParentMenuItem(
-		m.requestedPRsTitleMenuItem,
-		requestedReviewTitle,
-	)
+	m.requestedPRsTitleMenuItem.SetTitle(requestedReviewTitle + "   ")
 
-	m.updatePRSection(requestedReviewPRs, m.requestedPRsMenuItems, m.requestedPRsTitleMenuItem, &m.requestedPRsEmptyItem)
+	m.updatePRSection(requestedReviewPRs, m.requestedPRsMenuItems, &m.requestedPRsEmptyItem)
 
-	// Add asterisk to section title if it contains unseen PRs
 	userPRsTitle := fmt.Sprintf("Your PRs: %d", len(userCreatedPRs))
 	if m.hasUnseenPRs(userCreatedPRs) {
 		userPRsTitle = "* " + userPRsTitle
 	}
-	m.userPRsTitleMenuItem = m.addOrUpdateParentMenuItem(
-		m.userPRsTitleMenuItem,
-		userPRsTitle,
-	)
+	m.userPRsTitleMenuItem.SetTitle(userPRsTitle + "   ")
 
-	m.updatePRSection(userCreatedPRs, m.userPRsMenuItems, m.userPRsTitleMenuItem, &m.userPRsEmptyItem)
+	m.updatePRSection(userCreatedPRs, m.userPRsMenuItems, &m.userPRsEmptyItem)
 
 	totalPRs := len(requestedReviewPRs) + len(userCreatedPRs)
 	systray.SetTooltip(fmt.Sprintf("GitHub Notifier: %d PRs", totalPRs))
-
-	if m.quitMenuItem == nil {
-		systray.AddSeparator()
-		m.quitMenuItem = systray.AddMenuItem("Quit", "Quit the app")
-		go m.handleQuitClick()
-	}
 }
 
 // handleQuitClick handles the quit button click with proper cleanup
@@ -240,48 +274,30 @@ func (m *MenuAdapter) Shutdown() {
 	m.cancel()
 }
 
-func (m *MenuAdapter) addOrUpdateParentMenuItem(menuItem *systray.MenuItem, title string) *systray.MenuItem {
-	if menuItem == nil {
-		menuItem = systray.AddMenuItem("", "")
-	}
-	menuItem.SetTitle(title + "   ")
-	return menuItem
-}
-
-// updatePRSection updates the PR menu section in-place without first clearing all items,
-// which avoids the menu briefly disappearing between a clear and rebuild.
-//
-// emptyItem is a pointer to the section's dedicated "(empty)" placeholder. It is kept
-// separate from the repo slots so that repo items are never used as disabled leaf nodes.
-// A previously-leaf item that later gains children causes a GTK leaf→parent transition
-// that some dbusmenu/appindicator stacks do not propagate correctly.
-func (m *MenuAdapter) updatePRSection(prs []*pullrequest.PullRequest, menuItems []MenuItemPair, sectionTitle *systray.MenuItem, emptyItem **systray.MenuItem) {
+// updatePRSection updates a PR menu section (requested-reviews or user-PRs)
+// in-place using pre-created menu item slots.  No new items are ever created
+// here — initializeMenuStructure has already allocated every slot.
+func (m *MenuAdapter) updatePRSection(prs []*pullrequest.PullRequest, menuItems []MenuItemPair, emptyItem **systray.MenuItem) {
 	if len(prs) == 0 {
-		// Show dedicated "(empty)" placeholder (never shares a slot with a repo item).
-		if *emptyItem == nil {
-			*emptyItem = sectionTitle.AddSubMenuItem("(empty)   ", "")
-			(*emptyItem).Disable()
-		}
+		// Show the pre-created "(empty)" placeholder.
+		// SetTitle forces the GTK C layer through do_add_or_update_menu_item
+		// which always finalises with gtk_widget_show(), ensuring visibility
+		// even after a preceding Hide().
+		(*emptyItem).SetTitle("(empty)   ")
 		(*emptyItem).Show()
 
 		// Hide all repo slots and their children.
 		for i := 0; i < m.maxNumberOfRepos; i++ {
-			if menuItems[i].Parent != nil {
-				for j := 0; j < m.maxNumberOfPRs; j++ {
-					if menuItems[i].Children[j] != nil {
-						menuItems[i].Children[j].Hide()
-					}
-				}
-				menuItems[i].Parent.Hide()
+			for j := 0; j < m.maxNumberOfPRs; j++ {
+				menuItems[i].Children[j].Hide()
 			}
+			menuItems[i].Parent.Hide()
 		}
 		return
 	}
 
 	// Non-empty: hide the dedicated placeholder.
-	if *emptyItem != nil {
-		(*emptyItem).Hide()
-	}
+	(*emptyItem).Hide()
 
 	prsByRepo := m.groupPRsByRepository(prs)
 
@@ -294,11 +310,10 @@ func (m *MenuAdapter) updatePRSection(prs []*pullrequest.PullRequest, menuItems 
 
 	// Update repo slots that are in use
 	for i, repoName := range repoNames {
-		repoPRs := prsByRepo[repoName]
-
-		if menuItems[i].Parent == nil {
-			menuItems[i].Parent = sectionTitle.AddSubMenuItem("", "")
+		if i >= m.maxNumberOfRepos {
+			break
 		}
+		repoPRs := prsByRepo[repoName]
 
 		// Add asterisk to repository name if it contains unseen PRs
 		repoTitle := repoName
@@ -310,8 +325,8 @@ func (m *MenuAdapter) updatePRSection(prs []*pullrequest.PullRequest, menuItems 
 
 		// Update PR child slots that are in use
 		for j, pr := range repoPRs {
-			if menuItems[i].Children[j] == nil {
-				menuItems[i].Children[j] = menuItems[i].Parent.AddSubMenuItem("", "")
+			if j >= m.maxNumberOfPRs {
+				break
 			}
 
 			menuItem := menuItems[i].Children[j]
@@ -333,9 +348,7 @@ func (m *MenuAdapter) updatePRSection(prs []*pullrequest.PullRequest, menuItems 
 
 		// Hide child slots no longer in use for this repo
 		for j := len(repoPRs); j < m.maxNumberOfPRs; j++ {
-			if menuItems[i].Children[j] != nil {
-				menuItems[i].Children[j].Hide()
-			}
+			menuItems[i].Children[j].Hide()
 		}
 
 		menuItems[i].Parent.Show()
@@ -343,9 +356,7 @@ func (m *MenuAdapter) updatePRSection(prs []*pullrequest.PullRequest, menuItems 
 
 	// Hide repo slots no longer in use
 	for i := len(repoNames); i < m.maxNumberOfRepos; i++ {
-		if menuItems[i].Parent != nil {
-			menuItems[i].Parent.Hide()
-		}
+		menuItems[i].Parent.Hide()
 	}
 }
 
