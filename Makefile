@@ -1,4 +1,4 @@
-.PHONY: test test-verbose test-coverage test-race lint build clean help
+.PHONY: test test-verbose test-coverage test-race lint build clean help register-macos-notifier
 
 # Default target
 .DEFAULT_GOAL := help
@@ -90,6 +90,11 @@ mocks:
 	@go run github.com/vektra/mockery/v2@latest --name=UIPort --dir=application/port --output=internal/mocks --outpkg=mocks
 	@go run github.com/vektra/mockery/v2@latest --name=Service --dir=domain/tracking --output=internal/mocks --outpkg=mocks
 	@echo "Mocks generated successfully!"
+
+## register-macos-notifier: Register a local app bundle as the macOS notification sender (macOS only)
+register-macos-notifier:
+	@chmod +x scripts/register-macos-notifier.sh
+	@./scripts/register-macos-notifier.sh
 
 ## ci: Run all CI checks (test, lint, build)
 ci: test-race lint build
