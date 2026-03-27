@@ -193,6 +193,16 @@ func (app *App) startWithConfig(cfg *config.Config) {
 	systray.SetTooltip("GitHub PR Notifier")
 	app.menuAdapter.Setup()
 
+	// Register the "Configuration > Ignore Rules" handler.
+	// The menu item itself is created by initializeMenuStructure (on first UpdateDisplay)
+	// so it always appears after the PR sections and above Quit.
+	ignoreFilePath := config.DefaultIgnoreFilePath(cfg.ConfigFilePath)
+	app.menuAdapter.RegisterIgnoreHandler(func() {
+		if err := config.OpenOrCreateIgnoreFile(ignoreFilePath); err != nil {
+			log.Warn().Err(err).Msg("Failed to open ignore.yaml in editor")
+		}
+	})
+
 	// Initialize domain services
 	prFilter := pullrequest.NewDraftFilter(cfg.IncludeDraftPRs)
 	activityScheduler := pullrequest.NewActivityCheckScheduler(
@@ -206,6 +216,22 @@ func (app *App) startWithConfig(cfg *config.Config) {
 	// Register event handlers
 	notificationHandler := events.NewNotificationEventHandler(notificationAdapter, githubAdapter.AuthenticatedUser())
 	trackingHandler := events.NewTrackingEventHandler(trackingService)
+
+	// Load initial ignore config and start watching for changes.
+	if initialIgnoreCfg, err := config.LoadIgnoreConfig(ignoreFilePath); err != nil {
+		log.Warn().Err(err).Msg("Failed to load ignore.yaml — running without ignore rules")
+	} else if initialIgnoreCfg != nil {
+		logIgnoreConfig("ignore.yaml loaded", initialIgnoreCfg)
+		notificationHandler.UpdateIgnoreConfig(initialIgnoreCfg)
+	}
+	app.wg.Add(1)
+	go func() {
+		defer app.wg.Done()
+		for ignoreCfg := range config.WatchForValidIgnoreConfig(app.ctx, ignoreFilePath) {
+			logIgnoreConfig("ignore.yaml reloaded — applying new ignore rules", ignoreCfg)
+			notificationHandler.UpdateIgnoreConfig(ignoreCfg)
+		}
+	}()
 
 	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, notificationHandler)
 	eventBus.Subscribe(pullrequest.EventActivityDetected, notificationHandler)
@@ -325,4 +351,45 @@ func (app *App) onExit() {
 	case <-time.After(5 * time.Second):
 		log.Warn().Msg("Shutdown timeout - forcing exit")
 	}
+}
+
+// logIgnoreConfig logs a summary of the active ignore rules at Info level.
+func logIgnoreConfig(msg string, cfg *pullrequest.IgnoreConfig) {
+	e := log.Info().Str("blocked_repos", formatStringSlice(cfg.Ignore.Global.Repos))
+
+	if len(cfg.Ignore.Global.Events) > 0 {
+		e = e.Str("global_events", formatStringSlice(cfg.Ignore.Global.Events))
+	}
+	if len(cfg.Ignore.Global.Except) > 0 {
+		e = e.Str("global_except", formatStringSlice(cfg.Ignore.Global.Except))
+	}
+	if len(cfg.Ignore.Global.AuthoredBy) > 0 {
+		logins := make([]string, len(cfg.Ignore.Global.AuthoredBy))
+		for i, r := range cfg.Ignore.Global.AuthoredBy {
+			logins[i] = r.Login
+		}
+		e = e.Str("global_actors", formatStringSlice(logins))
+	}
+	if len(cfg.Ignore.Repos) > 0 {
+		repos := make([]string, 0, len(cfg.Ignore.Repos))
+		for repo := range cfg.Ignore.Repos {
+			repos = append(repos, repo)
+		}
+		e = e.Str("per_repo_overrides", formatStringSlice(repos))
+	}
+	e.Msg(msg)
+}
+
+func formatStringSlice(s []string) string {
+	if len(s) == 0 {
+		return "(none)"
+	}
+	result := ""
+	for i, v := range s {
+		if i > 0 {
+			result += ", "
+		}
+		result += v
+	}
+	return result
 }

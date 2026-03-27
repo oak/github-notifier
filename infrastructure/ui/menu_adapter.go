@@ -28,6 +28,7 @@ type MenuAdapter struct {
 	requestedPRsEmptyItem     *systray.MenuItem   // Separate (empty) placeholder for requested reviews section
 	userPRsEmptyItem          *systray.MenuItem   // Separate (empty) placeholder for user PRs section
 	waitingMenuItems          []*systray.MenuItem // Menu items shown during waiting-for-config state
+	ignoreHandler             IgnoreMenuHandler   // registered before menu is built; called when Ignore Rules is clicked
 	maxNumberOfRepos          int
 	maxNumberOfPRs            int
 	darkIcon                  []byte
@@ -43,6 +44,16 @@ type MenuAdapter struct {
 	ctx                       context.Context
 	cancel                    context.CancelFunc
 	menuInitialized           bool
+}
+
+// IgnoreMenuHandler is a callback for when the Ignore Rules menu item is clicked.
+type IgnoreMenuHandler func()
+
+// RegisterIgnoreHandler stores the callback to invoke when "Configuration > Ignore Rules"
+// is clicked. It must be called before the first UpdateDisplay so that
+// initializeMenuStructure can wire up the menu item at the right position.
+func (m *MenuAdapter) RegisterIgnoreHandler(handler IgnoreMenuHandler) {
+	m.ignoreHandler = handler
 }
 
 // ThemeProvider provides the current system theme
@@ -189,6 +200,24 @@ func (m *MenuAdapter) initializeMenuStructure() {
 			m.userPRsMenuItems[i].Children[j] = m.userPRsMenuItems[i].Parent.AddSubMenuItem("", "")
 			m.userPRsMenuItems[i].Children[j].Hide()
 		}
+	}
+
+	// ── Configuration ──
+	if m.ignoreHandler != nil {
+		systray.AddSeparator()
+		configParent := systray.AddMenuItem("Configuration", "Configuration options")
+		ignoreItem := configParent.AddSubMenuItem("Ignore Rules", "Edit ignore.yaml rules")
+		handler := m.ignoreHandler
+		go func() {
+			for {
+				select {
+				case <-ignoreItem.ClickedCh:
+					handler()
+				case <-m.ctx.Done():
+					return
+				}
+			}
+		}()
 	}
 
 	// ── Quit ──

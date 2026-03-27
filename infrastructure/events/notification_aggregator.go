@@ -4,6 +4,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
@@ -48,25 +50,77 @@ type NotificationAggregator struct {
 	onFlush           func(notifications []*PRNotification)
 	flushTimer        *time.Timer
 	stopCh            chan struct{}
-	authenticatedUser string // GitHub login — used to filter self-authored activities
+	authenticatedUser string                      // GitHub login — used to filter self-authored activities
+	ignoreConfig      *pullrequest.IgnoreConfig   // loaded ignore config, may be nil
 }
 
 // NewNotificationAggregator creates a new notification aggregator.
 // authenticatedUser is the GitHub login of the current user; activities authored by
 // this user are filtered out (they are domain facts, but not worth notifying about).
-func NewNotificationAggregator(flushInterval time.Duration, onFlush func(notifications []*PRNotification), authenticatedUser string) *NotificationAggregator {
+// ignoreConfig may be nil if no ignore.yaml exists yet.
+func NewNotificationAggregator(flushInterval time.Duration, onFlush func(notifications []*PRNotification), authenticatedUser string, ignoreConfig *pullrequest.IgnoreConfig) *NotificationAggregator {
 	return &NotificationAggregator{
 		pendingEvents:     make(map[string]*PRNotification),
 		flushInterval:     flushInterval,
 		onFlush:           onFlush,
 		stopCh:            make(chan struct{}),
 		authenticatedUser: authenticatedUser,
+		ignoreConfig:      ignoreConfig,
 	}
+}
+
+// UpdateIgnoreConfig atomically replaces the active ignore config.
+// Safe to call from any goroutine.
+func (a *NotificationAggregator) UpdateIgnoreConfig(cfg *pullrequest.IgnoreConfig) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.ignoreConfig = cfg
 }
 
 // AddEvent adds an event to the aggregator. It is a thin concurrency wrapper
 // around the pure accumulateEvent fold function.
 func (a *NotificationAggregator) AddEvent(event pullrequest.Event) {
+	// If ignore config is loaded, filter event before aggregation
+	if a.ignoreConfig != nil {
+		repoName := ""
+		author := ""
+		eventName := event.Name()
+		eventDetail := ""
+		switch e := event.(type) {
+		case *pullrequest.NewPullRequestDetected:
+			repoName = e.Repository.NameWithOwner()
+			author = e.Author.Login()
+		case *pullrequest.ActivityDetected:
+			repoName = e.Repository.NameWithOwner()
+			if e.Activity != nil {
+				author = e.Activity.Author().Login()
+				eventDetail = string(e.Activity.Type())
+			}
+		case *pullrequest.ReviewStateChanged:
+			repoName = e.Repository.NameWithOwner()
+			author = e.Reviewer.Login()
+			eventDetail = e.State.String()
+		case *pullrequest.Merged:
+			repoName = e.Repository.NameWithOwner()
+			author = e.PullRequest.Author().Login()
+		case *pullrequest.Closed:
+			repoName = e.Repository.NameWithOwner()
+			author = e.PullRequest.Author().Login()
+		case *pullrequest.PipelineStatusChanged:
+			repoName = e.Repository.NameWithOwner()
+			author = e.PullRequest.Author().Login()
+			eventDetail = e.NewStatus.String()
+		}
+		if pullrequest.ActivityIgnoreFilter(a.ignoreConfig, repoName, eventName, author, eventDetail) {
+			log.Debug().
+				Str("event", eventName).
+				Str("repo", repoName).
+				Str("author", author).
+				Str("detail", eventDetail).
+				Msg("event suppressed by ignore rule")
+			return
+		}
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.pendingEvents = accumulateEvent(a.pendingEvents, event, a.authenticatedUser)

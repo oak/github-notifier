@@ -26,8 +26,8 @@ func NewNotificationEventHandler(notificationPort port.NotificationPort, authent
 		notificationPort: notificationPort,
 	}
 
-	// Create aggregator with 2-second flush interval
-	handler.aggregator = NewNotificationAggregator(2*time.Second, handler.sendGroupedNotifications, authenticatedUser)
+	// Create aggregator with 2-second flush interval; ignore config is injected later via UpdateIgnoreConfig.
+	handler.aggregator = NewNotificationAggregator(2*time.Second, handler.sendGroupedNotifications, authenticatedUser, nil)
 
 	return handler
 }
@@ -111,6 +111,14 @@ func (h *NotificationEventHandler) sendGroupedNotifications(notifications []*PRN
 	// Send the grouped notifications
 	if err := h.notificationPort.NotifyPullRequests(portNotifications); err != nil {
 		log.Error().Msgf("Error sending grouped notifications: %v", err)
+	}
+}
+
+// UpdateIgnoreConfig replaces the active ignore config used to filter events.
+// Safe to call from any goroutine.
+func (h *NotificationEventHandler) UpdateIgnoreConfig(cfg *pullrequest.IgnoreConfig) {
+	if h.aggregator != nil {
+		h.aggregator.UpdateIgnoreConfig(cfg)
 	}
 }
 
