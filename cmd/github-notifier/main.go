@@ -23,6 +23,7 @@ import (
 	"github.com/oak3/github-notifier/infrastructure/notification/desktop"
 	"github.com/oak3/github-notifier/infrastructure/notification/linux"
 	"github.com/oak3/github-notifier/infrastructure/notification/macos"
+	macosun "github.com/oak3/github-notifier/infrastructure/notification/macos/un"
 	"github.com/oak3/github-notifier/infrastructure/notification/slack"
 	jsonrepo "github.com/oak3/github-notifier/infrastructure/persistence/json"
 	"github.com/oak3/github-notifier/infrastructure/ui"
@@ -135,6 +136,12 @@ func (app *App) enterWaitingMode() {
 func (app *App) createDesktopNotifier(themeProvider *ui.SystemThemeProvider) port.NotificationPort {
 	switch runtime.GOOS {
 	case "darwin":
+		// Prefer native UNUserNotificationCenter (click-to-open, no external tools).
+		// Only works when launched from a .app bundle; falls back to terminal-notifier.
+		if unAdapter := macosun.NewAdapter(); unAdapter != nil {
+			log.Info().Msg("Using native UNUserNotificationCenter adapter")
+			return unAdapter
+		}
 		adapter, err := macos.NewAdapter(themeProvider, app.cfg.MacOSNotificationSender)
 		if err != nil {
 			log.Warn().Err(err).Msg("Falling back to desktop notifications")
