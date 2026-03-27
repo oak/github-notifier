@@ -4,6 +4,7 @@
 package e2e
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -1782,4 +1783,56 @@ func TestE2E_FirstRun_PipelineChangeAfterInit_StillNotifies(t *testing.T) {
 		}
 	}
 	assert.True(t, foundPipeline, "Should send pipeline failure notification after first-run init")
+}
+
+func TestE2E_DuplicatePR_PipelineNotifiedOnce(t *testing.T) {
+	// Regression test: a PR that appears in both the review-requested search
+	// and the user-created search must not generate duplicate pipeline events.
+	suite := SetupSuite(t)
+	defer suite.Teardown()
+
+	pr := MockPR{
+		Title:                "My own PR",
+		Number:               9999,
+		Author:               "testuser",
+		HeadCommitSHA:        "deadbeef",
+		AppearInReviewSearch: true, // also returned by review-requested search
+	}
+	suite.mockGitHub.SetupPRs([]MockPR{pr})
+
+	// Cycle 1: PR detected with no pipeline status
+	err := suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
+	require.NoError(t, err)
+	suite.ClearNotifications()
+
+	// Cycle 2: pipeline transitions running → success
+	suite.mockGitHub.SetPipelineStatus(9999, "IN_PROGRESS")
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
+	require.NoError(t, err)
+	suite.ClearNotifications()
+
+	suite.mockGitHub.SetPipelineStatus(9999, "SUCCESS")
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs := suite.notifications.GetNotifications()
+	pipelineNotifCount := 0
+	for _, n := range notifs {
+		if strings.Contains(n.Title, "Pipeline") {
+			pipelineNotifCount++
+		}
+	}
+	assert.Equal(t, 1, pipelineNotifCount, "Pipeline passed should notify exactly once, not twice")
+	suite.ClearNotifications()
+
+	// Cycle 4: status unchanged — must NOT re-notify
+	err = suite.orchestrator.ExecuteRegularCheck(suite.ctx, time.Now())
+	require.NoError(t, err)
+	suite.FlushNotifications()
+
+	notifs = suite.notifications.GetNotifications()
+	for _, n := range notifs {
+		assert.NotContains(t, n.Title, "Pipeline", "Pipeline passed must not re-notify on subsequent cycles")
+	}
 }

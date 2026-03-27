@@ -28,16 +28,17 @@ type MockGitHubServer struct {
 
 // MockPR represents a pull request in the mock server
 type MockPR struct {
-	Title          string
-	URL            string
-	Number         int
-	CreatedAt      time.Time
-	IsDraft        bool
-	State          string
-	Repository     string
-	Author         string
-	HeadCommitSHA  string
-	PipelineStatus string // GitHub statusCheckRollup state: SUCCESS, FAILURE, PENDING, IN_PROGRESS, etc.
+	Title               string
+	URL                 string
+	Number              int
+	CreatedAt           time.Time
+	IsDraft             bool
+	State               string
+	Repository          string
+	Author              string
+	HeadCommitSHA       string
+	PipelineStatus      string // GitHub statusCheckRollup state: SUCCESS, FAILURE, PENDING, IN_PROGRESS, etc.
+	AppearInReviewSearch bool   // Force this PR to appear in review-requested/reviewed-by results too
 }
 
 // MockLatestReview represents a review returned in the search query's latestReviews connection
@@ -167,9 +168,9 @@ func (m *MockGitHubServer) handleSearchQuery(w http.ResponseWriter, query string
 
 	// Filter PRs based on query type
 	if strings.Contains(query, "review-requested:@me") || strings.Contains(query, "reviewed-by:@me") {
-		// Return PRs where user is requested to review
+		// Return PRs where user is requested to review, plus any forced into this search
 		for _, pr := range m.prs {
-			if pr.State == "open" && pr.Author != "testuser" {
+			if pr.State == "open" && (pr.Author != "testuser" || pr.AppearInReviewSearch) {
 				filteredPRs = append(filteredPRs, pr)
 			}
 		}

@@ -79,9 +79,18 @@ func (o *PullRequestOrchestrator) ExecuteRegularCheck(ctx context.Context, lastC
 	o.checkCycleState = updatedState
 
 	// Step 2: Detect merged/closed PRs
-	// Combine all current PRs to compare against tracked state
-	allCurrentPRs := append([]*pullrequest.PullRequest{}, result.RequestedReviewPRs...)
-	allCurrentPRs = append(allCurrentPRs, result.UserCreatedPRs...)
+	// Combine all current PRs to compare against tracked state.
+	// Deduplicate by URL: a PR can appear in both RequestedReviewPRs and
+	// UserCreatedPRs (e.g. author is also a reviewer), and duplicate entries
+	// cause double pipeline-status events and corrupt snapshot state.
+	seen := make(map[string]bool, len(result.RequestedReviewPRs)+len(result.UserCreatedPRs))
+	allCurrentPRs := make([]*pullrequest.PullRequest, 0, len(result.RequestedReviewPRs)+len(result.UserCreatedPRs))
+	for _, pr := range append(result.RequestedReviewPRs, result.UserCreatedPRs...) {
+		if !seen[pr.URL()] {
+			seen[pr.URL()] = true
+			allCurrentPRs = append(allCurrentPRs, pr)
+		}
+	}
 
 	if err := o.detectClosedPRsUseCase.Execute(ctx, allCurrentPRs); err != nil {
 		log.Error().Err(err).Msg("Error detecting closed PRs")
