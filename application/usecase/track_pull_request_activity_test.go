@@ -396,3 +396,96 @@ func TestTrackActivity_LoadsAndSeedsStateFromRepository(t *testing.T) {
 	mockPRRepo.AssertExpectations(t)
 	mockTrackingRepo.AssertExpectations(t)
 }
+
+func TestTrackActivity_PersistsLastActivityCheckAfterExecution(t *testing.T) {
+	// Regression test for: LastActivityCheck always zero in persisted snapshots.
+	// Execute must stamp a non-zero timestamp onto checked PRs so that after a
+	// restart the scheduler can seed its state and avoid redundant re-checks.
+	mockPRRepo := mocks.NewPullRequestRepository(t)
+	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+	mockEventPublisher := mocks.NewEventPublisher(t)
+	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
+
+	now := time.Now()
+	lastCheckTime := now.Add(-1 * time.Hour)
+
+	pr1 := testutil.NewTestPullRequest(1, testutil.WithCreatedAt(now.Add(-10*time.Minute)))
+
+	mockTrackingRepo.On("LoadAll").Return([]pullrequest.PRStateSnapshot{}, nil).Once()
+	mockPRRepo.On("EnrichWithActivities", mock.Anything, lastCheckTime).Return(nil, nil).Once()
+
+	var savedSnapshots []pullrequest.PRStateSnapshot
+	mockTrackingRepo.On("Save", mock.MatchedBy(func(snaps []pullrequest.PRStateSnapshot) bool {
+		savedSnapshots = snaps
+		return true
+	})).Return(nil).Once()
+
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, trackingService, mockEventPublisher, "")
+
+	beforeExec := time.Now()
+	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{pr1}, lastCheckTime)
+	afterExec := time.Now()
+
+	require.NoError(t, err)
+	require.Len(t, savedSnapshots, 1)
+	lac := savedSnapshots[0].LastActivityCheck
+	assert.False(t, lac.IsZero(), "LastActivityCheck must be non-zero after Execute")
+	assert.True(t, !lac.Before(beforeExec) && !lac.After(afterExec),
+		"LastActivityCheck should be within the execution window")
+	mockTrackingRepo.AssertExpectations(t)
+}
+
+func TestTrackActivity_RestartScenario_StaleCheckedOnceNotForever(t *testing.T) {
+	// Regression test for the restart scenario.
+	// Without the fix, LastActivityCheck is persisted as zero → SeedLastChecked
+	// ignores it → scheduler always resets → stale PR re-checked every restart.
+	//
+	// With the fix: cycle 1 post-restart checks stale PR (scheduling before seeding
+	// is unavoidable), but persists a non-zero LastActivityCheck. A fresh scheduler
+	// seeded with that value will correctly skip the stale PR next cycle.
+	mockPRRepo := mocks.NewPullRequestRepository(t)
+	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+	mockEventPublisher := mocks.NewEventPublisher(t)
+
+	// Fresh scheduler — simulates process restart.
+	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
+
+	now := time.Now()
+	lastCheckTime := now.Add(-1 * time.Hour)
+
+	stalePR := testutil.NewTestPullRequest(1, testutil.WithCreatedAt(now.Add(-72*time.Hour)))
+
+	// Cycle 1 post-restart: stale PR is checked (scheduler empty, can't skip).
+	mockTrackingRepo.On("LoadAll").Return([]pullrequest.PRStateSnapshot{}, nil).Once()
+	mockPRRepo.On("EnrichWithActivities", mock.Anything, lastCheckTime).Return(nil, nil).Once()
+
+	var savedAfterCycle1 []pullrequest.PRStateSnapshot
+	mockTrackingRepo.On("Save", mock.MatchedBy(func(snaps []pullrequest.PRStateSnapshot) bool {
+		savedAfterCycle1 = snaps
+		return true
+	})).Return(nil).Once()
+
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, trackingService, mockEventPublisher, "")
+
+	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{stalePR}, lastCheckTime)
+	require.NoError(t, err)
+
+	// The persisted snapshot must have a non-zero LastActivityCheck.
+	require.Len(t, savedAfterCycle1, 1)
+	assert.False(t, savedAfterCycle1[0].LastActivityCheck.IsZero(),
+		"LastActivityCheck must be persisted non-zero so a subsequent restart can seed the scheduler")
+
+	// Cycle 2 (same process, same scheduler): stale PR must be skipped now
+	// because MarkCheckedAt was called during cycle 1.
+	// No LoadAll expected — use case returns early when 0 PRs are due.
+	err = uc.Execute(context.Background(), []*pullrequest.PullRequest{stalePR}, lastCheckTime)
+	require.NoError(t, err)
+
+	// EnrichWithActivities must NOT be called in cycle 2 — stale PR recently checked.
+	mockPRRepo.AssertNumberOfCalls(t, "EnrichWithActivities", 1)
+	mockTrackingRepo.AssertExpectations(t)
+}

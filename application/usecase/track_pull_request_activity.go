@@ -112,8 +112,10 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 		return err
 	}
 
-	// Mark these PRs as checked in the scheduler
-	uc.scheduler.MarkChecked(prsToCheck)
+	// Record the check timestamp in the scheduler. Captured once so the same
+	// instant is written into every persisted snapshot below.
+	checkedAt := time.Now()
+	uc.scheduler.MarkCheckedAt(checkedAt, prsToCheck)
 
 	// Persist updated enrichment state so the next cycle (and DetectClosedPRs)
 	// can see the freshly-enriched values.
@@ -128,8 +130,7 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 	for _, s := range snapshots {
 		if pr, ok := checkedByURL[s.URL]; ok {
 			updated := pr.ToSnapshot()
-			// Preserve identity/display fields from the original snapshot to
-			// avoid clobbering data that TrackPRs saved (e.g. IsDraft changes).
+			updated.LastActivityCheck = checkedAt
 			updatedSnapshots = append(updatedSnapshots, updated)
 			delete(checkedByURL, s.URL) // mark as handled
 		} else {
@@ -138,7 +139,9 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 	}
 	// Any PRs that were checked but had no prior snapshot (new this cycle):
 	for _, pr := range checkedByURL {
-		updatedSnapshots = append(updatedSnapshots, pr.ToSnapshot())
+		snap := pr.ToSnapshot()
+		snap.LastActivityCheck = checkedAt
+		updatedSnapshots = append(updatedSnapshots, snap)
 	}
 	if saveErr := uc.trackingRepo.Save(updatedSnapshots); saveErr != nil {
 		log.Error().Err(saveErr).Msg("Activity tracker: failed to save updated snapshots")
