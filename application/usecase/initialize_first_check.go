@@ -14,6 +14,7 @@ import (
 type InitializeFirstCheckUseCase struct {
 	prRepo          pullrequest.PullRequestRepository
 	trackingService *pullrequest.TrackingService
+	seenReader      port.PullRequestSeenReader
 	prFilter        pullrequest.FilterFn
 	uiPort          port.UIPort
 }
@@ -22,12 +23,14 @@ type InitializeFirstCheckUseCase struct {
 func NewInitializeFirstCheckUseCase(
 	prRepo pullrequest.PullRequestRepository,
 	trackingService *pullrequest.TrackingService,
+	seenReader port.PullRequestSeenReader,
 	prFilter pullrequest.FilterFn,
 	uiPort port.UIPort,
 ) *InitializeFirstCheckUseCase {
 	return &InitializeFirstCheckUseCase{
 		prRepo:          prRepo,
 		trackingService: trackingService,
+		seenReader:      seenReader,
 		prFilter:        prFilter,
 		uiPort:          uiPort,
 	}
@@ -71,7 +74,7 @@ func (uc *InitializeFirstCheckUseCase) Execute(ctx context.Context) (bool, []*pu
 	uc.trackingService.MarkPullRequestsAsSeen(userCreatedPRs)
 
 	// Update the UI with tracking service
-	uc.uiPort.UpdateDisplay(requestedReviewPRs, userCreatedPRs, uc.trackingService)
+	uc.uiPort.UpdateDisplay(requestedReviewPRs, userCreatedPRs, uc.seenReader)
 
 	allPRs := append(requestedReviewPRs, userCreatedPRs...)
 	log.Info().Msgf("First run complete: marked %d PRs as seen", len(allPRs))

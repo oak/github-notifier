@@ -228,6 +228,7 @@ func (app *App) startWithConfig(cfg *config.Config) {
 	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(
 		githubAdapter,
 		trackingService,
+		trackingService,
 		prFilter,
 		app.menuAdapter,
 	)

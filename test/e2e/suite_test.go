@@ -78,6 +78,7 @@ func SetupSuite(t *testing.T) *TestSuite {
 	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(
 		githubAdapter,
 		trackingService,
+		trackingService,
 		prFilter,
 		menuAdapter,
 	)
@@ -172,7 +173,7 @@ func SetupSuiteFromStateFile(t *testing.T, stateFilePath string) *TestSuite {
 	prFilter := pullrequest.NewDraftFilter(false)
 	activityScheduler := pullrequest.NewActivityCheckScheduler(72, 15)
 
-	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(githubAdapter, trackingService, prFilter, menuAdapter)
+	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(githubAdapter, trackingService, trackingService, prFilter, menuAdapter)
 	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(githubAdapter, stateRepo, trackingService, prFilter, eventBus)
 	detectClosedPRsUseCase := usecase.NewDetectClosedPullRequestsUseCase(githubAdapter, stateRepo, eventBus)
 	trackActivityUseCase := usecase.NewTrackPullRequestActivityUseCase(githubAdapter, stateRepo, activityScheduler, trackingService, eventBus, githubAdapter.AuthenticatedUser())
@@ -234,7 +235,7 @@ func SetupSuiteOnMockServer(t *testing.T, mockGitHub *MockGitHubServer, stateFil
 	prFilter := pullrequest.NewDraftFilter(false)
 	activityScheduler := pullrequest.NewActivityCheckScheduler(72, 15)
 
-	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(githubAdapter, trackingService, prFilter, menuAdapter)
+	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(githubAdapter, trackingService, trackingService, prFilter, menuAdapter)
 	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(githubAdapter, stateRepo, trackingService, prFilter, eventBus)
 	detectClosedPRsUseCase := usecase.NewDetectClosedPullRequestsUseCase(githubAdapter, stateRepo, eventBus)
 	trackActivityUseCase := usecase.NewTrackPullRequestActivityUseCase(githubAdapter, stateRepo, activityScheduler, trackingService, eventBus, githubAdapter.AuthenticatedUser())

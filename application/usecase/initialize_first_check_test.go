@@ -38,7 +38,7 @@ func TestInitializeFirstCheck_FirstRunEver(t *testing.T) {
 
 	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), trackingService).Once()
 
-	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
+	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, trackingService, prFilter, mockUIPort)
 
 	// Act
 	isFirstRun, seededPRs, err := uc.Execute(context.Background())
@@ -64,7 +64,7 @@ func TestInitializeFirstCheck_NotFirstRun(t *testing.T) {
 	mockSeenRepo.On("IsEmpty").Return(false)
 	// No other calls should be made
 
-	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
+	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, trackingService, prFilter, mockUIPort)
 
 	// Act
 	isFirstRun, seededPRs, err := uc.Execute(context.Background())
@@ -93,7 +93,7 @@ func TestInitializeFirstCheck_FetchRequestedReviewsError(t *testing.T) {
 	mockSeenRepo.On("IsEmpty").Return(true)
 	mockPRRepo.On("FetchRequestedReviews").Return(nil, expectedErr)
 
-	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
+	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, trackingService, prFilter, mockUIPort)
 
 	// Act
 	isFirstRun, seededPRs, err := uc.Execute(context.Background())
@@ -124,7 +124,7 @@ func TestInitializeFirstCheck_FetchUserCreatedError(t *testing.T) {
 	mockPRRepo.On("FetchRequestedReviews").Return(requestedPRs, nil)
 	mockPRRepo.On("FetchUserCreated").Return(nil, expectedErr)
 
-	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
+	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, trackingService, prFilter, mockUIPort)
 
 	// Act
 	isFirstRun, seededPRs, err := uc.Execute(context.Background())
@@ -159,7 +159,7 @@ func TestInitializeFirstCheck_IncludeDrafts(t *testing.T) {
 
 	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), trackingService).Once()
 
-	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
+	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, trackingService, prFilter, mockUIPort)
 
 	// Act
 	isFirstRun, seededPRs, err := uc.Execute(context.Background())
@@ -187,7 +187,7 @@ func TestInitializeFirstCheck_NoPRs(t *testing.T) {
 	mockPRRepo.On("FetchUserCreated").Return(emptyPRs, nil)
 	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), trackingService).Once()
 
-	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, prFilter, mockUIPort)
+	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, trackingService, prFilter, mockUIPort)
 
 	// Act
 	isFirstRun, seededPRs, err := uc.Execute(context.Background())

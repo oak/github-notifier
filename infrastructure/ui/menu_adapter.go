@@ -12,6 +12,7 @@ import (
 	"github.com/getlantern/systray"
 	"github.com/rs/zerolog/log"
 
+	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/assets"
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
@@ -34,7 +35,6 @@ type MenuAdapter struct {
 	darkIcon                  []byte
 	lightIcon                 []byte
 	themeProvider             ThemeProvider
-	trackingService           *pullrequest.TrackingService
 	requestedReviewPRs        []*pullrequest.PullRequest
 	userCreatedPRs            []*pullrequest.PullRequest
 	clickedPRs                map[string]bool                          // Track which PRs have been clicked in the menu
@@ -228,13 +228,12 @@ func (m *MenuAdapter) initializeMenuStructure() {
 
 // UpdateDisplay implements the UIPort interface for systray menu display
 // This adapter specifically renders PRs as a system tray menu with dropdowns
-func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullrequest.PullRequest, trackingService *pullrequest.TrackingService) {
+func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullrequest.PullRequest, seenReader port.PullRequestSeenReader) {
 	// Pre-create all menu item slots on the first call so the
 	// dbusmenu/appindicator model contains every node from the start.
 	m.initializeMenuStructure()
 
-	// Store tracking service and PR lists for use in menu item formatting
-	m.trackingService = trackingService
+	// Store PR lists for use in menu item formatting
 	m.requestedReviewPRs = requestedReviewPRs
 	m.userCreatedPRs = userCreatedPRs
 
@@ -246,7 +245,7 @@ func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullre
 	// And PRs with new activity will show asterisks again
 	m.clickedPRsMu.Lock()
 	for _, pr := range requestedReviewPRs {
-		if trackingService.HasBeenSeen(pr.Identifier()) {
+		if seenReader.HasBeenSeen(pr.Identifier()) {
 			if !m.clickedPRs[pr.URL()] {
 				m.clickedPRs[pr.URL()] = true
 			}
@@ -256,7 +255,7 @@ func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullre
 		}
 	}
 	for _, pr := range userCreatedPRs {
-		if trackingService.HasBeenSeen(pr.Identifier()) {
+		if seenReader.HasBeenSeen(pr.Identifier()) {
 			if !m.clickedPRs[pr.URL()] {
 				m.clickedPRs[pr.URL()] = true
 			}
