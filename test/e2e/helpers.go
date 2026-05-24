@@ -28,16 +28,16 @@ type MockGitHubServer struct {
 
 // MockPR represents a pull request in the mock server
 type MockPR struct {
-	Title               string
-	URL                 string
-	Number              int
-	CreatedAt           time.Time
-	IsDraft             bool
-	State               string
-	Repository          string
-	Author              string
-	HeadCommitSHA       string
-	PipelineStatus      string // GitHub statusCheckRollup state: SUCCESS, FAILURE, PENDING, IN_PROGRESS, etc.
+	Title                string
+	URL                  string
+	Number               int
+	CreatedAt            time.Time
+	IsDraft              bool
+	State                string
+	Repository           string
+	Author               string
+	HeadCommitSHA        string
+	PipelineStatus       string // GitHub statusCheckRollup state: SUCCESS, FAILURE, PENDING, IN_PROGRESS, etc.
 	AppearInReviewSearch bool   // Force this PR to appear in review-requested/reviewed-by results too
 }
 

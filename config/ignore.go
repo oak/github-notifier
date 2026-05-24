@@ -67,7 +67,7 @@ func generateDefaultIgnoreContent() string {
 	b.WriteString("#           events:\n")
 	b.WriteString("#             - Merged\n")
 	b.WriteString("#\n")
-	b.WriteString(fmt.Sprintf("ignore:\n"))
+	b.WriteString("ignore:\n")
 	b.WriteString("  global:\n")
 	b.WriteString("    repos:\n")
 	b.WriteString("    events:\n")

@@ -50,8 +50,8 @@ type NotificationAggregator struct {
 	onFlush           func(notifications []*PRNotification)
 	flushTimer        *time.Timer
 	stopCh            chan struct{}
-	authenticatedUser string                      // GitHub login — used to filter self-authored activities
-	ignoreConfig      *pullrequest.IgnoreConfig   // loaded ignore config, may be nil
+	authenticatedUser string                    // GitHub login — used to filter self-authored activities
+	ignoreConfig      *pullrequest.IgnoreConfig // loaded ignore config, may be nil
 }
 
 // NewNotificationAggregator creates a new notification aggregator.

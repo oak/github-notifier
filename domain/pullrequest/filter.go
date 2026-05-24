@@ -12,7 +12,7 @@ type FilterFn func([]*PullRequest) []*PullRequest
 //   - eventName:   the domain event name constant (e.g. EventPipelineStatusChanged).
 //   - author:      the GitHub login of the actor that triggered the event.
 //   - eventDetail: an optional sub-type string (e.g. pipeline status, review state,
-//                  activity type). Used for event:detail matching in Except lists.
+//     activity type). Used for event:detail matching in Except lists.
 func ActivityIgnoreFilter(cfg *IgnoreConfig, repo, eventName, author, eventDetail string) bool {
 	// 1. Global repo blocklist — ignore everything from these repos.
 	for _, r := range cfg.Ignore.Global.Repos {
@@ -38,11 +38,12 @@ func ActivityIgnoreFilter(cfg *IgnoreConfig, repo, eventName, author, eventDetai
 // the event should be suppressed.
 //
 // Evaluation order:
-//  a. Scope-level Events list  — if non-empty and eventName is listed, candidate for ignore.
-//     Scope-level Except list  — if the event:detail pair is listed, veto the ignore.
-//  b. Per-author rules         — if the author matches a rule, evaluate that rule's
-//                                 Events/Except lists. A rule with an empty Events list
-//                                 matches all event types for that author.
+//
+//	a. Scope-level Events list  — if non-empty and eventName is listed, candidate for ignore.
+//	   Scope-level Except list  — if the event:detail pair is listed, veto the ignore.
+//	b. Per-author rules         — if the author matches a rule, evaluate that rule's
+//	                               Events/Except lists. A rule with an empty Events list
+//	                               matches all event types for that author.
 func matchScope(scope IgnoreScope, eventName, author, eventDetail string) bool {
 	// (a) Scope-level event filter.
 	if len(scope.Events) > 0 && contains(scope.Events, eventName) {

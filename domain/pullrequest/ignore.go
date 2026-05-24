@@ -16,9 +16,9 @@ type IgnoreConfig struct {
 // - Repos: (global scope only) ignore all events from these repositories.
 // - AuthoredBy: per-author rules; each entry can further restrict by events/except.
 type IgnoreScope struct {
-	Events    []string          `yaml:"events"`
-	Except    []string          `yaml:"except"`
-	Repos     []string          `yaml:"repos"`
+	Events     []string          `yaml:"events"`
+	Except     []string          `yaml:"except"`
+	Repos      []string          `yaml:"repos"`
 	AuthoredBy []IgnoreActorRule `yaml:"authored_by"`
 }
 
