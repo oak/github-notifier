@@ -39,7 +39,7 @@ func TestCheckNewPRs_NoNewPRs(t *testing.T) {
 	// Events should be published for each PR (2 + 1 = 3 events)
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.NewPullRequestDetected")).Return(nil).Times(3)
 
-	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, mockEventPublisher)
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, nil, trackingService, prFilter, mockEventPublisher)
 
 	// Act
 	result, _, err := uc.Execute(context.Background(), usecase.NewCheckCycleState())
@@ -79,7 +79,7 @@ func TestCheckNewPRs_TrulyNewPRs_EmitsEvents(t *testing.T) {
 	// Events should be published for each PR (2 + 1 = 3 events)
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.NewPullRequestDetected")).Return(nil).Times(3)
 
-	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, mockEventPublisher)
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, nil, trackingService, prFilter, mockEventPublisher)
 
 	// Act
 	result, _, err := uc.Execute(context.Background(), usecase.NewCheckCycleState())
@@ -130,7 +130,7 @@ func TestCheckNewPRs_PRsWithActivity(t *testing.T) {
 	// PRs with activity should NOT be marked as seen (handled by activity tracking)
 	// No events should be published for PRs with activity
 
-	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, mockEventPublisher)
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, nil, trackingService, prFilter, mockEventPublisher)
 
 	// Act
 	result, _, err := uc.Execute(context.Background(), state)
@@ -188,7 +188,7 @@ func TestCheckNewPRs_MixedNewAndActivity(t *testing.T) {
 	// Events only for truly new PRs (2 events)
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.NewPullRequestDetected")).Return(nil).Twice()
 
-	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, mockEventPublisher)
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, nil, trackingService, prFilter, mockEventPublisher)
 
 	// Act
 	result, _, err := uc.Execute(context.Background(), state)
@@ -214,7 +214,7 @@ func TestCheckNewPRs_FetchRequestedReviewsError(t *testing.T) {
 	// Mock expectations
 	mockPRRepo.On("FetchRequestedReviews").Return(nil, expectedErr)
 
-	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, mockEventPublisher)
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, nil, trackingService, prFilter, mockEventPublisher)
 
 	// Act
 	result, _, err := uc.Execute(context.Background(), usecase.NewCheckCycleState())
@@ -241,7 +241,7 @@ func TestCheckNewPRs_FetchUserCreatedError(t *testing.T) {
 	mockPRRepo.On("FetchRequestedReviews").Return(requestedPRs, nil)
 	mockPRRepo.On("FetchUserCreated").Return(nil, expectedErr)
 
-	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, mockEventPublisher)
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, nil, trackingService, prFilter, mockEventPublisher)
 
 	// Act
 	result, _, err := uc.Execute(context.Background(), usecase.NewCheckCycleState())
@@ -273,7 +273,7 @@ func TestCheckNewPRs_FiltersDrafts(t *testing.T) {
 	mockSeenRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Twice()
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.NewPullRequestDetected")).Return(nil).Twice()
 
-	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, mockEventPublisher)
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, nil, trackingService, prFilter, mockEventPublisher)
 
 	// Act
 	result, _, err := uc.Execute(context.Background(), usecase.NewCheckCycleState())
@@ -311,7 +311,7 @@ func TestCheckNewPRs_PublishEventError_ContinuesProcessing(t *testing.T) {
 	// PRs should still be marked as seen even if event fails
 	mockSeenRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Twice()
 
-	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, trackingService, prFilter, mockEventPublisher)
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, nil, trackingService, prFilter, mockEventPublisher)
 
 	// Act
 	result, _, err := uc.Execute(context.Background(), usecase.NewCheckCycleState())
@@ -321,4 +321,64 @@ func TestCheckNewPRs_PublishEventError_ContinuesProcessing(t *testing.T) {
 	assert.NotNil(t, result)
 	mockEventPublisher.AssertExpectations(t)
 	mockSeenRepo.AssertExpectations(t)
+}
+
+func TestCheckNewPRs_SeedsKnownReviewsFromSnapshotsOnFirstCycle(t *testing.T) {
+	// Arrange
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+	mockPRRepo := mocks.NewPullRequestRepository(t)
+	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
+	mockEventPublisher := mocks.NewEventPublisher(t)
+	prFilter := pullrequest.NewDraftFilter(false)
+
+	now := time.Now()
+	pr := testutil.NewTestPullRequest(
+		42,
+		testutil.WithURL("https://github.com/owner/repo/pull/42"),
+		testutil.WithTitle("Review baseline test"),
+		testutil.WithCreatedAt(now.Add(-24*time.Hour)),
+	)
+
+	reviewer := testutil.NewTestAuthor("reviewer")
+	// Current fetched state is approved.
+	pr.AddReview(pullrequest.NewReview(reviewer, pullrequest.ReviewStateApproved, now.Add(-1*time.Hour)))
+
+	// Persisted baseline state from before restart is commented.
+	mockTrackingRepo.On("LoadAll").Return([]pullrequest.PRStateSnapshot{
+		{
+			URL:               pr.URL(),
+			Number:            pr.Number(),
+			Repository:        pr.RepositoryName(),
+			Author:            pr.AuthorLogin(),
+			Title:             pr.Title(),
+			CreatedAt:         pr.CreatedAt(),
+			PipelineStatus:    pullrequest.PipelineStatusUnknown,
+			LastActivityCheck: now.Add(-2 * time.Hour),
+			Reviews: map[string]pullrequest.ReviewSnapshot{
+				"reviewer": {
+					State:       pullrequest.ReviewStateCommented,
+					SubmittedAt: now.Add(-2 * time.Hour),
+				},
+			},
+		},
+	}, nil).Once()
+
+	mockPRRepo.On("FetchRequestedReviews").Return([]*pullrequest.PullRequest{pr}, nil)
+	mockPRRepo.On("FetchUserCreated").Return([]*pullrequest.PullRequest{}, nil)
+	mockSeenRepo.On("HasBeenSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(true).Once()
+	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ReviewStateChanged")).Return(nil).Once()
+
+	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingRepo, trackingService, prFilter, mockEventPublisher)
+
+	// Act
+	_, state, err := uc.Execute(context.Background(), usecase.NewCheckCycleState())
+
+	// Assert
+	require.NoError(t, err)
+	assert.True(t, state.ReviewsSeeded)
+	known, ok := state.KnownReviews[pr.URL()]
+	require.True(t, ok)
+	require.Contains(t, known, "reviewer")
+	assert.Equal(t, pullrequest.ReviewStateApproved, known["reviewer"].State())
 }

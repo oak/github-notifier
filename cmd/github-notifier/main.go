@@ -250,6 +250,7 @@ func (app *App) startWithConfig(cfg *config.Config) {
 
 	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(
 		githubAdapter,
+		stateRepo,
 		trackingService,
 		prFilter,
 		eventBus,

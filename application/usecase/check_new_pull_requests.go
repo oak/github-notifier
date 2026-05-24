@@ -15,6 +15,7 @@ import (
 type CheckCycleState struct {
 	KnownPRs      map[string]bool
 	KnownReviews  map[string]map[string]*pullrequest.Review
+	ReviewsSeeded bool
 	LastCheckTime time.Time
 }
 
@@ -31,6 +32,7 @@ func NewCheckCycleState() CheckCycleState {
 // Emits domain events for new PRs instead of directly sending notifications
 type CheckNewPullRequestsUseCase struct {
 	prRepo          pullrequest.PullRequestRepository
+	trackingRepo    pullrequest.PRTrackingRepository
 	trackingService *pullrequest.TrackingService
 	prFilter        pullrequest.FilterFn
 	eventPublisher  port.EventPublisher
@@ -39,12 +41,14 @@ type CheckNewPullRequestsUseCase struct {
 // NewCheckNewPullRequestsUseCase creates a new use case
 func NewCheckNewPullRequestsUseCase(
 	prRepo pullrequest.PullRequestRepository,
+	trackingRepo pullrequest.PRTrackingRepository,
 	trackingService *pullrequest.TrackingService,
 	prFilter pullrequest.FilterFn,
 	eventPublisher port.EventPublisher,
 ) *CheckNewPullRequestsUseCase {
 	return &CheckNewPullRequestsUseCase{
 		prRepo:          prRepo,
+		trackingRepo:    trackingRepo,
 		trackingService: trackingService,
 		prFilter:        prFilter,
 		eventPublisher:  eventPublisher,
@@ -61,6 +65,8 @@ type PRCheckResult struct {
 // It accepts the current inter-cycle state and returns the updated state for the
 // next cycle together with the fetched PRs for use by other use cases.
 func (uc *CheckNewPullRequestsUseCase) Execute(ctx context.Context, state CheckCycleState) (*PRCheckResult, CheckCycleState, error) {
+	uc.seedKnownReviewsFromSnapshots(&state)
+
 	// Fetch PRs from both sources
 	requestedReviewPRs, err := uc.prRepo.FetchRequestedReviews()
 	if err != nil {
@@ -100,6 +106,42 @@ func (uc *CheckNewPullRequestsUseCase) Execute(ctx context.Context, state CheckC
 		RequestedReviewPRs: requestedReviewPRs,
 		UserCreatedPRs:     userCreatedPRs,
 	}, state, nil
+}
+
+// seedKnownReviewsFromSnapshots restores review baseline state from persisted
+// snapshots one time per process run, so review changes that happened while the
+// app was down can still be detected on the first regular cycle.
+func (uc *CheckNewPullRequestsUseCase) seedKnownReviewsFromSnapshots(state *CheckCycleState) {
+	if state.ReviewsSeeded || uc.trackingRepo == nil {
+		return
+	}
+
+	snapshots, err := uc.trackingRepo.LoadAll()
+	if err != nil {
+		log.Error().Err(err).Msg("Error loading tracked PR snapshots for review baseline seeding")
+		return
+	}
+
+	for _, snapshot := range snapshots {
+		if _, exists := state.KnownReviews[snapshot.URL]; exists {
+			continue
+		}
+
+		reviews := make(map[string]*pullrequest.Review, len(snapshot.Reviews))
+		for login, reviewSnapshot := range snapshot.Reviews {
+			reviewer, authorErr := pullrequest.NewAuthor(login)
+			if authorErr != nil {
+				log.Error().Err(authorErr).Msgf("Skipping invalid reviewer %q while seeding review baseline", login)
+				continue
+			}
+
+			reviews[login] = pullrequest.NewReview(reviewer, reviewSnapshot.State, reviewSnapshot.SubmittedAt)
+		}
+
+		state.KnownReviews[snapshot.URL] = reviews
+	}
+
+	state.ReviewsSeeded = true
 }
 
 // processNewPRs finds new PRs and emits appropriate events
