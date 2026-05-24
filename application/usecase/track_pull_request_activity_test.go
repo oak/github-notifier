@@ -437,6 +437,118 @@ func TestTrackActivity_PersistsLastActivityCheckAfterExecution(t *testing.T) {
 	mockTrackingRepo.AssertExpectations(t)
 }
 
+func TestTrackActivity_IgnoredAuthor_NotMarkedUnseen(t *testing.T) {
+	// Verify that activity authored by an ignored user does NOT mark the PR as
+	// unseen, even though the activity is by someone other than the authenticated user.
+	mockPRRepo := mocks.NewPullRequestRepository(t)
+	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+	mockEventPublisher := mocks.NewEventPublisher(t)
+	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
+
+	now := time.Now()
+	lastCheckTime := now.Add(-1 * time.Hour)
+
+	pr := testutil.NewTestPullRequest(1,
+		testutil.WithCreatedAt(now.Add(-10*time.Minute)),
+		testutil.WithRepository("owner/repo"),
+	)
+
+	mockTrackingRepo.On("LoadAll").Return([]pullrequest.PRStateSnapshot{}, nil).Once()
+
+	var enrichedEvents []pullrequest.Event
+	mockPRRepo.On("EnrichWithActivities", mock.Anything, lastCheckTime).
+		Run(func(args mock.Arguments) {
+			prsArg := args.Get(0).([]*pullrequest.PullRequest)
+			// Activity by the ignored bot — not the authenticated user
+			activity := testutil.NewTestActivity(
+				pullrequest.ActivityTypeComment,
+				now.Add(-30*time.Minute),
+				testutil.WithActivityPR(prsArg[0].URL(), prsArg[0].Number()),
+				testutil.WithActivityAuthor("dependabot"),
+			)
+			enrichedEvents = append(enrichedEvents, prsArg[0].AddActivities([]*pullrequest.Activity{activity})...)
+		}).
+		Return(func([]*pullrequest.PullRequest, time.Time) []pullrequest.Event { return enrichedEvents }, nil)
+
+	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
+	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil)
+
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, trackingService, mockEventPublisher, "alice")
+
+	// Configure ignore rules that suppress all activity from "dependabot"
+	ignoreCfg := &pullrequest.IgnoreConfig{}
+	ignoreCfg.Ignore.Global.AuthoredBy = []pullrequest.IgnoreActorRule{
+		{Login: "dependabot"},
+	}
+	uc.UpdateIgnoreConfig(ignoreCfg)
+
+	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{pr}, lastCheckTime)
+
+	require.NoError(t, err)
+	// PR must NOT be marked unseen because the only activity is from an ignored author
+	mockSeenRepo.AssertNotCalled(t, "UnmarkAsSeen")
+	mockPRRepo.AssertExpectations(t)
+	mockTrackingRepo.AssertExpectations(t)
+}
+
+func TestTrackActivity_IgnoreConfig_NonIgnoredAuthorStillMarkUnseen(t *testing.T) {
+	// Ensure that when an ignore config is set, activity from non-ignored authors
+	// still marks the PR as unseen.
+	mockPRRepo := mocks.NewPullRequestRepository(t)
+	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
+	mockSeenRepo := mocks.NewSeenRepository(t)
+	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+	mockEventPublisher := mocks.NewEventPublisher(t)
+	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
+
+	now := time.Now()
+	lastCheckTime := now.Add(-1 * time.Hour)
+
+	pr := testutil.NewTestPullRequest(1,
+		testutil.WithCreatedAt(now.Add(-10*time.Minute)),
+		testutil.WithRepository("owner/repo"),
+	)
+
+	mockTrackingRepo.On("LoadAll").Return([]pullrequest.PRStateSnapshot{}, nil).Once()
+
+	var enrichedEvents []pullrequest.Event
+	mockPRRepo.On("EnrichWithActivities", mock.Anything, lastCheckTime).
+		Run(func(args mock.Arguments) {
+			prsArg := args.Get(0).([]*pullrequest.PullRequest)
+			// Activity by a regular user — not ignored
+			activity := testutil.NewTestActivity(
+				pullrequest.ActivityTypeComment,
+				now.Add(-30*time.Minute),
+				testutil.WithActivityPR(prsArg[0].URL(), prsArg[0].Number()),
+				testutil.WithActivityAuthor("bob"),
+			)
+			enrichedEvents = append(enrichedEvents, prsArg[0].AddActivities([]*pullrequest.Activity{activity})...)
+		}).
+		Return(func([]*pullrequest.PullRequest, time.Time) []pullrequest.Event { return enrichedEvents }, nil)
+
+	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
+	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil)
+	mockSeenRepo.On("UnmarkAsSeen", pr.Identifier()).Return(nil)
+
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, trackingService, mockEventPublisher, "alice")
+
+	// Ignore config only suppresses "dependabot" — "bob" is not ignored
+	ignoreCfg := &pullrequest.IgnoreConfig{}
+	ignoreCfg.Ignore.Global.AuthoredBy = []pullrequest.IgnoreActorRule{
+		{Login: "dependabot"},
+	}
+	uc.UpdateIgnoreConfig(ignoreCfg)
+
+	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{pr}, lastCheckTime)
+
+	require.NoError(t, err)
+	mockSeenRepo.AssertExpectations(t)
+	mockPRRepo.AssertExpectations(t)
+	mockTrackingRepo.AssertExpectations(t)
+}
+
 func TestTrackActivity_RestartScenario_StaleCheckedOnceNotForever(t *testing.T) {
 	// Regression test for the restart scenario.
 	// Without the fix, LastActivityCheck is persisted as zero → SeedLastChecked

@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -24,6 +25,8 @@ type TrackPullRequestActivityUseCase struct {
 	trackingService   *pullrequest.TrackingService
 	eventPublisher    port.EventPublisher
 	authenticatedUser string // GitHub login — used to filter self-activity for unseen marking
+	mu                sync.RWMutex
+	ignoreConfig      *pullrequest.IgnoreConfig // may be nil; safe to update concurrently
 }
 
 // NewTrackPullRequestActivityUseCase creates a new use case.
@@ -45,6 +48,14 @@ func NewTrackPullRequestActivityUseCase(
 		eventPublisher:    eventPublisher,
 		authenticatedUser: authenticatedUser,
 	}
+}
+
+// UpdateIgnoreConfig atomically replaces the active ignore config used to decide
+// whether a PR should be marked as unseen. Safe to call from any goroutine.
+func (uc *TrackPullRequestActivityUseCase) UpdateIgnoreConfig(cfg *pullrequest.IgnoreConfig) {
+	uc.mu.Lock()
+	defer uc.mu.Unlock()
+	uc.ignoreConfig = cfg
 }
 
 // Execute checks for new activity on PRs using two-tier scheduling.
@@ -182,13 +193,28 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 }
 
 // hasActivityByOthers returns true if the PR has any activities since lastCheckTime
-// that were NOT authored by the authenticated user. Self-authored activities are
-// domain facts but should not trigger unseen marking or notifications.
+// that were NOT authored by the authenticated user AND are not suppressed by the
+// active ignore config. Self-authored activities are domain facts but should not
+// trigger unseen marking. Ignored activities are also excluded so the UI asterisk
+// stays in sync with the notification suppression in NotificationAggregator.
 func (uc *TrackPullRequestActivityUseCase) hasActivityByOthers(pr *pullrequest.PullRequest, since time.Time) bool {
+	uc.mu.RLock()
+	cfg := uc.ignoreConfig
+	uc.mu.RUnlock()
+
 	for _, activity := range pr.ActivitiesSince(since) {
-		if uc.authenticatedUser == "" || activity.Author().Login() != uc.authenticatedUser {
-			return true
+		author := activity.Author().Login()
+		if uc.authenticatedUser != "" && author == uc.authenticatedUser {
+			continue
 		}
+		if cfg != nil {
+			repo := pr.Repository().NameWithOwner()
+			eventDetail := string(activity.Type())
+			if pullrequest.ActivityIgnoreFilter(cfg, repo, pullrequest.EventActivityDetected, author, eventDetail) {
+				continue
+			}
+		}
+		return true
 	}
 	return false
 }

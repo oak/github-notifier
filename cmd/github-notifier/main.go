@@ -204,28 +204,12 @@ func (app *App) startWithConfig(cfg *config.Config) {
 		cfg.StalePRCheckIntervalMin,
 	)
 
-	// Initialize event infrastructure
-	eventBus := events.NewInMemoryEventBus()
-
 	// Register event handlers
 	notificationHandler := events.NewNotificationEventHandler(notificationAdapter, githubAdapter.AuthenticatedUser())
 	trackingHandler := events.NewTrackingEventHandler(trackingService)
 
-	// Load initial ignore config and start watching for changes.
-	if initialIgnoreCfg, err := config.LoadIgnoreConfig(ignoreFilePath); err != nil {
-		log.Warn().Err(err).Msg("Failed to load ignore.yaml — running without ignore rules")
-	} else if initialIgnoreCfg != nil {
-		logIgnoreConfig("ignore.yaml loaded", initialIgnoreCfg)
-		notificationHandler.UpdateIgnoreConfig(initialIgnoreCfg)
-	}
-	app.wg.Add(1)
-	go func() {
-		defer app.wg.Done()
-		for ignoreCfg := range config.WatchForValidIgnoreConfig(app.ctx, ignoreFilePath) {
-			logIgnoreConfig("ignore.yaml reloaded — applying new ignore rules", ignoreCfg)
-			notificationHandler.UpdateIgnoreConfig(ignoreCfg)
-		}
-	}()
+	// Initialize event infrastructure
+	eventBus := events.NewInMemoryEventBus()
 
 	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, notificationHandler)
 	eventBus.Subscribe(pullrequest.EventActivityDetected, notificationHandler)
@@ -290,6 +274,24 @@ func (app *App) startWithConfig(cfg *config.Config) {
 	if err := app.orchestrator.ExecuteInitialCheck(app.ctx); err != nil {
 		log.Error().Err(err).Msg("Error during initial check")
 	}
+
+	// Load initial ignore config and start watching for changes.
+	if initialIgnoreCfg, err := config.LoadIgnoreConfig(ignoreFilePath); err != nil {
+		log.Warn().Err(err).Msg("Failed to load ignore.yaml — running without ignore rules")
+	} else if initialIgnoreCfg != nil {
+		logIgnoreConfig("ignore.yaml loaded", initialIgnoreCfg)
+		notificationHandler.UpdateIgnoreConfig(initialIgnoreCfg)
+		trackActivityUseCase.UpdateIgnoreConfig(initialIgnoreCfg)
+	}
+	app.wg.Add(1)
+	go func() {
+		defer app.wg.Done()
+		for ignoreCfg := range config.WatchForValidIgnoreConfig(app.ctx, ignoreFilePath) {
+			logIgnoreConfig("ignore.yaml reloaded — applying new ignore rules", ignoreCfg)
+			notificationHandler.UpdateIgnoreConfig(ignoreCfg)
+			trackActivityUseCase.UpdateIgnoreConfig(ignoreCfg)
+		}
+	}()
 
 	// Setup periodic checks with context cancellation.
 	// lastCheck is captured before each call so ExecuteRegularCheck receives the
