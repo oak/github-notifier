@@ -25,7 +25,7 @@ type TestSuite struct {
 	orchestrator        *application.PullRequestOrchestrator
 	notifications       *SpyNotificationAdapter
 	menuAdapter         *SpyUIAdapter
-	trackingService     *pullrequest.TrackingService
+	seenRepo            pullrequest.SeenRepository
 	notificationHandler *events.NotificationEventHandler
 }
 
@@ -45,14 +45,13 @@ func SetupSuite(t *testing.T) *TestSuite {
 	githubAdapter := github.NewAdapterWithURL(mockGitHub.URL)
 	seenRepo := memory.NewSeenPullRequestRepository()
 	trackingRepo := memory.NewPRTrackingRepository()
-	trackingService := pullrequest.NewTrackingService(seenRepo)
 
 	// Setup event infrastructure
 	eventBus := events.NewInMemoryEventBus()
 
 	// Register event handlers
 	notificationHandler := events.NewNotificationEventHandler(notifications, githubAdapter.AuthenticatedUser())
-	trackingHandler := events.NewTrackingEventHandler(trackingService)
+	trackingHandler := events.NewTrackingEventHandler(seenRepo)
 
 	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, notificationHandler)
 	eventBus.Subscribe(pullrequest.EventActivityDetected, notificationHandler)
@@ -77,8 +76,7 @@ func SetupSuite(t *testing.T) *TestSuite {
 	// Initialize use cases
 	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(
 		githubAdapter,
-		trackingService,
-		trackingService,
+		seenRepo,
 		prFilter,
 		menuAdapter,
 	)
@@ -86,7 +84,7 @@ func SetupSuite(t *testing.T) *TestSuite {
 	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(
 		githubAdapter,
 		trackingRepo,
-		trackingService,
+		seenRepo,
 		prFilter,
 		eventBus,
 	)
@@ -101,14 +99,14 @@ func SetupSuite(t *testing.T) *TestSuite {
 		githubAdapter,
 		trackingRepo,
 		activityScheduler,
-		trackingService,
+		seenRepo,
 		eventBus,
 		githubAdapter.AuthenticatedUser(),
 	)
 
 	updateDisplayUseCase := usecase.NewUpdatePullRequestDisplayUseCase(
 		menuAdapter,
-		trackingService,
+		seenRepo,
 	)
 
 	// Create orchestrator
@@ -128,7 +126,7 @@ func SetupSuite(t *testing.T) *TestSuite {
 		orchestrator:        orchestrator,
 		notifications:       notifications,
 		menuAdapter:         menuAdapter,
-		trackingService:     trackingService,
+		seenRepo:            seenRepo,
 		notificationHandler: notificationHandler,
 	}
 }
@@ -150,12 +148,11 @@ func SetupSuiteFromStateFile(t *testing.T, stateFilePath string) *TestSuite {
 
 	githubAdapter := github.NewAdapterWithURL(mockGitHub.URL)
 	stateRepo := jsonrepo.NewStateRepository(stateFilePath)
-	trackingService := pullrequest.NewTrackingService(stateRepo)
 
 	eventBus := events.NewInMemoryEventBus()
 
 	notificationHandler := events.NewNotificationEventHandler(notifications, githubAdapter.AuthenticatedUser())
-	trackingHandler := events.NewTrackingEventHandler(trackingService)
+	trackingHandler := events.NewTrackingEventHandler(stateRepo)
 
 	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, notificationHandler)
 	eventBus.Subscribe(pullrequest.EventActivityDetected, notificationHandler)
@@ -173,11 +170,11 @@ func SetupSuiteFromStateFile(t *testing.T, stateFilePath string) *TestSuite {
 	prFilter := pullrequest.NewDraftFilter(false)
 	activityScheduler := pullrequest.NewActivityCheckScheduler(72, 15)
 
-	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(githubAdapter, trackingService, trackingService, prFilter, menuAdapter)
-	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(githubAdapter, stateRepo, trackingService, prFilter, eventBus)
+	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(githubAdapter, stateRepo, prFilter, menuAdapter)
+	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(githubAdapter, stateRepo, stateRepo, prFilter, eventBus)
 	detectClosedPRsUseCase := usecase.NewDetectClosedPullRequestsUseCase(githubAdapter, stateRepo, eventBus)
-	trackActivityUseCase := usecase.NewTrackPullRequestActivityUseCase(githubAdapter, stateRepo, activityScheduler, trackingService, eventBus, githubAdapter.AuthenticatedUser())
-	updateDisplayUseCase := usecase.NewUpdatePullRequestDisplayUseCase(menuAdapter, trackingService)
+	trackActivityUseCase := usecase.NewTrackPullRequestActivityUseCase(githubAdapter, stateRepo, activityScheduler, stateRepo, eventBus, githubAdapter.AuthenticatedUser())
+	updateDisplayUseCase := usecase.NewUpdatePullRequestDisplayUseCase(menuAdapter, stateRepo)
 
 	orchestrator := application.NewPullRequestOrchestrator(
 		initializeUseCase,
@@ -195,7 +192,7 @@ func SetupSuiteFromStateFile(t *testing.T, stateFilePath string) *TestSuite {
 		orchestrator:        orchestrator,
 		notifications:       notifications,
 		menuAdapter:         menuAdapter,
-		trackingService:     trackingService,
+		seenRepo:            stateRepo,
 		notificationHandler: notificationHandler,
 	}
 }
@@ -212,12 +209,11 @@ func SetupSuiteOnMockServer(t *testing.T, mockGitHub *MockGitHubServer, stateFil
 
 	githubAdapter := github.NewAdapterWithURL(mockGitHub.URL)
 	stateRepo := jsonrepo.NewStateRepository(stateFilePath)
-	trackingService := pullrequest.NewTrackingService(stateRepo)
 
 	eventBus := events.NewInMemoryEventBus()
 
 	notificationHandler := events.NewNotificationEventHandler(notifications, githubAdapter.AuthenticatedUser())
-	trackingHandler := events.NewTrackingEventHandler(trackingService)
+	trackingHandler := events.NewTrackingEventHandler(stateRepo)
 
 	eventBus.Subscribe(pullrequest.EventNewPullRequestDetected, notificationHandler)
 	eventBus.Subscribe(pullrequest.EventActivityDetected, notificationHandler)
@@ -235,11 +231,11 @@ func SetupSuiteOnMockServer(t *testing.T, mockGitHub *MockGitHubServer, stateFil
 	prFilter := pullrequest.NewDraftFilter(false)
 	activityScheduler := pullrequest.NewActivityCheckScheduler(72, 15)
 
-	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(githubAdapter, trackingService, trackingService, prFilter, menuAdapter)
-	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(githubAdapter, stateRepo, trackingService, prFilter, eventBus)
+	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(githubAdapter, stateRepo, prFilter, menuAdapter)
+	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(githubAdapter, stateRepo, stateRepo, prFilter, eventBus)
 	detectClosedPRsUseCase := usecase.NewDetectClosedPullRequestsUseCase(githubAdapter, stateRepo, eventBus)
-	trackActivityUseCase := usecase.NewTrackPullRequestActivityUseCase(githubAdapter, stateRepo, activityScheduler, trackingService, eventBus, githubAdapter.AuthenticatedUser())
-	updateDisplayUseCase := usecase.NewUpdatePullRequestDisplayUseCase(menuAdapter, trackingService)
+	trackActivityUseCase := usecase.NewTrackPullRequestActivityUseCase(githubAdapter, stateRepo, activityScheduler, stateRepo, eventBus, githubAdapter.AuthenticatedUser())
+	updateDisplayUseCase := usecase.NewUpdatePullRequestDisplayUseCase(menuAdapter, stateRepo)
 
 	orchestrator := application.NewPullRequestOrchestrator(
 		initializeUseCase,
@@ -257,7 +253,7 @@ func SetupSuiteOnMockServer(t *testing.T, mockGitHub *MockGitHubServer, stateFil
 		orchestrator:        orchestrator,
 		notifications:       notifications,
 		menuAdapter:         menuAdapter,
-		trackingService:     trackingService,
+		seenRepo:            stateRepo,
 		notificationHandler: notificationHandler,
 	}
 }

@@ -10,18 +10,18 @@ import (
 
 // UpdatePullRequestDisplayUseCase handles updating the UI with current PR state
 type UpdatePullRequestDisplayUseCase struct {
-	uiPort     port.UIPort
-	seenReader port.PullRequestSeenReader
+	uiPort   port.UIPort
+	seenRepo pullrequest.SeenRepository
 }
 
 // NewUpdatePullRequestDisplayUseCase creates a new use case
 func NewUpdatePullRequestDisplayUseCase(
 	uiPort port.UIPort,
-	seenReader port.PullRequestSeenReader,
+	seenRepo pullrequest.SeenRepository,
 ) *UpdatePullRequestDisplayUseCase {
 	return &UpdatePullRequestDisplayUseCase{
-		uiPort:     uiPort,
-		seenReader: seenReader,
+		uiPort:   uiPort,
+		seenRepo: seenRepo,
 	}
 }
 
@@ -31,7 +31,7 @@ func (uc *UpdatePullRequestDisplayUseCase) Execute(ctx context.Context, requeste
 	userCreatedPRs []*pullrequest.PullRequest,
 ) error {
 	// Sort PRs by creation date (oldest first) — original slices are not modified
-	uc.uiPort.UpdateDisplay(sortedByCreatedAt(requestedReviewPRs), sortedByCreatedAt(userCreatedPRs), uc.seenReader)
+	uc.uiPort.UpdateDisplay(sortedByCreatedAt(requestedReviewPRs), sortedByCreatedAt(userCreatedPRs), uc.seenRepo)
 
 	return nil
 }

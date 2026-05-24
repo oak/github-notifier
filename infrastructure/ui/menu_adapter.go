@@ -12,7 +12,6 @@ import (
 	"github.com/getlantern/systray"
 	"github.com/rs/zerolog/log"
 
-	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/assets"
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
@@ -228,7 +227,7 @@ func (m *MenuAdapter) initializeMenuStructure() {
 
 // UpdateDisplay implements the UIPort interface for systray menu display
 // This adapter specifically renders PRs as a system tray menu with dropdowns
-func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullrequest.PullRequest, seenReader port.PullRequestSeenReader) {
+func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullrequest.PullRequest, seenRepo pullrequest.SeenRepository) {
 	// Pre-create all menu item slots on the first call so the
 	// dbusmenu/appindicator model contains every node from the start.
 	m.initializeMenuStructure()
@@ -237,7 +236,7 @@ func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullre
 	m.requestedReviewPRs = requestedReviewPRs
 	m.userCreatedPRs = userCreatedPRs
 
-	// Sync clickedPRs with tracking service's seen state (bidirectional sync)
+	// Sync clickedPRs with seen state (bidirectional sync)
 	// If a PR has been marked as seen, consider it clicked in the menu
 	// If a PR has been marked as unseen (e.g., new activity), remove it from clicked
 	// This way: in-memory repos won't show asterisks on first load
@@ -245,7 +244,7 @@ func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullre
 	// And PRs with new activity will show asterisks again
 	m.clickedPRsMu.Lock()
 	for _, pr := range requestedReviewPRs {
-		if seenReader.HasBeenSeen(pr.Identifier()) {
+		if seenRepo.HasBeenSeen(pr.Identifier()) {
 			if !m.clickedPRs[pr.URL()] {
 				m.clickedPRs[pr.URL()] = true
 			}
@@ -255,7 +254,7 @@ func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullre
 		}
 	}
 	for _, pr := range userCreatedPRs {
-		if seenReader.HasBeenSeen(pr.Identifier()) {
+		if seenRepo.HasBeenSeen(pr.Identifier()) {
 			if !m.clickedPRs[pr.URL()] {
 				m.clickedPRs[pr.URL()] = true
 			}

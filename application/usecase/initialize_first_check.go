@@ -12,27 +12,24 @@ import (
 // InitializeFirstCheckUseCase handles the first-run initialization
 // On first run, all existing PRs are marked as seen to avoid notifications
 type InitializeFirstCheckUseCase struct {
-	prRepo          pullrequest.PullRequestRepository
-	trackingService *pullrequest.TrackingService
-	seenReader      port.PullRequestSeenReader
-	prFilter        pullrequest.FilterFn
-	uiPort          port.UIPort
+	prRepo   pullrequest.PullRequestRepository
+	seenRepo pullrequest.SeenRepository
+	prFilter pullrequest.FilterFn
+	uiPort   port.UIPort
 }
 
 // NewInitializeFirstCheckUseCase creates a new use case
 func NewInitializeFirstCheckUseCase(
 	prRepo pullrequest.PullRequestRepository,
-	trackingService *pullrequest.TrackingService,
-	seenReader port.PullRequestSeenReader,
+	seenRepo pullrequest.SeenRepository,
 	prFilter pullrequest.FilterFn,
 	uiPort port.UIPort,
 ) *InitializeFirstCheckUseCase {
 	return &InitializeFirstCheckUseCase{
-		prRepo:          prRepo,
-		trackingService: trackingService,
-		seenReader:      seenReader,
-		prFilter:        prFilter,
-		uiPort:          uiPort,
+		prRepo:   prRepo,
+		seenRepo: seenRepo,
+		prFilter: prFilter,
+		uiPort:   uiPort,
 	}
 }
 
@@ -44,7 +41,7 @@ func NewInitializeFirstCheckUseCase(
 // Returns (false, nil, nil) when the tracking store is already populated.
 func (uc *InitializeFirstCheckUseCase) Execute(ctx context.Context) (bool, []*pullrequest.PullRequest, error) {
 	// Check if this is truly the first run ever
-	isFirstRunEver := uc.trackingService.IsEmpty()
+	isFirstRunEver := uc.seenRepo.IsEmpty()
 
 	if !isFirstRunEver {
 		return false, nil, nil
@@ -70,11 +67,17 @@ func (uc *InitializeFirstCheckUseCase) Execute(ctx context.Context) (bool, []*pu
 	userCreatedPRs = uc.prFilter(userCreatedPRs)
 
 	// Mark all existing PRs as seen (no notifications, no asterisks on first run)
-	uc.trackingService.MarkPullRequestsAsSeen(requestedReviewPRs)
-	uc.trackingService.MarkPullRequestsAsSeen(userCreatedPRs)
+	for _, pr := range requestedReviewPRs {
+		// Best-effort: we don't fail if marking as seen fails
+		_ = uc.seenRepo.MarkAsSeen(pr.Identifier()) //nolint:errcheck // marking as seen is best-effort
+	}
+	for _, pr := range userCreatedPRs {
+		// Best-effort: we don't fail if marking as seen fails
+		_ = uc.seenRepo.MarkAsSeen(pr.Identifier()) //nolint:errcheck // marking as seen is best-effort
+	}
 
-	// Update the UI with tracking service
-	uc.uiPort.UpdateDisplay(requestedReviewPRs, userCreatedPRs, uc.seenReader)
+	// Update the UI with seen state
+	uc.uiPort.UpdateDisplay(requestedReviewPRs, userCreatedPRs, uc.seenRepo)
 
 	allPRs := append(requestedReviewPRs, userCreatedPRs...)
 	log.Info().Msgf("First run complete: marked %d PRs as seen", len(allPRs))

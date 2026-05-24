@@ -149,7 +149,6 @@ func (app *App) startWithConfig(cfg *config.Config) {
 	// Initialize infrastructure adapters
 	githubAdapter := github.NewAdapter(cfg.GitHubToken)
 	stateRepo := jsonrepo.NewStateRepository(cfg.StateFilePath())
-	trackingService := pullrequest.NewTrackingService(stateRepo)
 	themeProvider := ui.NewSystemThemeProvider()
 
 	// Setup notification adapters (OS-specific desktop + optional Slack)
@@ -206,7 +205,7 @@ func (app *App) startWithConfig(cfg *config.Config) {
 
 	// Register event handlers
 	notificationHandler := events.NewNotificationEventHandler(notificationAdapter, githubAdapter.AuthenticatedUser())
-	trackingHandler := events.NewTrackingEventHandler(trackingService)
+	trackingHandler := events.NewTrackingEventHandler(stateRepo)
 
 	// Initialize event infrastructure
 	eventBus := events.NewInMemoryEventBus()
@@ -227,8 +226,7 @@ func (app *App) startWithConfig(cfg *config.Config) {
 	// Initialize use cases
 	initializeUseCase := usecase.NewInitializeFirstCheckUseCase(
 		githubAdapter,
-		trackingService,
-		trackingService,
+		stateRepo,
 		prFilter,
 		app.menuAdapter,
 	)
@@ -236,7 +234,7 @@ func (app *App) startWithConfig(cfg *config.Config) {
 	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(
 		githubAdapter,
 		stateRepo,
-		trackingService,
+		stateRepo,
 		prFilter,
 		eventBus,
 	)
@@ -251,14 +249,14 @@ func (app *App) startWithConfig(cfg *config.Config) {
 		githubAdapter,
 		stateRepo,
 		activityScheduler,
-		trackingService,
+		stateRepo,
 		eventBus,
 		githubAdapter.AuthenticatedUser(),
 	)
 
 	updateDisplayUseCase := usecase.NewUpdatePullRequestDisplayUseCase(
 		app.menuAdapter,
-		trackingService,
+		stateRepo,
 	)
 
 	// Create orchestrator

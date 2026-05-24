@@ -11,13 +11,13 @@ import (
 // TrackingEventHandler handles domain events by updating tracking state
 // Implements the EventHandler port
 type TrackingEventHandler struct {
-	trackingService *pullrequest.TrackingService
+	seenRepo pullrequest.SeenRepository
 }
 
 // NewTrackingEventHandler creates a new tracking event handler
-func NewTrackingEventHandler(trackingService *pullrequest.TrackingService) *TrackingEventHandler {
+func NewTrackingEventHandler(seenRepo pullrequest.SeenRepository) *TrackingEventHandler {
 	return &TrackingEventHandler{
-		trackingService: trackingService,
+		seenRepo: seenRepo,
 	}
 }
 
@@ -76,7 +76,7 @@ func (h *TrackingEventHandler) handlePRMerged(event *pullrequest.Merged) error {
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner())
 	// Remove from tracking so it doesn't trigger repeated notifications
-	h.trackingService.RemoveSeen(event.PullRequestID)
+	_ = h.seenRepo.UnmarkAsSeen(event.PullRequestID) //nolint:errcheck // cleanup is best-effort
 	return nil
 }
 
@@ -86,7 +86,7 @@ func (h *TrackingEventHandler) handlePRClosed(event *pullrequest.Closed) error {
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner())
 	// Remove from tracking so it doesn't trigger repeated notifications
-	h.trackingService.RemoveSeen(event.PullRequestID)
+	_ = h.seenRepo.UnmarkAsSeen(event.PullRequestID) //nolint:errcheck // cleanup is best-effort
 	return nil
 }
 

@@ -759,7 +759,7 @@ func NewSpyUIAdapter() *SpyUIAdapter {
 }
 
 // UpdateDisplay captures the PRs (implements UIPort)
-func (s *SpyUIAdapter) UpdateDisplay(requestedPRs, userPRs []*pullrequest.PullRequest, _ port.PullRequestSeenReader) {
+func (s *SpyUIAdapter) UpdateDisplay(requestedPRs, userPRs []*pullrequest.PullRequest, _ pullrequest.SeenRepository) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

@@ -21,18 +21,17 @@ func TestOrchestrator_ExecuteInitialCheck_FirstRun(t *testing.T) {
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
 	mockUIPort := mocks.NewUIPort(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	prFilter := pullrequest.NewDraftFilter(false)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
 	// Create use cases
-	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, trackingService, prFilter, mockUIPort)
-	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingRepo, trackingService, prFilter, mockEventPublisher)
+	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockSeenRepo, prFilter, mockUIPort)
+	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockSeenRepo, prFilter, mockEventPublisher)
 	detectClosedPRsUC := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockEventPublisher)
-	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, trackingService, mockEventPublisher, "")
-	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
+	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, mockSeenRepo, mockEventPublisher, "")
+	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockSeenRepo)
 
 	prs := testutil.CreateTestPRs(2, 0)
 
@@ -42,7 +41,7 @@ func TestOrchestrator_ExecuteInitialCheck_FirstRun(t *testing.T) {
 	mockPRRepo.On("FetchUserCreated").Return([]*pullrequest.PullRequest{}, nil)
 	// 2 PRs should be marked as seen (MarkAsSeen called twice)
 	mockSeenRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Twice()
-	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), trackingService).Once()
+	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockSeenRepo).Once()
 	// TrackPRs is called after first run to seed initial pipeline state
 	mockTrackingRepo.On("LoadAll").Return([]pullrequest.PRStateSnapshot{}, nil).Once()
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
@@ -72,17 +71,17 @@ func TestOrchestrator_ExecuteInitialCheck_NotFirstRun(t *testing.T) {
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+
 	mockUIPort := mocks.NewUIPort(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	prFilter := pullrequest.NewDraftFilter(false)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
-	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, trackingService, prFilter, mockUIPort)
-	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingRepo, trackingService, prFilter, mockEventPublisher)
+	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockSeenRepo, prFilter, mockUIPort)
+	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockSeenRepo, prFilter, mockEventPublisher)
 	detectClosedPRsUC := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockEventPublisher)
-	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, trackingService, mockEventPublisher, "")
-	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
+	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, mockSeenRepo, mockEventPublisher, "")
+	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockSeenRepo)
 
 	prs := testutil.CreateTestPRs(2, 0)
 
@@ -95,7 +94,7 @@ func TestOrchestrator_ExecuteInitialCheck_NotFirstRun(t *testing.T) {
 	// Tracking repo: detectClosedPRs.Execute loads, TrackPRs loads+saves
 	mockTrackingRepo.On("LoadAll").Return([]pullrequest.PRStateSnapshot{}, nil)
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil)
-	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), trackingService).Once()
+	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockSeenRepo).Once()
 
 	orchestrator := application.NewPullRequestOrchestrator(
 		initUC,
@@ -121,17 +120,17 @@ func TestOrchestrator_ExecuteRegularCheck_WithoutActivityTracking(t *testing.T) 
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+
 	mockUIPort := mocks.NewUIPort(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	prFilter := pullrequest.NewDraftFilter(false)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
-	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, trackingService, prFilter, mockUIPort)
-	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingRepo, trackingService, prFilter, mockEventPublisher)
+	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockSeenRepo, prFilter, mockUIPort)
+	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockSeenRepo, prFilter, mockEventPublisher)
 	detectClosedPRsUC := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockEventPublisher)
-	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, trackingService, mockEventPublisher, "")
-	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
+	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, mockSeenRepo, mockEventPublisher, "")
+	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockSeenRepo)
 
 	prs := testutil.CreateTestPRs(2, 0)
 
@@ -143,7 +142,7 @@ func TestOrchestrator_ExecuteRegularCheck_WithoutActivityTracking(t *testing.T) 
 	// Tracking repo: detectClosedPRs.Execute loads, TrackPRs loads+saves
 	mockTrackingRepo.On("LoadAll").Return([]pullrequest.PRStateSnapshot{}, nil)
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil)
-	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), trackingService).Once()
+	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockSeenRepo).Once()
 
 	orchestrator := application.NewPullRequestOrchestrator(
 		initUC,
@@ -170,17 +169,17 @@ func TestOrchestrator_ExecuteRegularCheck_WithActivityTracking(t *testing.T) {
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+
 	mockUIPort := mocks.NewUIPort(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	prFilter := pullrequest.NewDraftFilter(false)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
-	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, trackingService, prFilter, mockUIPort)
-	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingRepo, trackingService, prFilter, mockEventPublisher)
+	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockSeenRepo, prFilter, mockUIPort)
+	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockSeenRepo, prFilter, mockEventPublisher)
 	detectClosedPRsUC := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockEventPublisher)
-	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, trackingService, mockEventPublisher, "")
-	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
+	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, mockSeenRepo, mockEventPublisher, "")
+	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockSeenRepo)
 
 	prs := testutil.CreateTestPRs(2, 0)
 
@@ -193,7 +192,7 @@ func TestOrchestrator_ExecuteRegularCheck_WithActivityTracking(t *testing.T) {
 	mockTrackingRepo.On("LoadAll").Return([]pullrequest.PRStateSnapshot{}, nil)
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil)
 	mockPRRepo.On("EnrichWithActivities", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("time.Time")).Return(nil, nil)
-	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), trackingService).Once()
+	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockSeenRepo).Once()
 
 	orchestrator := application.NewPullRequestOrchestrator(
 		initUC,
@@ -222,17 +221,17 @@ func TestOrchestrator_ExecuteRegularCheck_AllPRsClosed_UpdatesDisplayWithEmptyLi
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+
 	mockUIPort := mocks.NewUIPort(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	prFilter := pullrequest.NewDraftFilter(false)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
-	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, trackingService, prFilter, mockUIPort)
-	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingRepo, trackingService, prFilter, mockEventPublisher)
+	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockSeenRepo, prFilter, mockUIPort)
+	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockSeenRepo, prFilter, mockEventPublisher)
 	detectClosedPRsUC := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockEventPublisher)
-	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, trackingService, mockEventPublisher, "")
-	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
+	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, mockSeenRepo, mockEventPublisher, "")
+	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockSeenRepo)
 
 	// GitHub now returns no open PRs (all have been merged/closed)
 	mockPRRepo.On("FetchRequestedReviews").Return([]*pullrequest.PullRequest{}, nil)
@@ -251,7 +250,7 @@ func TestOrchestrator_ExecuteRegularCheck_AllPRsClosed_UpdatesDisplayWithEmptyLi
 	mockUIPort.On("UpdateDisplay",
 		mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool { return len(prs) == 0 }),
 		mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool { return len(prs) == 0 }),
-		trackingService,
+		mockSeenRepo,
 	).Once()
 
 	orchestrator := application.NewPullRequestOrchestrator(
@@ -277,17 +276,17 @@ func TestOrchestrator_ExecuteRegularCheck_CheckNewPRsError(t *testing.T) {
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+
 	mockUIPort := mocks.NewUIPort(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	prFilter := pullrequest.NewDraftFilter(false)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
-	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, trackingService, prFilter, mockUIPort)
-	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingRepo, trackingService, prFilter, mockEventPublisher)
+	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockSeenRepo, prFilter, mockUIPort)
+	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockSeenRepo, prFilter, mockEventPublisher)
 	detectClosedPRsUC := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockEventPublisher)
-	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, trackingService, mockEventPublisher, "")
-	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
+	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, mockSeenRepo, mockEventPublisher, "")
+	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockSeenRepo)
 
 	expectedErr := errors.New("github api error")
 
@@ -320,17 +319,17 @@ func TestOrchestrator_ExecuteRegularCheck_ActivityTrackingError_ContinuesWithDis
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
+
 	mockUIPort := mocks.NewUIPort(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 	prFilter := pullrequest.NewDraftFilter(false)
 	scheduler := pullrequest.NewActivityCheckScheduler(48, 15)
 
-	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, trackingService, trackingService, prFilter, mockUIPort)
-	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingRepo, trackingService, prFilter, mockEventPublisher)
+	initUC := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockSeenRepo, prFilter, mockUIPort)
+	checkNewPRsUC := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockSeenRepo, prFilter, mockEventPublisher)
 	detectClosedPRsUC := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockEventPublisher)
-	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, trackingService, mockEventPublisher, "")
-	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, trackingService)
+	trackActivityUC := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, mockSeenRepo, mockEventPublisher, "")
+	updateDisplayUC := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockSeenRepo)
 
 	prs := testutil.CreateTestPRs(2, 0)
 
@@ -344,7 +343,7 @@ func TestOrchestrator_ExecuteRegularCheck_ActivityTrackingError_ContinuesWithDis
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil)
 	mockPRRepo.On("EnrichWithActivities", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("time.Time")).Return(nil, errors.New("activity error"))
 	// Display should still be called even if activity tracking fails
-	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), trackingService).Once()
+	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockSeenRepo).Once()
 
 	orchestrator := application.NewPullRequestOrchestrator(
 		initUC,

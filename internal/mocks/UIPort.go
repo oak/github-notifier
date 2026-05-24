@@ -3,7 +3,6 @@
 package mocks
 
 import (
-	port "github.com/oak3/github-notifier/application/port"
 	pullrequest "github.com/oak3/github-notifier/domain/pullrequest"
 	mock "github.com/stretchr/testify/mock"
 )
@@ -13,9 +12,9 @@ type UIPort struct {
 	mock.Mock
 }
 
-// UpdateDisplay provides a mock function with given fields: requestedReviewPRs, userCreatedPRs, seenReader
-func (_m *UIPort) UpdateDisplay(requestedReviewPRs []*pullrequest.PullRequest, userCreatedPRs []*pullrequest.PullRequest, seenReader port.PullRequestSeenReader) {
-	_m.Called(requestedReviewPRs, userCreatedPRs, seenReader)
+// UpdateDisplay provides a mock function with given fields: requestedReviewPRs, userCreatedPRs, seenRepo
+func (_m *UIPort) UpdateDisplay(requestedReviewPRs []*pullrequest.PullRequest, userCreatedPRs []*pullrequest.PullRequest, seenRepo pullrequest.SeenRepository) {
+	_m.Called(requestedReviewPRs, userCreatedPRs, seenRepo)
 }
 
 // NewUIPort creates a new instance of UIPort. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

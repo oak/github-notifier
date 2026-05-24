@@ -31,27 +31,27 @@ func NewCheckCycleState() CheckCycleState {
 // CheckNewPullRequestsUseCase handles fetching and detecting new PRs
 // Emits domain events for new PRs instead of directly sending notifications
 type CheckNewPullRequestsUseCase struct {
-	prRepo          pullrequest.PullRequestRepository
-	trackingRepo    pullrequest.PRTrackingRepository
-	trackingService *pullrequest.TrackingService
-	prFilter        pullrequest.FilterFn
-	eventPublisher  port.EventPublisher
+	prRepo         pullrequest.PullRequestRepository
+	trackingRepo   pullrequest.PRTrackingRepository
+	seenRepo       pullrequest.SeenRepository
+	prFilter       pullrequest.FilterFn
+	eventPublisher port.EventPublisher
 }
 
 // NewCheckNewPullRequestsUseCase creates a new use case
 func NewCheckNewPullRequestsUseCase(
 	prRepo pullrequest.PullRequestRepository,
 	trackingRepo pullrequest.PRTrackingRepository,
-	trackingService *pullrequest.TrackingService,
+	seenRepo pullrequest.SeenRepository,
 	prFilter pullrequest.FilterFn,
 	eventPublisher port.EventPublisher,
 ) *CheckNewPullRequestsUseCase {
 	return &CheckNewPullRequestsUseCase{
-		prRepo:          prRepo,
-		trackingRepo:    trackingRepo,
-		trackingService: trackingService,
-		prFilter:        prFilter,
-		eventPublisher:  eventPublisher,
+		prRepo:         prRepo,
+		trackingRepo:   trackingRepo,
+		seenRepo:       seenRepo,
+		prFilter:       prFilter,
+		eventPublisher: eventPublisher,
 	}
 }
 
@@ -155,7 +155,7 @@ func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequ
 	// KnownPRs is empty but the seen repo has persisted data.
 	var newPRs []*pullrequest.PullRequest
 	for _, pr := range prs {
-		if !state.KnownPRs[pr.URL()] && !uc.trackingService.HasBeenSeen(pr.Identifier()) {
+		if !state.KnownPRs[pr.URL()] && !uc.seenRepo.HasBeenSeen(pr.Identifier()) {
 			newPRs = append(newPRs, pr)
 		}
 		// Always track as known so MarkPullRequestAsUnseen can't cause re-detection
@@ -180,9 +180,12 @@ func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequ
 		}
 	}
 
-	// Mark all new PRs as seen in the tracking service
+	// Mark all new PRs as seen in the tracking repo
 	// This sets the initial seen state for UI display
-	uc.trackingService.MarkPullRequestsAsSeen(newPRs)
+	for _, pr := range newPRs {
+		// Best-effort: we don't fail if marking as seen fails
+		_ = uc.seenRepo.MarkAsSeen(pr.Identifier()) //nolint:errcheck // marking as seen is best-effort
+	}
 
 	// PRs with activity will trigger activity events via TrackPullRequestActivityUseCase
 	if len(prsWithActivity) > 0 {

@@ -17,8 +17,8 @@ import (
 func TestTrackingHandler_HandleNewPRDetected_Success(t *testing.T) {
 	// Arrange
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
-	handler := events.NewTrackingEventHandler(trackingService)
+
+	handler := events.NewTrackingEventHandler(mockSeenRepo)
 
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewNewPullRequestDetected(pr)
@@ -35,8 +35,8 @@ func TestTrackingHandler_HandleNewPRDetected_Success(t *testing.T) {
 func TestTrackingHandler_HandleActivityDetected_Success(t *testing.T) {
 	// Arrange
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
-	handler := events.NewTrackingEventHandler(trackingService)
+
+	handler := events.NewTrackingEventHandler(mockSeenRepo)
 
 	pr := testutil.NewTestPullRequest(1)
 	activity := testutil.NewTestActivity(
@@ -59,8 +59,8 @@ func TestTrackingHandler_HandleActivityDetected_Success(t *testing.T) {
 func TestTrackingHandler_HandleUnknownEvent_Ignored(t *testing.T) {
 	// Arrange
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
-	handler := events.NewTrackingEventHandler(trackingService)
+
+	handler := events.NewTrackingEventHandler(mockSeenRepo)
 
 	// Create a mock event type (not a real event, just for testing)
 	type UnknownEvent struct {
@@ -81,8 +81,8 @@ func TestTrackingHandler_HandleUnknownEvent_Ignored(t *testing.T) {
 func TestTrackingHandler_HandleMultipleNewPRs(t *testing.T) {
 	// Arrange
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
-	handler := events.NewTrackingEventHandler(trackingService)
+
+	handler := events.NewTrackingEventHandler(mockSeenRepo)
 
 	pr1 := testutil.NewTestPullRequest(1)
 	pr2 := testutil.NewTestPullRequest(2)
@@ -103,8 +103,8 @@ func TestTrackingHandler_HandleMultipleNewPRs(t *testing.T) {
 func TestTrackingHandler_HandleMultipleActivities(t *testing.T) {
 	// Arrange
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
-	handler := events.NewTrackingEventHandler(trackingService)
+
+	handler := events.NewTrackingEventHandler(mockSeenRepo)
 
 	pr := testutil.NewTestPullRequest(1)
 	activity1 := testutil.NewTestActivity(
@@ -134,8 +134,8 @@ func TestTrackingHandler_HandleMultipleActivities(t *testing.T) {
 func TestTrackingHandler_HandleMixedEvents(t *testing.T) {
 	// Arrange
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
-	handler := events.NewTrackingEventHandler(trackingService)
+
+	handler := events.NewTrackingEventHandler(mockSeenRepo)
 
 	pr1 := testutil.NewTestPullRequest(1)
 	pr2 := testutil.NewTestPullRequest(2)
@@ -162,8 +162,8 @@ func TestTrackingHandler_HandleMixedEvents(t *testing.T) {
 func TestTrackingHandler_HandlePRMerged(t *testing.T) {
 	// Arrange
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
-	handler := events.NewTrackingEventHandler(trackingService)
+
+	handler := events.NewTrackingEventHandler(mockSeenRepo)
 
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewMerged(pr)
@@ -182,8 +182,8 @@ func TestTrackingHandler_HandlePRMerged(t *testing.T) {
 func TestTrackingHandler_HandlePRClosed(t *testing.T) {
 	// Arrange
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
-	handler := events.NewTrackingEventHandler(trackingService)
+
+	handler := events.NewTrackingEventHandler(mockSeenRepo)
 
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewClosed(pr)
@@ -202,8 +202,8 @@ func TestTrackingHandler_HandlePRClosed(t *testing.T) {
 func TestTrackingHandler_HandleStatusChanged(t *testing.T) {
 	// Arrange
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
-	handler := events.NewTrackingEventHandler(trackingService)
+
+	handler := events.NewTrackingEventHandler(mockSeenRepo)
 
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewStatusChanged(pr, pullrequest.StatusOpen, pullrequest.StatusMerged)
@@ -218,8 +218,8 @@ func TestTrackingHandler_HandleStatusChanged(t *testing.T) {
 func TestTrackingHandler_HandlePipelineStatusChanged(t *testing.T) {
 	// Arrange
 	mockSeenRepo := mocks.NewSeenRepository(t)
-	trackingService := pullrequest.NewTrackingService(mockSeenRepo)
-	handler := events.NewTrackingEventHandler(trackingService)
+
+	handler := events.NewTrackingEventHandler(mockSeenRepo)
 
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewPipelineStatusChanged(pr, pullrequest.PipelineStatusRunning, pullrequest.PipelineStatusSuccess)

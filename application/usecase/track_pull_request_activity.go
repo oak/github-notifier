@@ -22,7 +22,7 @@ type TrackPullRequestActivityUseCase struct {
 	prRepo            pullrequest.PullRequestRepository
 	trackingRepo      pullrequest.PRTrackingRepository
 	scheduler         *pullrequest.ActivityCheckScheduler
-	trackingService   *pullrequest.TrackingService
+	seenRepo          pullrequest.SeenRepository
 	eventPublisher    port.EventPublisher
 	authenticatedUser string // GitHub login — used to filter self-activity for unseen marking
 	mu                sync.RWMutex
@@ -36,7 +36,7 @@ func NewTrackPullRequestActivityUseCase(
 	prRepo pullrequest.PullRequestRepository,
 	trackingRepo pullrequest.PRTrackingRepository,
 	scheduler *pullrequest.ActivityCheckScheduler,
-	trackingService *pullrequest.TrackingService,
+	seenRepo pullrequest.SeenRepository,
 	eventPublisher port.EventPublisher,
 	authenticatedUser string,
 ) *TrackPullRequestActivityUseCase {
@@ -44,7 +44,7 @@ func NewTrackPullRequestActivityUseCase(
 		prRepo:            prRepo,
 		trackingRepo:      trackingRepo,
 		scheduler:         scheduler,
-		trackingService:   trackingService,
+		seenRepo:          seenRepo,
 		eventPublisher:    eventPublisher,
 		authenticatedUser: authenticatedUser,
 	}
@@ -184,7 +184,7 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 
 	// Mark PRs with new activity as unseen (to show asterisks)
 	for _, pr := range prsWithNewActivity {
-		if err := uc.trackingService.MarkPullRequestAsUnseen(pr); err != nil {
+		if err := uc.seenRepo.UnmarkAsSeen(pr.Identifier()); err != nil {
 			log.Error().Err(err).Msg("Error marking PR as unseen")
 		}
 	}
