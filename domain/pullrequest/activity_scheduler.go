@@ -4,13 +4,13 @@ import (
 	"time"
 )
 
-// SchedulerConfig holds the immutable configuration for the two-tier scheduling strategy.
-type SchedulerConfig struct {
+// schedulerConfig holds the immutable configuration for the two-tier scheduling strategy.
+type schedulerConfig struct {
 	RecentThreshold    time.Duration // PRs younger than this are "recent"
 	StaleCheckInterval time.Duration // How often to check stale PRs
 }
 
-// DetermineChecks is a pure function that determines which PRs need activity checks.
+// determineChecks is a pure function that determines which PRs need activity checks.
 // No I/O — same inputs always produce the same output.
 // Returns the PRs to check plus per-tier counts (recent, stale, skipped).
 //
@@ -18,10 +18,10 @@ type SchedulerConfig struct {
 //   - Recent PRs (age < cfg.RecentThreshold): always check
 //   - Stale PRs (age >= cfg.RecentThreshold): check only if cfg.StaleCheckInterval has elapsed
 //     since the last entry in lastChecked (a missing entry is treated as never checked)
-func DetermineChecks(
+func determineChecks(
 	prs []*PullRequest,
 	lastChecked map[string]time.Time,
-	cfg SchedulerConfig,
+	cfg schedulerConfig,
 	now time.Time,
 ) (toCheck []*PullRequest, recentN, staleN, skippedN int) {
 	toCheck = make([]*PullRequest, 0, len(prs))
@@ -52,9 +52,9 @@ func DetermineChecks(
 	return
 }
 
-// RecordChecked is a pure function that returns a new map with the given PRs
+// recordChecked is a pure function that returns a new map with the given PRs
 // recorded as checked at now. The input map is never mutated.
-func RecordChecked(
+func recordChecked(
 	lastChecked map[string]time.Time,
 	prs []*PullRequest,
 	now time.Time,
@@ -69,18 +69,18 @@ func RecordChecked(
 	return updated
 }
 
-// ActivityCheckScheduler is a thin stateful wrapper around the pure DetermineChecks
-// and RecordChecked functions. It owns lastCheckMap and supplies the current time
+// ActivityCheckScheduler is a thin stateful wrapper around the pure determineChecks
+// and recordChecked functions. It owns lastCheckMap and supplies the current time
 // so that call sites in use cases remain unchanged.
 type ActivityCheckScheduler struct {
-	cfg          SchedulerConfig
+	cfg          schedulerConfig
 	lastCheckMap map[string]time.Time
 }
 
 // NewActivityCheckScheduler creates a new activity check scheduler.
 func NewActivityCheckScheduler(recentThresholdHours int, staleCheckIntervalMin int) *ActivityCheckScheduler {
 	return &ActivityCheckScheduler{
-		cfg: SchedulerConfig{
+		cfg: schedulerConfig{
 			RecentThreshold:    time.Duration(recentThresholdHours) * time.Hour,
 			StaleCheckInterval: time.Duration(staleCheckIntervalMin) * time.Minute,
 		},
@@ -88,19 +88,19 @@ func NewActivityCheckScheduler(recentThresholdHours int, staleCheckIntervalMin i
 	}
 }
 
-// ScheduleResult contains the results of scheduling determination.
-type ScheduleResult struct {
+// scheduleResult contains the results of scheduling determination.
+type scheduleResult struct {
 	PRsToCheck   []*PullRequest
 	RecentCount  int
 	StaleCount   int
 	SkippedCount int
 }
 
-// DeterminePRsToCheckAt returns which PRs should be checked for activity at the given time.
-// Thin wrapper around DetermineChecks using the scheduler's owned state.
-func (s *ActivityCheckScheduler) DeterminePRsToCheckAt(now time.Time, prs []*PullRequest) *ScheduleResult {
-	toCheck, recentN, staleN, skippedN := DetermineChecks(prs, s.lastCheckMap, s.cfg, now)
-	return &ScheduleResult{
+// determinePRsToCheckAt returns which PRs should be checked for activity at the given time.
+// Thin wrapper around determineChecks using the scheduler's owned state.
+func (s *ActivityCheckScheduler) determinePRsToCheckAt(now time.Time, prs []*PullRequest) *scheduleResult {
+	toCheck, recentN, staleN, skippedN := determineChecks(prs, s.lastCheckMap, s.cfg, now)
+	return &scheduleResult{
 		PRsToCheck:   toCheck,
 		RecentCount:  recentN,
 		StaleCount:   staleN,
@@ -108,20 +108,15 @@ func (s *ActivityCheckScheduler) DeterminePRsToCheckAt(now time.Time, prs []*Pul
 	}
 }
 
-// DeterminePRsToCheck calls DeterminePRsToCheckAt with the current time.
-func (s *ActivityCheckScheduler) DeterminePRsToCheck(prs []*PullRequest) *ScheduleResult {
-	return s.DeterminePRsToCheckAt(time.Now(), prs)
+// DeterminePRsToCheck calls determinePRsToCheckAt with the current time.
+func (s *ActivityCheckScheduler) DeterminePRsToCheck(prs []*PullRequest) *scheduleResult {
+	return s.determinePRsToCheckAt(time.Now(), prs)
 }
 
 // MarkCheckedAt records that the given PRs were checked at the given time.
-// Thin wrapper around RecordChecked using the scheduler's owned state.
+// Thin wrapper around recordChecked using the scheduler's owned state.
 func (s *ActivityCheckScheduler) MarkCheckedAt(now time.Time, prs []*PullRequest) {
-	s.lastCheckMap = RecordChecked(s.lastCheckMap, prs, now)
-}
-
-// MarkChecked records that the given PRs were checked at the current time.
-func (s *ActivityCheckScheduler) MarkChecked(prs []*PullRequest) {
-	s.MarkCheckedAt(time.Now(), prs)
+	s.lastCheckMap = recordChecked(s.lastCheckMap, prs, now)
 }
 
 // SeedLastChecked pre-populates the last-check timestamp for a single PR URL.

@@ -73,7 +73,7 @@ func (uc *InitializeFirstCheckUseCase) Execute(ctx context.Context) (bool, []*pu
 	}
 	for _, pr := range userCreatedPRs {
 		// Best-effort: we don't fail if marking as seen fails
-		_ = uc.seenRepo.MarkAsSeen(pr.Identifier()) //nolint:errcheck // marking as seen is best-effort
+		_ = uc.seenRepo.MarkAsSeen(pr.Identifier())
 	}
 
 	// Update the UI with seen state
