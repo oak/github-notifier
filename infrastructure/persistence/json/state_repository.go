@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak3/github-notifier/infrastructure/persistence"
 )
 
 const currentVersion = 2
@@ -24,8 +25,8 @@ const currentVersion = 2
 // on load; an unknown version causes the file to be treated as empty so that
 // future format changes degrade gracefully.
 type stateEnvelope struct {
-	Version    int               `json:"version"`
-	TrackedPRs []PRStateSnapshot `json:"trackedPRs"`
+	Version    int                           `json:"version"`
+	TrackedPRs []persistence.PRStateSnapshot `json:"trackedPRs"`
 }
 
 // StateRepository implements pullrequest.PRTrackingRepository from a JSON file.
@@ -57,7 +58,7 @@ func (r *StateRepository) Update(pullRequest *pullrequest.PullRequest) error {
 	// Update the specific PR in the tracked PRs
 	for i, snapshot := range env.TrackedPRs {
 		if snapshot.URL == pullRequest.Identifier().URL() {
-			env.TrackedPRs[i] = toSnapshot(pullRequest)
+			env.TrackedPRs[i] = persistence.ToSnapshot(pullRequest)
 			break
 		}
 	}
@@ -65,12 +66,12 @@ func (r *StateRepository) Update(pullRequest *pullrequest.PullRequest) error {
 }
 
 // Save replaces the entire tracked-PR snapshot set and persists the change.
-func (r *StateRepository) Save(pullrequests []pullrequest.PullRequest) error {
+func (r *StateRepository) Save(pullrequests []*pullrequest.PullRequest) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	env := r.load()
-	env.TrackedPRs = toSnapshots(pullrequests)
+	env.TrackedPRs = persistence.ToSnapshots(pullrequests)
 	return r.save(env)
 }
 
@@ -81,7 +82,7 @@ func (r *StateRepository) Fetch(prIdentifier pullrequest.PRIdentifier) (*pullreq
 	env := r.load()
 	for _, snapshot := range env.TrackedPRs {
 		if snapshot.URL == prIdentifier.URL() {
-			pr, err := snapshot.toDomain()
+			pr, err := snapshot.ReconstitutePRFromSnapshot()
 			if err != nil {
 				return nil, fmt.Errorf("state: failed to reconstitute PR from snapshot: %w", err)
 			}
@@ -93,31 +94,39 @@ func (r *StateRepository) Fetch(prIdentifier pullrequest.PRIdentifier) (*pullreq
 
 // LoadAll returns all previously saved PR snapshots.
 // Returns an empty (non-nil) slice when no state has been persisted yet.
-func (r *StateRepository) LoadAll() ([]pullrequest.PullRequest, error) {
+func (r *StateRepository) LoadAll() ([]*pullrequest.PullRequest, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	env := r.load()
 	if len(env.TrackedPRs) == 0 {
-		return []pullrequest.PullRequest{}, nil
+		return []*pullrequest.PullRequest{}, nil
 	}
 	// Return a defensive copy.
-	cp := make([]pullrequest.PullRequest, len(env.TrackedPRs))
+	cp := make([]*pullrequest.PullRequest, len(env.TrackedPRs))
 	for i, snapshot := range env.TrackedPRs {
-		pr, err := snapshot.toDomain()
+		pr, err := snapshot.ReconstitutePRFromSnapshot()
 		if err != nil {
 			log.Warn().Err(err).Str("url", snapshot.URL).Msg("state: failed to reconstitute PR from snapshot; skipping")
 			continue
 		}
-		cp[i] = *pr
+		cp[i] = pr
 	}
 	// Alternative: skip invalid snapshots and return the valid ones, rather than failing the whole load.
 	// This would be more robust to partial file corruption but might hide issues with the snapshot format.
 	// For now we log and skip individual failures but still return an error if all snapshots fail, to avoid silently losing all tracking state.
 	if len(cp) == 0 {
-		return []pullrequest.PullRequest{}, fmt.Errorf("state: no valid PR snapshots found")
+		return []*pullrequest.PullRequest{}, fmt.Errorf("state: no valid PR snapshots found")
 	}
 	return cp, nil
+}
+
+func (r *StateRepository) IsEmpty() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	env := r.load()
+	return len(env.TrackedPRs) == 0
 }
 
 // ─── Clear ───────────────────────────────────────────────────────────────────
@@ -162,7 +171,7 @@ func (r *StateRepository) load() stateEnvelope {
 
 	// Ensure slices are non-nil for consistent behaviour.
 	if env.TrackedPRs == nil {
-		env.TrackedPRs = []PRStateSnapshot{}
+		env.TrackedPRs = []persistence.PRStateSnapshot{}
 	}
 
 	return env

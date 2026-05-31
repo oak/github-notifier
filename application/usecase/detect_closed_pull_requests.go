@@ -53,21 +53,21 @@ func (uc *DetectClosedPullRequestsUseCase) TrackPRs(prs []*pullrequest.PullReque
 	}
 
 	// Build lookup map for previous enrichment data
-	prevByURL := make(map[string]pullrequest.PullRequest, len(existing))
+	prevByURL := make(map[string]*pullrequest.PullRequest, len(existing))
 	for _, s := range existing {
 		prevByURL[s.URL()] = s
 	}
 
-	snapshots := make([]pullrequest.PullRequest, 0, len(prs))
-	for _, pr := range prs {
+	snapshots := make([]*pullrequest.PullRequest, 0, len(prs))
+	for _, snapshot := range snapshots {
 		// Preserve enrichment fields from the previous snapshot so that
 		// TrackPullRequestActivityUseCase can correctly detect changes.
-		if prev, ok := prevByURL[pr.URL()]; ok {
-			pr.HeadCommitSHA = prev.HeadCommitSHA
-			pr.PipelineStatus = prev.PipelineStatus
-			pr.LastActivityCheck = prev.LastActivityCheck
+		if prev, ok := prevByURL[snapshot.URL()]; ok {
+			snapshot.SetInitialHeadCommitSHA(prev.HeadCommitSHA())
+			snapshot.SetInitialPipelineStatus(prev.PipelineStatus())
+			snapshot.SetInitialLastActivityCheck(prev.LastActivityCheck())
 		}
-		snapshots = append(snapshots, pr)
+		snapshots = append(snapshots, snapshot)
 	}
 
 	if err := uc.trackingRepo.Save(snapshots); err != nil {
@@ -97,7 +97,7 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 	var missing []pullrequest.PullRequest
 	for _, pr := range prs {
 		if !currentURLs[pr.URL()] {
-			missing = append(missing, pr)
+			missing = append(missing, *pr)
 		}
 	}
 
@@ -153,7 +153,7 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 
 	// Remove confirmed closed/merged PRs from the repository immediately so
 	// that a subsequent Execute call does not re-process them.
-	remaining := make([]pullrequest.PullRequest, 0, len(prs)-len(processedURLs))
+	remaining := make([]*pullrequest.PullRequest, 0, len(prs)-len(processedURLs))
 	for _, pr := range prs {
 		if !processedURLs[pr.URL()] {
 			remaining = append(remaining, pr)

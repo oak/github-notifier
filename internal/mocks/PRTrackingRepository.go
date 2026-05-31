@@ -60,24 +60,42 @@ func (_m *PRTrackingRepository) Fetch(prIdentifier pullrequest.PRIdentifier) (*p
 	return r0, r1
 }
 
+// IsEmpty provides a mock function with no fields
+func (_m *PRTrackingRepository) IsEmpty() bool {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for IsEmpty")
+	}
+
+	var r0 bool
+	if rf, ok := ret.Get(0).(func() bool); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	return r0
+}
+
 // LoadAll provides a mock function with no fields
-func (_m *PRTrackingRepository) LoadAll() ([]pullrequest.PullRequest, error) {
+func (_m *PRTrackingRepository) LoadAll() ([]*pullrequest.PullRequest, error) {
 	ret := _m.Called()
 
 	if len(ret) == 0 {
 		panic("no return value specified for LoadAll")
 	}
 
-	var r0 []pullrequest.PullRequest
+	var r0 []*pullrequest.PullRequest
 	var r1 error
-	if rf, ok := ret.Get(0).(func() ([]pullrequest.PullRequest, error)); ok {
+	if rf, ok := ret.Get(0).(func() ([]*pullrequest.PullRequest, error)); ok {
 		return rf()
 	}
-	if rf, ok := ret.Get(0).(func() []pullrequest.PullRequest); ok {
+	if rf, ok := ret.Get(0).(func() []*pullrequest.PullRequest); ok {
 		r0 = rf()
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]pullrequest.PullRequest)
+			r0 = ret.Get(0).([]*pullrequest.PullRequest)
 		}
 	}
 
@@ -91,7 +109,7 @@ func (_m *PRTrackingRepository) LoadAll() ([]pullrequest.PullRequest, error) {
 }
 
 // Save provides a mock function with given fields: pullRequests
-func (_m *PRTrackingRepository) Save(pullRequests []pullrequest.PullRequest) error {
+func (_m *PRTrackingRepository) Save(pullRequests []*pullrequest.PullRequest) error {
 	ret := _m.Called(pullRequests)
 
 	if len(ret) == 0 {
@@ -99,7 +117,7 @@ func (_m *PRTrackingRepository) Save(pullRequests []pullrequest.PullRequest) err
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func([]pullrequest.PullRequest) error); ok {
+	if rf, ok := ret.Get(0).(func([]*pullrequest.PullRequest) error); ok {
 		r0 = rf(pullRequests)
 	} else {
 		r0 = ret.Error(0)
@@ -109,7 +127,7 @@ func (_m *PRTrackingRepository) Save(pullRequests []pullrequest.PullRequest) err
 }
 
 // Update provides a mock function with given fields: pullRequest
-func (_m *PRTrackingRepository) Update(pullRequest pullrequest.PullRequest) error {
+func (_m *PRTrackingRepository) Update(pullRequest *pullrequest.PullRequest) error {
 	ret := _m.Called(pullRequest)
 
 	if len(ret) == 0 {
@@ -117,7 +135,7 @@ func (_m *PRTrackingRepository) Update(pullRequest pullrequest.PullRequest) erro
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(pullrequest.PullRequest) error); ok {
+	if rf, ok := ret.Get(0).(func(*pullrequest.PullRequest) error); ok {
 		r0 = rf(pullRequest)
 	} else {
 		r0 = ret.Error(0)

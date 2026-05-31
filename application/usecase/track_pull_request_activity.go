@@ -80,13 +80,13 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 
 	// Load persisted enrichment state for all tracked PRs.
 	// DetectClosedPRsUseCase.TrackPRs writes this at the end of each cycle.
-	snapshots, loadErr := uc.trackingRepo.LoadAll()
+	prs, loadErr := uc.trackingRepo.LoadAll()
 	if loadErr != nil {
-		log.Error().Err(loadErr).Msg("Activity tracker: failed to load snapshots; proceeding without prior state")
+		log.Error().Err(loadErr).Msg("Activity tracker: failed to load prs; proceeding without prior state")
 	}
-	snapByURL := make(map[string]pullrequest.PullRequest, len(snapshots))
-	for _, s := range snapshots {
-		snapByURL[s.URL()] = s
+	snapByURL := make(map[string]pullrequest.PullRequest, len(prs))
+	for _, s := range prs {
+		snapByURL[s.URL()] = *s
 	}
 
 	// Restore known enrichment state on fresh PR objects.
@@ -101,9 +101,9 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 	// from the timeline query fires the initial transition event.
 	for _, pr := range prsToCheck {
 		if snap, ok := snapByURL[pr.URL()]; ok {
-			pr.SetInitialHeadCommitSHA(snap.HeadCommitSHA)
-			pr.SetInitialPipelineStatus(snap.PipelineStatus)
-			uc.scheduler.SeedLastChecked(pr.URL(), snap.LastActivityCheck)
+			pr.SetInitialHeadCommitSHA(snap.HeadCommitSHA())
+			pr.SetInitialPipelineStatus(snap.PipelineStatus())
+			uc.scheduler.SeedLastChecked(pr.URL(), snap.LastActivityCheck())
 		} else {
 			// No stored state — reset pipeline to Unknown so the first status
 			// from the batched timeline query fires a transition event.
@@ -134,21 +134,21 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 	for _, pr := range prsToCheck {
 		checkedByURL[pr.URL()] = pr
 	}
-	updatedSnapshots := make([]pullrequest.PRStateSnapshot, 0, len(snapshots))
-	for _, s := range snapshots {
-		if pr, ok := checkedByURL[s.URL]; ok {
-			updated := pr.ToSnapshot()
-			updated.LastActivityCheck = checkedAt
+	updatedSnapshots := make([]*pullrequest.PullRequest, 0, len(prsToCheck))
+	for _, s := range prsToCheck {
+		if pr, ok := checkedByURL[s.URL()]; ok {
+			updated := pr
+			updated.SetInitialLastActivityCheck(checkedAt)
 			updatedSnapshots = append(updatedSnapshots, updated)
-			delete(checkedByURL, s.URL) // mark as handled
+			delete(checkedByURL, s.URL()) // mark as handled
 		} else {
 			updatedSnapshots = append(updatedSnapshots, s)
 		}
 	}
 	// Any PRs that were checked but had no prior snapshot (new this cycle):
 	for _, pr := range checkedByURL {
-		snap := pr.ToSnapshot()
-		snap.LastActivityCheck = checkedAt
+		snap := pr
+		snap.SetInitialLastActivityCheck(checkedAt)
 		updatedSnapshots = append(updatedSnapshots, snap)
 	}
 	if saveErr := uc.trackingRepo.Save(updatedSnapshots); saveErr != nil {
@@ -181,9 +181,7 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 
 	// Mark PRs with new activity as unseen (to show asterisks)
 	for _, pr := range prsWithNewActivity {
-		if err := uc.prTrackingRepo.UnmarkAsSeen(pr.Identifier()); err != nil {
-			log.Error().Err(err).Msg("Error marking PR as unseen")
-		}
+		pr.MarkAsUnseen()
 	}
 
 	return nil

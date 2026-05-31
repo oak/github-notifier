@@ -1,4 +1,4 @@
-package json
+package persistence
 
 import (
 	"fmt"
@@ -36,10 +36,10 @@ type ReviewSnapshot struct {
 	SubmittedAt time.Time               `json:"submittedAt"`
 }
 
-func toSnapshots(prs []pullrequest.PullRequest) []PRStateSnapshot {
+func ToSnapshots(prs []*pullrequest.PullRequest) []PRStateSnapshot {
 	snapshots := make([]PRStateSnapshot, len(prs))
 	for i, pr := range prs {
-		snapshots[i] = toSnapshot(&pr)
+		snapshots[i] = ToSnapshot(pr)
 	}
 	return snapshots
 }
@@ -48,7 +48,7 @@ func toSnapshots(prs []pullrequest.PullRequest) []PRStateSnapshot {
 // form. The resulting snapshot can be persisted and later passed to
 // ReconstitutePRFromSnapshot to rebuild the aggregate without re-fetching from
 // GitHub.
-func toSnapshot(pr *pullrequest.PullRequest) PRStateSnapshot {
+func ToSnapshot(pr *pullrequest.PullRequest) PRStateSnapshot {
 	reviews := make(map[string]ReviewSnapshot, len(pr.Reviews()))
 	for login, review := range pr.Reviews() {
 		reviews[login] = ReviewSnapshot{
@@ -69,6 +69,7 @@ func toSnapshot(pr *pullrequest.PullRequest) PRStateSnapshot {
 		PipelineStatus:    pr.PipelineStatus(),
 		LastActivityCheck: pr.LastActivityCheck(),
 		Reviews:           reviews,
+		Seen:              pr.Seen(),
 	}
 }
 
@@ -80,7 +81,7 @@ func toSnapshot(pr *pullrequest.PullRequest) PRStateSnapshot {
 // Only open PRs are ever persisted to a snapshot; closed and merged PRs are
 // removed from the tracking repository before saving. Status is therefore
 // always StatusOpen on reconstitution.
-func (s PRStateSnapshot) toDomain() (*pullrequest.PullRequest, error) {
+func (s PRStateSnapshot) ReconstitutePRFromSnapshot() (*pullrequest.PullRequest, error) {
 	identifier, err := pullrequest.NewPRIdentifier(s.URL, s.Number)
 	if err != nil {
 		return nil, fmt.Errorf("reconstitute PR: invalid identifier: %w", err)
@@ -117,7 +118,7 @@ func (s PRStateSnapshot) toDomain() (*pullrequest.PullRequest, error) {
 		s.HeadCommitSHA,
 		make(map[string]*pullrequest.Review),
 		s.PipelineStatus,
-		s.Seen(),
+		s.Seen,
 	)
 
 	for login, rs := range s.Reviews {

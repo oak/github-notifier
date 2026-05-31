@@ -35,11 +35,13 @@ type PullRequestRepository interface {
 type PRTrackingRepository interface {
 	Fetch(prIdentifier PRIdentifier) (*PullRequest, error)
 
-	LoadAll() ([]PullRequest, error)
+	LoadAll() ([]*PullRequest, error)
 
-	Update(pullRequest PullRequest) error
+	Update(pullRequest *PullRequest) error
 
-	Save(pullRequests []PullRequest) error
+	Save(pullRequests []*PullRequest) error
+
+	IsEmpty() bool
 
 	Clear() error
 }

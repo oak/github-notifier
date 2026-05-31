@@ -41,7 +41,7 @@ func NewInitializeFirstCheckUseCase(
 // Returns (false, nil, nil) when the tracking store is already populated.
 func (uc *InitializeFirstCheckUseCase) Execute(ctx context.Context) (bool, []*pullrequest.PullRequest, error) {
 	// Check if this is truly the first run ever
-	isFirstRunEver := uc.prTrackingRepo.HasNoSeenPRs()
+	isFirstRunEver := uc.prTrackingRepo.IsEmpty()
 
 	if !isFirstRunEver {
 		return false, nil, nil
