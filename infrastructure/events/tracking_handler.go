@@ -76,7 +76,9 @@ func (h *TrackingEventHandler) handlePRMerged(event *pullrequest.Merged) error {
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner())
 	event.PullRequest.MarkAsUnseen()
-	_ = h.prTrackingRepo.Update(event.PullRequest)
+	if err := h.prTrackingRepo.Update(event.PullRequest); err != nil {
+		log.Error().Err(err).Msgf("Tracking: failed to update merged PR %s", event.PullRequestID.URL())
+	}
 	return nil
 }
 
@@ -86,7 +88,9 @@ func (h *TrackingEventHandler) handlePRClosed(event *pullrequest.Closed) error {
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner())
 	event.PullRequest.MarkAsUnseen()
-	_ = h.prTrackingRepo.Update(event.PullRequest)
+	if err := h.prTrackingRepo.Update(event.PullRequest); err != nil {
+		log.Error().Err(err).Msgf("Tracking: failed to update closed PR %s", event.PullRequestID.URL())
+	}
 	return nil
 }
 

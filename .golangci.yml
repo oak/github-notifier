@@ -37,6 +37,8 @@ linters-settings:
         severity: warning
       - name: exported
         severity: warning
+        arguments:
+          - "disableStutteringCheck"
 
 output:
   formats: colored-line-number
