@@ -161,6 +161,9 @@ func loadConfigFile(path string) map[string]string {
 			values[key] = value
 		}
 	}
+	if scanner.Err() != nil {
+		return make(map[string]string)
+	}
 
 	return values
 }
