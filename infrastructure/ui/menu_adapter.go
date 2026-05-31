@@ -244,7 +244,7 @@ func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullre
 	// And PRs with new activity will show asterisks again
 	m.clickedPRsMu.Lock()
 	for _, pr := range requestedReviewPRs {
-		if prTrackingRepo.HasBeenSeen(pr.Identifier()) {
+		if pr.Seen() {
 			if !m.clickedPRs[pr.URL()] {
 				m.clickedPRs[pr.URL()] = true
 			}
@@ -254,7 +254,7 @@ func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullre
 		}
 	}
 	for _, pr := range userCreatedPRs {
-		if prTrackingRepo.HasBeenSeen(pr.Identifier()) {
+		if pr.Seen() {
 			if !m.clickedPRs[pr.URL()] {
 				m.clickedPRs[pr.URL()] = true
 			}

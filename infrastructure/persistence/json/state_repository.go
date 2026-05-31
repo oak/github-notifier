@@ -1,7 +1,7 @@
 // Package json provides a JSON-file-backed implementation of the
-// pullrequest.SeenRepository and pullrequest.PRTrackingRepository ports.
+// pullrequest.PRTrackingRepository port.
 //
-// Both interfaces are satisfied by a single StateRepository that reads and
+// The interface is satisfied by a single StateRepository that reads and
 // writes one versioned JSON file, allowing atomic persistence of all
 // cross-restart state in a single os.Rename call.
 package json
@@ -28,8 +28,7 @@ type stateEnvelope struct {
 	TrackedPRs []PRStateSnapshot `json:"trackedPRs"`
 }
 
-// StateRepository implements both pullrequest.SeenRepository and
-// pullrequest.PRTrackingRepository from a single JSON file.
+// StateRepository implements pullrequest.PRTrackingRepository from a JSON file.
 //
 // Reads are done by loading the full file on every call (the file is tiny).
 // Writes are atomic: the new content is written to a ".tmp" sibling first,
@@ -162,9 +161,6 @@ func (r *StateRepository) load() stateEnvelope {
 	}
 
 	// Ensure slices are non-nil for consistent behaviour.
-	if env.SeenPRs == nil {
-		env.SeenPRs = []string{}
-	}
 	if env.TrackedPRs == nil {
 		env.TrackedPRs = []PRStateSnapshot{}
 	}

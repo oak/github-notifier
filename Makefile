@@ -84,11 +84,11 @@ install-tools:
 mocks:
 	@echo "Generating mocks..."
 	@go run github.com/vektra/mockery/v2@latest --name=PullRequestRepository --dir=domain/pullrequest --output=internal/mocks --outpkg=mocks
+	@go run github.com/vektra/mockery/v2@latest --name=PRTrackingRepository --dir=domain/pullrequest --output=internal/mocks --outpkg=mocks
 	@go run github.com/vektra/mockery/v2@latest --name=EventPublisher --dir=application/port --output=internal/mocks --outpkg=mocks
 	@go run github.com/vektra/mockery/v2@latest --name=EventHandler --dir=application/port --output=internal/mocks --outpkg=mocks
 	@go run github.com/vektra/mockery/v2@latest --name=NotificationPort --dir=application/port --output=internal/mocks --outpkg=mocks
 	@go run github.com/vektra/mockery/v2@latest --name=UIPort --dir=application/port --output=internal/mocks --outpkg=mocks
-	@go run github.com/vektra/mockery/v2@latest --name=Service --dir=domain/tracking --output=internal/mocks --outpkg=mocks
 	@echo "Mocks generated successfully!"
 
 ## register-macos-notifier: Register a local app bundle as the macOS notification sender (macOS only)
