@@ -15,7 +15,7 @@ import (
 	"github.com/oak3/github-notifier/application"
 	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/application/usecase"
-	"github.com/oak3/github-notifier/config"
+	"github.com/oak3/github-notifier/infrastructure/config"
 	"github.com/oak3/github-notifier/domain/pullrequest"
 	"github.com/oak3/github-notifier/infrastructure/events"
 	"github.com/oak3/github-notifier/infrastructure/github"
@@ -348,7 +348,7 @@ func (app *App) onExit() {
 }
 
 // logIgnoreConfig logs a summary of the active ignore rules at Info level.
-func logIgnoreConfig(msg string, cfg *config.IgnoreConfig) {
+func logIgnoreConfig(msg string, cfg *pullrequest.IgnoreConfig) {
 	e := log.Info().Str("blocked_repos", formatStringSlice(cfg.Ignore.Global.Repos))
 
 	if len(cfg.Ignore.Global.Events) > 0 {

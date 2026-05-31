@@ -1,6 +1,4 @@
-package filter
-
-import "github.com/oak3/github-notifier/config"
+package pullrequest
 
 // ActivityIgnoreFilter reports whether an event should be suppressed based on the
 // provided IgnoreConfig. It returns true if the event should be ignored.
@@ -12,7 +10,7 @@ import "github.com/oak3/github-notifier/config"
 //   - author:      the GitHub login of the actor that triggered the event.
 //   - eventDetail: an optional sub-type string (e.g. pipeline status, review state,
 //     activity type). Used for event:detail matching in Except lists.
-func ActivityIgnoreFilter(cfg *config.IgnoreConfig, repo, eventName, author, eventDetail string) bool {
+func ActivityIgnoreFilter(cfg *IgnoreConfig, repo, eventName, author, eventDetail string) bool {
 	// 1. Global repo blocklist — ignore everything from these repos.
 	for _, r := range cfg.Ignore.Global.Repos {
 		if r == repo {
@@ -43,7 +41,7 @@ func ActivityIgnoreFilter(cfg *config.IgnoreConfig, repo, eventName, author, eve
 //	b. Per-author rules         — if the author matches a rule, evaluate that rule's
 //	                               Events/Except lists. A rule with an empty Events list
 //	                               matches all event types for that author.
-func matchScope(scope config.IgnoreScope, eventName, author, eventDetail string) bool {
+func matchScope(scope IgnoreScope, eventName, author, eventDetail string) bool {
 	// (a) Scope-level event filter.
 	if len(scope.Events) > 0 && contains(scope.Events, eventName) {
 		if !containsPair(scope.Except, eventName, eventDetail) {

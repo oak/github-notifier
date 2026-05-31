@@ -4,14 +4,16 @@ import (
 	"context"
 	"os"
 	"time"
+
+	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
 // WatchForValidIgnoreConfig polls ignoreFilePath every 2 seconds and sends a
-// freshly parsed *IgnoreConfig on the returned channel whenever the
+// freshly parsed *pullrequest.IgnoreConfig on the returned channel whenever the
 // file's modification time changes and the new content parses successfully.
 // The channel is closed when ctx is cancelled.
-func WatchForValidIgnoreConfig(ctx context.Context, ignoreFilePath string) <-chan *IgnoreConfig {
-	ch := make(chan *IgnoreConfig, 1)
+func WatchForValidIgnoreConfig(ctx context.Context, ignoreFilePath string) <-chan *pullrequest.IgnoreConfig {
+	ch := make(chan *pullrequest.IgnoreConfig, 1)
 	go func() {
 		defer close(ch)
 		var lastModTime time.Time

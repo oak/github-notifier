@@ -1,20 +1,19 @@
-package filter_test
+package pullrequest_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/oak3/github-notifier/application/filter"
-	"github.com/oak3/github-notifier/config"
+	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
 func TestActivityIgnoreFilter_ConfigVariations(t *testing.T) {
-	cfg := &config.IgnoreConfig{}
+	cfg := &pullrequest.IgnoreConfig{}
 	cfg.Ignore.Global.Repos = []string{"octocat/ignored-repo"}
 	cfg.Ignore.Global.Events = []string{"PipelineStatusChanged"}
 	cfg.Ignore.Global.Except = []string{"PipelineStatusChanged:failed"}
-	cfg.Ignore.Global.AuthoredBy = []config.IgnoreActorRule{
+	cfg.Ignore.Global.AuthoredBy = []pullrequest.IgnoreActorRule{
 		{
 			Login:  "renovate[bot]",
 			Events: []string{"PipelineStatusChanged", "ReviewStateChanged"},
@@ -29,9 +28,9 @@ func TestActivityIgnoreFilter_ConfigVariations(t *testing.T) {
 			Events: []string{"ActivityDetected"},
 		},
 	}
-	cfg.Ignore.Repos = map[string]config.IgnoreScope{
+	cfg.Ignore.Repos = map[string]pullrequest.IgnoreScope{
 		"octocat/special-repo": {
-			AuthoredBy: []config.IgnoreActorRule{
+			AuthoredBy: []pullrequest.IgnoreActorRule{
 				{
 					Login:  "special-bot",
 					Events: []string{"Merged"},
@@ -64,7 +63,7 @@ func TestActivityIgnoreFilter_ConfigVariations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			got := filter.ActivityIgnoreFilter(cfg, tt.repo, tt.event, tt.author, tt.detail)
+			got := pullrequest.ActivityIgnoreFilter(cfg, tt.repo, tt.event, tt.author, tt.detail)
 			assert.Equal(t, tt.wantIgnore, got,
 				"ActivityIgnoreFilter(repo=%q, event=%q, author=%q, detail=%q)", tt.repo, tt.event, tt.author, tt.detail)
 		})

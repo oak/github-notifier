@@ -7,9 +7,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/oak3/github-notifier/application/filter"
 	"github.com/oak3/github-notifier/application/port"
-	"github.com/oak3/github-notifier/config"
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
@@ -27,7 +25,7 @@ type TrackPullRequestActivityUseCase struct {
 	eventPublisher    port.EventPublisher
 	authenticatedUser string // GitHub login — used to filter self-activity for unseen marking
 	mu                sync.RWMutex
-	ignoreConfig      *config.IgnoreConfig // may be nil; safe to update concurrently
+	ignoreConfig      *pullrequest.IgnoreConfig // may be nil; safe to update concurrently
 }
 
 // NewTrackPullRequestActivityUseCase creates a new use case.
@@ -51,7 +49,7 @@ func NewTrackPullRequestActivityUseCase(
 
 // UpdateIgnoreConfig atomically replaces the active ignore config used to decide
 // whether a PR should be marked as unseen. Safe to call from any goroutine.
-func (uc *TrackPullRequestActivityUseCase) UpdateIgnoreConfig(cfg *config.IgnoreConfig) {
+func (uc *TrackPullRequestActivityUseCase) UpdateIgnoreConfig(cfg *pullrequest.IgnoreConfig) {
 	uc.mu.Lock()
 	defer uc.mu.Unlock()
 	uc.ignoreConfig = cfg
@@ -206,7 +204,7 @@ func (uc *TrackPullRequestActivityUseCase) hasActivityByOthers(pr *pullrequest.P
 		if cfg != nil {
 			repo := pr.Repository().NameWithOwner()
 			eventDetail := string(activity.Type())
-			if filter.ActivityIgnoreFilter(cfg, repo, pullrequest.EventActivityDetected, author, eventDetail) {
+			if pullrequest.ActivityIgnoreFilter(cfg, repo, pullrequest.EventActivityDetected, author, eventDetail) {
 				continue
 			}
 		}
