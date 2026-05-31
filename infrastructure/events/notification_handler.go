@@ -56,60 +56,14 @@ func (h *NotificationEventHandler) Handle(ctx context.Context, event pullrequest
 }
 
 // sendGroupedNotifications sends the aggregated notifications
-func (h *NotificationEventHandler) sendGroupedNotifications(notifications []*PRNotification) {
+func (h *NotificationEventHandler) sendGroupedNotifications(notifications []*port.PRNotificationData) {
 	if len(notifications) == 0 {
 		return
 	}
 
 	log.Info().Msgf("Sending %d grouped PR notification(s)", len(notifications))
 
-	// Convert to port notification data
-	portNotifications := make([]*port.PRNotificationData, 0, len(notifications))
-	for _, notification := range notifications {
-		portNotification := &port.PRNotificationData{
-			PullRequest:   notification.PullRequest,
-			IsNew:         notification.IsNew,
-			Activities:    make([]port.ActivityInfo, len(notification.Activities)),
-			StatusChanges: make([]port.StatusChange, len(notification.StatusChanges)),
-			ReviewChanges: make([]port.ReviewChangeInfo, len(notification.ReviewChanges)),
-		}
-
-		// Convert activities
-		for i, activity := range notification.Activities {
-			portNotification.Activities[i] = port.ActivityInfo{
-				Type:  activity.Type,
-				Count: activity.Count,
-			}
-		}
-
-		// Convert status changes
-		for i, statusChange := range notification.StatusChanges {
-			portNotification.StatusChanges[i] = port.StatusChange{
-				EventType: statusChange.EventType,
-			}
-		}
-
-		// Convert review changes
-		for i, reviewChange := range notification.ReviewChanges {
-			portNotification.ReviewChanges[i] = port.ReviewChangeInfo{
-				Reviewer: reviewChange.Reviewer,
-				State:    reviewChange.State,
-			}
-		}
-
-		// Convert pipeline change
-		if notification.PipelineChange != nil {
-			portNotification.PipelineChange = &port.PipelineStatusChange{
-				OldStatus: notification.PipelineChange.OldStatus,
-				NewStatus: notification.PipelineChange.NewStatus,
-			}
-		}
-
-		portNotifications = append(portNotifications, portNotification)
-	}
-
-	// Send the grouped notifications
-	if err := h.notificationPort.NotifyPullRequests(portNotifications); err != nil {
+	if err := h.notificationPort.NotifyPullRequests(notifications); err != nil {
 		log.Error().Msgf("Error sending grouped notifications: %v", err)
 	}
 }

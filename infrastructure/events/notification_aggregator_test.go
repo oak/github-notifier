@@ -10,13 +10,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
 	"github.com/oak3/github-notifier/internal/testutil"
 )
 
 // newBatch returns an empty batch, mirroring what NewNotificationAggregator initialises.
-func newBatch() map[string]*PRNotification {
-	return make(map[string]*PRNotification)
+func newBatch() map[string]*port.PRNotificationData {
+	return make(map[string]*port.PRNotificationData)
 }
 
 // ── NewPullRequestDetected ────────────────────────────────────────────────────

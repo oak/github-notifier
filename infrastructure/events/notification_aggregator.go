@@ -6,48 +6,16 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/oak3/github-notifier/application/port"
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
-
-// PRNotification represents aggregated notification data for a PR
-type PRNotification struct {
-	PullRequest    *pullrequest.PullRequest
-	IsNew          bool
-	Activities     []ActivityInfo
-	StatusChanges  []StatusChange
-	ReviewChanges  []ReviewChange
-	PipelineChange *PipelineStatusChange // nil if no pipeline status change
-}
-
-// ActivityInfo holds information about a specific activity
-type ActivityInfo struct {
-	Type  pullrequest.ActivityType
-	Count int
-}
-
-// StatusChange holds information about status changes
-type StatusChange struct {
-	EventType pullrequest.StatusChangeType
-}
-
-// ReviewChange holds information about a review state change
-type ReviewChange struct {
-	Reviewer string
-	State    pullrequest.ReviewState
-}
-
-// PipelineStatusChange holds information about a CI/CD pipeline status transition
-type PipelineStatusChange struct {
-	OldStatus pullrequest.PipelineStatus
-	NewStatus pullrequest.PipelineStatus
-}
 
 // NotificationAggregator batches notifications and groups them by PR
 type NotificationAggregator struct {
 	mu                sync.Mutex
-	pendingEvents     map[string]*PRNotification // Key: PR URL
+	pendingEvents     map[string]*port.PRNotificationData // Key: PR URL
 	flushInterval     time.Duration
-	onFlush           func(notifications []*PRNotification)
+	onFlush           func(notifications []*port.PRNotificationData)
 	flushTimer        *time.Timer
 	stopCh            chan struct{}
 	authenticatedUser string                    // GitHub login — used to filter self-authored activities
@@ -58,9 +26,9 @@ type NotificationAggregator struct {
 // authenticatedUser is the GitHub login of the current user; activities authored by
 // this user are filtered out (they are domain facts, but not worth notifying about).
 // ignoreConfig may be nil if no ignore.yaml exists yet.
-func NewNotificationAggregator(flushInterval time.Duration, onFlush func(notifications []*PRNotification), authenticatedUser string, ignoreConfig *pullrequest.IgnoreConfig) *NotificationAggregator {
+func NewNotificationAggregator(flushInterval time.Duration, onFlush func(notifications []*port.PRNotificationData), authenticatedUser string, ignoreConfig *pullrequest.IgnoreConfig) *NotificationAggregator {
 	return &NotificationAggregator{
-		pendingEvents:     make(map[string]*PRNotification),
+		pendingEvents:     make(map[string]*port.PRNotificationData),
 		flushInterval:     flushInterval,
 		onFlush:           onFlush,
 		stopCh:            make(chan struct{}),
@@ -133,18 +101,18 @@ func (a *NotificationAggregator) AddEvent(event pullrequest.Event) {
 //
 // The caller is responsible for synchronisation (see AddEvent).
 func accumulateEvent(
-	batch map[string]*PRNotification,
+	batch map[string]*port.PRNotificationData,
 	event pullrequest.Event,
 	authenticatedUser string,
-) map[string]*PRNotification {
+) map[string]*port.PRNotificationData {
 	switch e := event.(type) {
 	case *pullrequest.NewPullRequestDetected:
 		url := e.PullRequestID.URL()
 		notification, exists := batch[url]
 		if !exists {
-			notification = &PRNotification{
+			notification = &port.PRNotificationData{
 				PullRequest: e.PullRequest,
-				Activities:  []ActivityInfo{},
+				Activities:  []port.ActivityInfo{},
 			}
 			batch[url] = notification
 		}
@@ -158,9 +126,9 @@ func accumulateEvent(
 		url := e.PullRequestID.URL()
 		notification, exists := batch[url]
 		if !exists {
-			notification = &PRNotification{
+			notification = &port.PRNotificationData{
 				PullRequest: e.PullRequest,
-				Activities:  []ActivityInfo{},
+				Activities:  []port.ActivityInfo{},
 			}
 			batch[url] = notification
 		}
@@ -174,7 +142,7 @@ func accumulateEvent(
 			}
 		}
 		if !found {
-			notification.Activities = append(notification.Activities, ActivityInfo{
+			notification.Activities = append(notification.Activities, port.ActivityInfo{
 				Type:  activityType,
 				Count: 1,
 			})
@@ -188,14 +156,14 @@ func accumulateEvent(
 		url := e.PullRequestID.URL()
 		notification, exists := batch[url]
 		if !exists {
-			notification = &PRNotification{
+			notification = &port.PRNotificationData{
 				PullRequest:   e.PullRequest,
-				Activities:    []ActivityInfo{},
-				ReviewChanges: []ReviewChange{},
+				Activities:    []port.ActivityInfo{},
+				ReviewChanges: []port.ReviewChangeInfo{},
 			}
 			batch[url] = notification
 		}
-		notification.ReviewChanges = append(notification.ReviewChanges, ReviewChange{
+		notification.ReviewChanges = append(notification.ReviewChanges, port.ReviewChangeInfo{
 			Reviewer: e.Reviewer.Login(),
 			State:    e.State,
 		})
@@ -204,14 +172,14 @@ func accumulateEvent(
 		url := e.PullRequestID.URL()
 		notification, exists := batch[url]
 		if !exists {
-			notification = &PRNotification{
+			notification = &port.PRNotificationData{
 				PullRequest:   e.PullRequest,
-				Activities:    []ActivityInfo{},
-				StatusChanges: []StatusChange{},
+				Activities:    []port.ActivityInfo{},
+				StatusChanges: []port.StatusChange{},
 			}
 			batch[url] = notification
 		}
-		notification.StatusChanges = append(notification.StatusChanges, StatusChange{
+		notification.StatusChanges = append(notification.StatusChanges, port.StatusChange{
 			EventType: pullrequest.StatusChangeMerged,
 		})
 
@@ -219,14 +187,14 @@ func accumulateEvent(
 		url := e.PullRequestID.URL()
 		notification, exists := batch[url]
 		if !exists {
-			notification = &PRNotification{
+			notification = &port.PRNotificationData{
 				PullRequest:   e.PullRequest,
-				Activities:    []ActivityInfo{},
-				StatusChanges: []StatusChange{},
+				Activities:    []port.ActivityInfo{},
+				StatusChanges: []port.StatusChange{},
 			}
 			batch[url] = notification
 		}
-		notification.StatusChanges = append(notification.StatusChanges, StatusChange{
+		notification.StatusChanges = append(notification.StatusChanges, port.StatusChange{
 			EventType: pullrequest.StatusChangeClosed,
 		})
 
@@ -234,16 +202,16 @@ func accumulateEvent(
 		url := e.PullRequestID.URL()
 		notification, exists := batch[url]
 		if !exists {
-			notification = &PRNotification{
+			notification = &port.PRNotificationData{
 				PullRequest: e.PullRequest,
-				Activities:  []ActivityInfo{},
+				Activities:  []port.ActivityInfo{},
 			}
 			batch[url] = notification
 		}
 		// Keep only the latest transition: preserve OldStatus from the first event
 		// in this flush window so the user sees the full transition.
 		if notification.PipelineChange == nil {
-			notification.PipelineChange = &PipelineStatusChange{
+			notification.PipelineChange = &port.PipelineStatusChange{
 				OldStatus: e.OldStatus,
 				NewStatus: e.NewStatus,
 			}
@@ -277,13 +245,13 @@ func (a *NotificationAggregator) Flush() {
 	}
 
 	// Collect all notifications
-	notifications := make([]*PRNotification, 0, len(a.pendingEvents))
+	notifications := make([]*port.PRNotificationData, 0, len(a.pendingEvents))
 	for _, notification := range a.pendingEvents {
 		notifications = append(notifications, notification)
 	}
 
 	// Clear the pending events
-	a.pendingEvents = make(map[string]*PRNotification)
+	a.pendingEvents = make(map[string]*port.PRNotificationData)
 
 	// Call the flush callback
 	if a.onFlush != nil {
