@@ -121,13 +121,15 @@ func (s PRStateSnapshot) ReconstitutePRFromSnapshot() (*pullrequest.PullRequest,
 		s.Seen,
 	)
 
+	reviews := make(map[string]*pullrequest.Review, len(s.Reviews))
 	for login, rs := range s.Reviews {
 		reviewer, err := pullrequest.NewAuthor(login)
 		if err != nil {
 			return nil, fmt.Errorf("reconstitute PR: invalid reviewer %q: %w", login, err)
 		}
-		pr.Reviews()[login] = pullrequest.NewReview(reviewer, rs.State, rs.SubmittedAt)
+		reviews[login] = pullrequest.NewReview(reviewer, rs.State, rs.SubmittedAt)
 	}
+	pr.SetInitialReviews(reviews)
 
 	return pr, nil
 }

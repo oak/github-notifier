@@ -120,6 +120,10 @@ func (uc *CheckNewPullRequestsUseCase) seedKnownReviewsFromSnapshots(state *Chec
 	}
 
 	for _, pr := range prs {
+		// Seed known PR URLs so previously tracked PRs are not re-detected as new
+		// after process restart.
+		state.KnownPRs[pr.URL()] = true
+
 		if _, exists := state.KnownReviews[pr.URL()]; exists {
 			continue
 		}

@@ -59,15 +59,15 @@ func (uc *DetectClosedPullRequestsUseCase) TrackPRs(prs []*pullrequest.PullReque
 	}
 
 	snapshots := make([]*pullrequest.PullRequest, 0, len(prs))
-	for _, snapshot := range snapshots {
+	for _, pr := range prs {
 		// Preserve enrichment fields from the previous snapshot so that
 		// TrackPullRequestActivityUseCase can correctly detect changes.
-		if prev, ok := prevByURL[snapshot.URL()]; ok {
-			snapshot.SetInitialHeadCommitSHA(prev.HeadCommitSHA())
-			snapshot.SetInitialPipelineStatus(prev.PipelineStatus())
-			snapshot.SetInitialLastActivityCheck(prev.LastActivityCheck())
+		if prev, ok := prevByURL[pr.URL()]; ok {
+			pr.SetInitialHeadCommitSHA(prev.HeadCommitSHA())
+			pr.SetInitialPipelineStatus(prev.PipelineStatus())
+			pr.SetInitialLastActivityCheck(prev.LastActivityCheck())
 		}
-		snapshots = append(snapshots, snapshot)
+		snapshots = append(snapshots, pr)
 	}
 
 	if err := uc.trackingRepo.Save(snapshots); err != nil {

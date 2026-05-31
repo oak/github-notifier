@@ -242,8 +242,12 @@ func TestCheckNewPRs_SeedsKnownReviewsFromSnapshotsOnFirstCycle(t *testing.T) {
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ReviewStateChanged")).Return(nil).Once()
 
 	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, mockTrackingRepo, prFilter, mockEventPublisher)
+	state := usecase.NewCheckCycleState()
+	// Keep PR as known so this test isolates review-change seeding behavior and
+	// does not require NewPullRequestDetected expectations.
+	state.KnownPRs[pr.URL()] = true
 
-	_, state, err := uc.Execute(context.Background(), usecase.NewCheckCycleState())
+	_, state, err := uc.Execute(context.Background(), state)
 
 	require.NoError(t, err)
 	assert.True(t, state.ReviewsSeeded)

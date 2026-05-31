@@ -25,15 +25,9 @@ func TestInitializeFirstCheck_FirstRunEver(t *testing.T) {
 	userPRs := testutil.CreateTestPRs(1, 1)      // 1 regular, 1 draft
 
 	// Mock expectations
-	mockPRTrackingRepo.On("HasNoSeenPRs").Return(true)
+	mockPRTrackingRepo.On("IsEmpty").Return(true)
 	mockPRRepo.On("FetchRequestedReviews").Return(requestedPRs, nil)
 	mockPRRepo.On("FetchUserCreated").Return(userPRs, nil)
-
-	// After filtering, should only mark non-drafts as seen (2 + 1 = 3 total calls)
-	// First batch: 2 non-draft requested PRs
-	mockPRTrackingRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Times(2)
-	// Second batch: 1 non-draft user PR
-	mockPRTrackingRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Times(1)
 
 	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockPRTrackingRepo).Once()
 
@@ -46,6 +40,9 @@ func TestInitializeFirstCheck_FirstRunEver(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, isFirstRun, "Should return true on first run")
 	assert.Len(t, seededPRs, 3, "Should return all 3 non-draft PRs")
+	for _, pr := range seededPRs {
+		assert.True(t, pr.Seen(), "all first-run PRs should be marked seen")
+	}
 	mockPRTrackingRepo.AssertExpectations(t)
 	mockPRRepo.AssertExpectations(t)
 	mockUIPort.AssertExpectations(t)
@@ -101,7 +98,6 @@ func TestInitializeFirstCheck_FetchRequestedReviewsError(t *testing.T) {
 	assert.False(t, isFirstRun, "Should return false on error")
 	assert.Nil(t, seededPRs)
 	mockPRRepo.AssertNotCalled(t, "FetchUserCreated")
-	mockPRTrackingRepo.AssertNotCalled(t, "MarkAsSeen")
 	mockUIPort.AssertNotCalled(t, "UpdateDisplay")
 }
 
@@ -130,7 +126,9 @@ func TestInitializeFirstCheck_FetchUserCreatedError(t *testing.T) {
 	assert.Equal(t, expectedErr, err)
 	assert.False(t, isFirstRun, "Should return false on error")
 	assert.Nil(t, seededPRs)
-	mockPRTrackingRepo.AssertNotCalled(t, "MarkAsSeen")
+	for _, pr := range requestedPRs {
+		assert.False(t, pr.Seen())
+	}
 	mockUIPort.AssertNotCalled(t, "UpdateDisplay")
 }
 
@@ -149,9 +147,6 @@ func TestInitializeFirstCheck_IncludeDrafts(t *testing.T) {
 	mockPRRepo.On("FetchRequestedReviews").Return(requestedPRs, nil)
 	mockPRRepo.On("FetchUserCreated").Return(userPRs, nil)
 
-	// When including drafts, all PRs should be marked as seen (3 + 2 = 5 calls)
-	mockPRTrackingRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Times(5)
-
 	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockPRTrackingRepo).Once()
 
 	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockPRTrackingRepo, prFilter, mockUIPort)
@@ -163,6 +158,9 @@ func TestInitializeFirstCheck_IncludeDrafts(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, isFirstRun)
 	assert.Len(t, seededPRs, 5, "Should return all 5 PRs including drafts")
+	for _, pr := range seededPRs {
+		assert.True(t, pr.Seen(), "all first-run PRs should be marked seen")
+	}
 	mockPRTrackingRepo.AssertExpectations(t)
 }
 

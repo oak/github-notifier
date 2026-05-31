@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/oak3/github-notifier/domain/pullrequest"
@@ -168,8 +167,8 @@ func TestTrackingHandler_HandlePRMerged(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewMerged(pr)
 
-	// Merged event should trigger cleanup — UnmarkAsSeen removes from seen state
-	mockPRTrackingRepo.On("UnmarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Once()
+	// Merged event should mark PR unseen and persist via Update.
+	mockPRTrackingRepo.On("Update", pr).Return(nil).Once()
 
 	// Act
 	err := handler.Handle(context.Background(), &event)
@@ -188,8 +187,8 @@ func TestTrackingHandler_HandlePRClosed(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewClosed(pr)
 
-	// Closed event should trigger cleanup — UnmarkAsSeen removes from seen state
-	mockPRTrackingRepo.On("UnmarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Once()
+	// Closed event should mark PR unseen and persist via Update.
+	mockPRTrackingRepo.On("Update", pr).Return(nil).Once()
 
 	// Act
 	err := handler.Handle(context.Background(), &event)
