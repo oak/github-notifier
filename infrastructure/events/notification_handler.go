@@ -7,6 +7,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/oak3/github-notifier/application/port"
+	"github.com/oak3/github-notifier/config"
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
@@ -116,7 +117,7 @@ func (h *NotificationEventHandler) sendGroupedNotifications(notifications []*PRN
 
 // UpdateIgnoreConfig replaces the active ignore config used to filter events.
 // Safe to call from any goroutine.
-func (h *NotificationEventHandler) UpdateIgnoreConfig(cfg *pullrequest.IgnoreConfig) {
+func (h *NotificationEventHandler) UpdateIgnoreConfig(cfg *config.IgnoreConfig) {
 	if h.aggregator != nil {
 		h.aggregator.UpdateIgnoreConfig(cfg)
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/oak3/github-notifier/application/usecase"
+	"github.com/oak3/github-notifier/config"
 	"github.com/oak3/github-notifier/domain/pullrequest"
 	"github.com/oak3/github-notifier/internal/mocks"
 	"github.com/oak3/github-notifier/internal/testutil"
@@ -323,8 +324,8 @@ func TestTrackActivity_IgnoredAuthor_NotMarkedUnseen(t *testing.T) {
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil).Once()
 
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, mockEventPublisher, "alice")
-	ignoreCfg := &pullrequest.IgnoreConfig{}
-	ignoreCfg.Ignore.Global.AuthoredBy = []pullrequest.IgnoreActorRule{{Login: "dependabot"}}
+	ignoreCfg := &config.IgnoreConfig{}
+	ignoreCfg.Ignore.Global.AuthoredBy = []config.IgnoreActorRule{{Login: "dependabot"}}
 	uc.UpdateIgnoreConfig(ignoreCfg)
 
 	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{pr}, lastCheckTime)
@@ -364,8 +365,8 @@ func TestTrackActivity_IgnoreConfig_NonIgnoredAuthorStillMarkUnseen(t *testing.T
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil).Once()
 
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, mockEventPublisher, "alice")
-	ignoreCfg := &pullrequest.IgnoreConfig{}
-	ignoreCfg.Ignore.Global.AuthoredBy = []pullrequest.IgnoreActorRule{{Login: "dependabot"}}
+	ignoreCfg := &config.IgnoreConfig{}
+	ignoreCfg.Ignore.Global.AuthoredBy = []config.IgnoreActorRule{{Login: "dependabot"}}
 	uc.UpdateIgnoreConfig(ignoreCfg)
 
 	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{pr}, lastCheckTime)

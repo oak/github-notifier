@@ -348,7 +348,7 @@ func (app *App) onExit() {
 }
 
 // logIgnoreConfig logs a summary of the active ignore rules at Info level.
-func logIgnoreConfig(msg string, cfg *pullrequest.IgnoreConfig) {
+func logIgnoreConfig(msg string, cfg *config.IgnoreConfig) {
 	e := log.Info().Str("blocked_repos", formatStringSlice(cfg.Ignore.Global.Repos))
 
 	if len(cfg.Ignore.Global.Events) > 0 {

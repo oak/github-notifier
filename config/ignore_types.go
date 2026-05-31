@@ -1,4 +1,4 @@
-package pullrequest
+package config
 
 // IgnoreConfig represents the structure of the ignore.yaml file
 // for filtering out noisy or automated activity.

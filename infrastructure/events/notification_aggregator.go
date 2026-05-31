@@ -6,6 +6,8 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/oak3/github-notifier/application/filter"
+	"github.com/oak3/github-notifier/config"
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
@@ -50,15 +52,15 @@ type NotificationAggregator struct {
 	onFlush           func(notifications []*PRNotification)
 	flushTimer        *time.Timer
 	stopCh            chan struct{}
-	authenticatedUser string                    // GitHub login — used to filter self-authored activities
-	ignoreConfig      *pullrequest.IgnoreConfig // loaded ignore config, may be nil
+	authenticatedUser string               // GitHub login — used to filter self-authored activities
+	ignoreConfig      *config.IgnoreConfig // loaded ignore config, may be nil
 }
 
 // NewNotificationAggregator creates a new notification aggregator.
 // authenticatedUser is the GitHub login of the current user; activities authored by
 // this user are filtered out (they are domain facts, but not worth notifying about).
 // ignoreConfig may be nil if no ignore.yaml exists yet.
-func NewNotificationAggregator(flushInterval time.Duration, onFlush func(notifications []*PRNotification), authenticatedUser string, ignoreConfig *pullrequest.IgnoreConfig) *NotificationAggregator {
+func NewNotificationAggregator(flushInterval time.Duration, onFlush func(notifications []*PRNotification), authenticatedUser string, ignoreConfig *config.IgnoreConfig) *NotificationAggregator {
 	return &NotificationAggregator{
 		pendingEvents:     make(map[string]*PRNotification),
 		flushInterval:     flushInterval,
@@ -71,7 +73,7 @@ func NewNotificationAggregator(flushInterval time.Duration, onFlush func(notific
 
 // UpdateIgnoreConfig atomically replaces the active ignore config.
 // Safe to call from any goroutine.
-func (a *NotificationAggregator) UpdateIgnoreConfig(cfg *pullrequest.IgnoreConfig) {
+func (a *NotificationAggregator) UpdateIgnoreConfig(cfg *config.IgnoreConfig) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.ignoreConfig = cfg
@@ -111,7 +113,7 @@ func (a *NotificationAggregator) AddEvent(event pullrequest.Event) {
 			author = e.PullRequest.Author().Login()
 			eventDetail = e.NewStatus.String()
 		}
-		if pullrequest.ActivityIgnoreFilter(a.ignoreConfig, repoName, eventName, author, eventDetail) {
+		if filter.ActivityIgnoreFilter(a.ignoreConfig, repoName, eventName, author, eventDetail) {
 			log.Debug().
 				Str("event", eventName).
 				Str("repo", repoName).
