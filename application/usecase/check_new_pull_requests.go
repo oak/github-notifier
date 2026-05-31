@@ -33,7 +33,6 @@ func NewCheckCycleState() CheckCycleState {
 type CheckNewPullRequestsUseCase struct {
 	prRepo         pullrequest.PullRequestRepository
 	trackingRepo   pullrequest.PRTrackingRepository
-	seenRepo       pullrequest.SeenRepository
 	prFilter       pullrequest.FilterFn
 	eventPublisher port.EventPublisher
 }
@@ -42,14 +41,12 @@ type CheckNewPullRequestsUseCase struct {
 func NewCheckNewPullRequestsUseCase(
 	prRepo pullrequest.PullRequestRepository,
 	trackingRepo pullrequest.PRTrackingRepository,
-	seenRepo pullrequest.SeenRepository,
 	prFilter pullrequest.FilterFn,
 	eventPublisher port.EventPublisher,
 ) *CheckNewPullRequestsUseCase {
 	return &CheckNewPullRequestsUseCase{
 		prRepo:         prRepo,
 		trackingRepo:   trackingRepo,
-		seenRepo:       seenRepo,
 		prFilter:       prFilter,
 		eventPublisher: eventPublisher,
 	}
@@ -116,29 +113,29 @@ func (uc *CheckNewPullRequestsUseCase) seedKnownReviewsFromSnapshots(state *Chec
 		return
 	}
 
-	snapshots, err := uc.trackingRepo.LoadAll()
+	prs, err := uc.trackingRepo.LoadAll()
 	if err != nil {
 		log.Error().Err(err).Msg("Error loading tracked PR snapshots for review baseline seeding")
 		return
 	}
 
-	for _, snapshot := range snapshots {
-		if _, exists := state.KnownReviews[snapshot.URL]; exists {
+	for _, pr := range prs {
+		if _, exists := state.KnownReviews[pr.URL()]; exists {
 			continue
 		}
 
-		reviews := make(map[string]*pullrequest.Review, len(snapshot.Reviews))
-		for login, reviewSnapshot := range snapshot.Reviews {
+		reviews := make(map[string]*pullrequest.Review, len(pr.Reviews()))
+		for login, review := range pr.Reviews() {
 			reviewer, authorErr := pullrequest.NewAuthor(login)
 			if authorErr != nil {
 				log.Error().Err(authorErr).Msgf("Skipping invalid reviewer %q while seeding review baseline", login)
 				continue
 			}
 
-			reviews[login] = pullrequest.NewReview(reviewer, reviewSnapshot.State, reviewSnapshot.SubmittedAt)
+			reviews[login] = pullrequest.NewReview(reviewer, review.State(), review.SubmittedAt())
 		}
 
-		state.KnownReviews[snapshot.URL] = reviews
+		state.KnownReviews[pr.URL()] = reviews
 	}
 
 	state.ReviewsSeeded = true
@@ -146,16 +143,9 @@ func (uc *CheckNewPullRequestsUseCase) seedKnownReviewsFromSnapshots(state *Chec
 
 // processNewPRs finds new PRs and emits appropriate events
 func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequest, category string, state *CheckCycleState) error {
-	// Find PRs that are genuinely new (never encountered before).
-	// We check both our own KnownPRs set AND the seen repository.
-	// The KnownPRs set prevents false re-detections that occur when the
-	// activity tracking use case calls MarkPullRequestAsUnseen (which removes
-	// PRs from the seen repository so the UI can show asterisks for unread
-	// activity). The seen repository check handles app restarts where
-	// KnownPRs is empty but the seen repo has persisted data.
 	var newPRs []*pullrequest.PullRequest
 	for _, pr := range prs {
-		if !state.KnownPRs[pr.URL()] && !uc.seenRepo.HasBeenSeen(pr.Identifier()) {
+		if !state.KnownPRs[pr.URL()] {
 			newPRs = append(newPRs, pr)
 		}
 		// Always track as known so MarkPullRequestAsUnseen can't cause re-detection
@@ -183,8 +173,7 @@ func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequ
 	// Mark all new PRs as seen in the tracking repo
 	// This sets the initial seen state for UI display
 	for _, pr := range newPRs {
-		// Best-effort: we don't fail if marking as seen fails
-		_ = uc.seenRepo.MarkAsSeen(pr.Identifier()) //nolint:errcheck // marking as seen is best-effort
+		pr.MarkAsSeen()
 	}
 
 	// PRs with activity will trigger activity events via TrackPullRequestActivityUseCase

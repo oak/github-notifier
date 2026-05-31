@@ -22,7 +22,6 @@ type TrackPullRequestActivityUseCase struct {
 	prRepo            pullrequest.PullRequestRepository
 	trackingRepo      pullrequest.PRTrackingRepository
 	scheduler         *pullrequest.ActivityCheckScheduler
-	seenRepo          pullrequest.SeenRepository
 	eventPublisher    port.EventPublisher
 	authenticatedUser string // GitHub login — used to filter self-activity for unseen marking
 	mu                sync.RWMutex
@@ -36,7 +35,6 @@ func NewTrackPullRequestActivityUseCase(
 	prRepo pullrequest.PullRequestRepository,
 	trackingRepo pullrequest.PRTrackingRepository,
 	scheduler *pullrequest.ActivityCheckScheduler,
-	seenRepo pullrequest.SeenRepository,
 	eventPublisher port.EventPublisher,
 	authenticatedUser string,
 ) *TrackPullRequestActivityUseCase {
@@ -44,7 +42,6 @@ func NewTrackPullRequestActivityUseCase(
 		prRepo:            prRepo,
 		trackingRepo:      trackingRepo,
 		scheduler:         scheduler,
-		seenRepo:          seenRepo,
 		eventPublisher:    eventPublisher,
 		authenticatedUser: authenticatedUser,
 	}
@@ -87,9 +84,9 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 	if loadErr != nil {
 		log.Error().Err(loadErr).Msg("Activity tracker: failed to load snapshots; proceeding without prior state")
 	}
-	snapByURL := make(map[string]pullrequest.PRStateSnapshot, len(snapshots))
+	snapByURL := make(map[string]pullrequest.PullRequest, len(snapshots))
 	for _, s := range snapshots {
-		snapByURL[s.URL] = s
+		snapByURL[s.URL()] = s
 	}
 
 	// Restore known enrichment state on fresh PR objects.
@@ -184,7 +181,7 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 
 	// Mark PRs with new activity as unseen (to show asterisks)
 	for _, pr := range prsWithNewActivity {
-		if err := uc.seenRepo.UnmarkAsSeen(pr.Identifier()); err != nil {
+		if err := uc.prTrackingRepo.UnmarkAsSeen(pr.Identifier()); err != nil {
 			log.Error().Err(err).Msg("Error marking PR as unseen")
 		}
 	}

@@ -16,9 +16,9 @@ import (
 
 func TestTrackingHandler_HandleNewPRDetected_Success(t *testing.T) {
 	// Arrange
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 
-	handler := events.NewTrackingEventHandler(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(mockPRTrackingRepo)
 
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewNewPullRequestDetected(pr)
@@ -29,14 +29,14 @@ func TestTrackingHandler_HandleNewPRDetected_Success(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	// Handler currently just logs, no tracking service calls expected
-	mockSeenRepo.AssertNotCalled(t, "MarkAsSeen")
+	mockPRTrackingRepo.AssertNotCalled(t, "MarkAsSeen")
 }
 
 func TestTrackingHandler_HandleActivityDetected_Success(t *testing.T) {
 	// Arrange
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 
-	handler := events.NewTrackingEventHandler(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(mockPRTrackingRepo)
 
 	pr := testutil.NewTestPullRequest(1)
 	activity := testutil.NewTestActivity(
@@ -53,14 +53,14 @@ func TestTrackingHandler_HandleActivityDetected_Success(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	// Handler currently just logs, no tracking service calls expected
-	mockSeenRepo.AssertNotCalled(t, "UnmarkAsSeen")
+	mockPRTrackingRepo.AssertNotCalled(t, "UnmarkAsSeen")
 }
 
 func TestTrackingHandler_HandleUnknownEvent_Ignored(t *testing.T) {
 	// Arrange
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 
-	handler := events.NewTrackingEventHandler(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(mockPRTrackingRepo)
 
 	// Create a mock event type (not a real event, just for testing)
 	type UnknownEvent struct {
@@ -74,15 +74,15 @@ func TestTrackingHandler_HandleUnknownEvent_Ignored(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	// No tracking service calls should be made for unknown event types
-	mockSeenRepo.AssertNotCalled(t, "MarkAsSeen")
-	mockSeenRepo.AssertNotCalled(t, "UnmarkAsSeen")
+	mockPRTrackingRepo.AssertNotCalled(t, "MarkAsSeen")
+	mockPRTrackingRepo.AssertNotCalled(t, "UnmarkAsSeen")
 }
 
 func TestTrackingHandler_HandleMultipleNewPRs(t *testing.T) {
 	// Arrange
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 
-	handler := events.NewTrackingEventHandler(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(mockPRTrackingRepo)
 
 	pr1 := testutil.NewTestPullRequest(1)
 	pr2 := testutil.NewTestPullRequest(2)
@@ -102,9 +102,9 @@ func TestTrackingHandler_HandleMultipleNewPRs(t *testing.T) {
 
 func TestTrackingHandler_HandleMultipleActivities(t *testing.T) {
 	// Arrange
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 
-	handler := events.NewTrackingEventHandler(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(mockPRTrackingRepo)
 
 	pr := testutil.NewTestPullRequest(1)
 	activity1 := testutil.NewTestActivity(
@@ -133,9 +133,9 @@ func TestTrackingHandler_HandleMultipleActivities(t *testing.T) {
 
 func TestTrackingHandler_HandleMixedEvents(t *testing.T) {
 	// Arrange
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 
-	handler := events.NewTrackingEventHandler(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(mockPRTrackingRepo)
 
 	pr1 := testutil.NewTestPullRequest(1)
 	pr2 := testutil.NewTestPullRequest(2)
@@ -161,49 +161,49 @@ func TestTrackingHandler_HandleMixedEvents(t *testing.T) {
 
 func TestTrackingHandler_HandlePRMerged(t *testing.T) {
 	// Arrange
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 
-	handler := events.NewTrackingEventHandler(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(mockPRTrackingRepo)
 
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewMerged(pr)
 
 	// Merged event should trigger cleanup — UnmarkAsSeen removes from seen state
-	mockSeenRepo.On("UnmarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Once()
+	mockPRTrackingRepo.On("UnmarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Once()
 
 	// Act
 	err := handler.Handle(context.Background(), &event)
 
 	// Assert
 	require.NoError(t, err)
-	mockSeenRepo.AssertExpectations(t)
+	mockPRTrackingRepo.AssertExpectations(t)
 }
 
 func TestTrackingHandler_HandlePRClosed(t *testing.T) {
 	// Arrange
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 
-	handler := events.NewTrackingEventHandler(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(mockPRTrackingRepo)
 
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewClosed(pr)
 
 	// Closed event should trigger cleanup — UnmarkAsSeen removes from seen state
-	mockSeenRepo.On("UnmarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Once()
+	mockPRTrackingRepo.On("UnmarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Once()
 
 	// Act
 	err := handler.Handle(context.Background(), &event)
 
 	// Assert
 	require.NoError(t, err)
-	mockSeenRepo.AssertExpectations(t)
+	mockPRTrackingRepo.AssertExpectations(t)
 }
 
 func TestTrackingHandler_HandleStatusChanged(t *testing.T) {
 	// Arrange
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 
-	handler := events.NewTrackingEventHandler(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(mockPRTrackingRepo)
 
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewStatusChanged(pr, pullrequest.StatusOpen, pullrequest.StatusMerged)
@@ -217,9 +217,9 @@ func TestTrackingHandler_HandleStatusChanged(t *testing.T) {
 
 func TestTrackingHandler_HandlePipelineStatusChanged(t *testing.T) {
 	// Arrange
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 
-	handler := events.NewTrackingEventHandler(mockSeenRepo)
+	handler := events.NewTrackingEventHandler(mockPRTrackingRepo)
 
 	pr := testutil.NewTestPullRequest(1)
 	event := pullrequest.NewPipelineStatusChanged(pr, pullrequest.PipelineStatusRunning, pullrequest.PipelineStatusSuccess)
@@ -230,6 +230,6 @@ func TestTrackingHandler_HandlePipelineStatusChanged(t *testing.T) {
 	// Assert - should handle without error, just logs
 	require.NoError(t, err)
 	// No tracking service calls expected (pipeline events are log-only)
-	mockSeenRepo.AssertNotCalled(t, "MarkAsSeen")
-	mockSeenRepo.AssertNotCalled(t, "UnmarkAsSeen")
+	mockPRTrackingRepo.AssertNotCalled(t, "MarkAsSeen")
+	mockPRTrackingRepo.AssertNotCalled(t, "UnmarkAsSeen")
 }

@@ -53,22 +53,21 @@ func (uc *DetectClosedPullRequestsUseCase) TrackPRs(prs []*pullrequest.PullReque
 	}
 
 	// Build lookup map for previous enrichment data
-	prevByURL := make(map[string]pullrequest.PRStateSnapshot, len(existing))
+	prevByURL := make(map[string]pullrequest.PullRequest, len(existing))
 	for _, s := range existing {
-		prevByURL[s.URL] = s
+		prevByURL[s.URL()] = s
 	}
 
-	snapshots := make([]pullrequest.PRStateSnapshot, 0, len(prs))
+	snapshots := make([]pullrequest.PullRequest, 0, len(prs))
 	for _, pr := range prs {
-		snap := pr.ToSnapshot()
 		// Preserve enrichment fields from the previous snapshot so that
 		// TrackPullRequestActivityUseCase can correctly detect changes.
 		if prev, ok := prevByURL[pr.URL()]; ok {
-			snap.HeadCommitSHA = prev.HeadCommitSHA
-			snap.PipelineStatus = prev.PipelineStatus
-			snap.LastActivityCheck = prev.LastActivityCheck
+			pr.HeadCommitSHA = prev.HeadCommitSHA
+			pr.PipelineStatus = prev.PipelineStatus
+			pr.LastActivityCheck = prev.LastActivityCheck
 		}
-		snapshots = append(snapshots, snap)
+		snapshots = append(snapshots, pr)
 	}
 
 	if err := uc.trackingRepo.Save(snapshots); err != nil {
@@ -79,12 +78,12 @@ func (uc *DetectClosedPullRequestsUseCase) TrackPRs(prs []*pullrequest.PullReque
 // Execute compares the current open PR list against the previously-saved
 // snapshot set to detect merged/closed PRs.
 func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentPRs []*pullrequest.PullRequest) error {
-	snapshots, err := uc.trackingRepo.LoadAll()
+	prs, err := uc.trackingRepo.LoadAll()
 	if err != nil {
 		return err
 	}
 
-	if len(snapshots) == 0 {
+	if len(prs) == 0 {
 		return nil // Nothing tracked yet — first cycle
 	}
 
@@ -94,11 +93,11 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 		currentURLs[pr.URL()] = true
 	}
 
-	// Find snapshots for PRs that are no longer in the open list
-	var missing []pullrequest.PRStateSnapshot
-	for _, snap := range snapshots {
-		if !currentURLs[snap.URL] {
-			missing = append(missing, snap)
+	// Find prs for PRs that are no longer in the open list
+	var missing []pullrequest.PullRequest
+	for _, pr := range prs {
+		if !currentURLs[pr.URL()] {
+			missing = append(missing, pr)
 		}
 	}
 
@@ -113,15 +112,7 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 	// Execute call in the same cycle).
 	processedURLs := make(map[string]bool, len(missing))
 
-	for _, snap := range missing {
-		// Reconstitute the full aggregate so we can call Merge()/Close() and
-		// publish the proper domain events.
-		pr, reconErr := pullrequest.ReconstitutePRFromSnapshot(snap)
-		if reconErr != nil {
-			log.Error().Err(reconErr).Msgf("DetectClosedPRs: failed to reconstitute PR %s, skipping", snap.URL)
-			continue
-		}
-
+	for _, pr := range missing {
 		repo := pr.Repository()
 		status, fetchErr := uc.prRepo.FetchPRStatus(repo.Owner(), repo.Name(), pr.Number())
 		if fetchErr != nil {
@@ -138,7 +129,7 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 					log.Error().Err(err).Msgf("Error publishing event for PR %s", pr.URL())
 				}
 			}
-			processedURLs[snap.URL] = true
+			processedURLs[pr.URL()] = true
 
 		case pullrequest.StatusClosed:
 			log.Info().Msgf("PR %s was closed", pr.URL())
@@ -147,7 +138,7 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 					log.Error().Err(err).Msgf("Error publishing event for PR %s", pr.URL())
 				}
 			}
-			processedURLs[snap.URL] = true
+			processedURLs[pr.URL()] = true
 
 		case pullrequest.StatusOpen:
 			// PR is still open but not in our fetch results — transient
@@ -162,10 +153,10 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 
 	// Remove confirmed closed/merged PRs from the repository immediately so
 	// that a subsequent Execute call does not re-process them.
-	remaining := make([]pullrequest.PRStateSnapshot, 0, len(snapshots)-len(processedURLs))
-	for _, s := range snapshots {
-		if !processedURLs[s.URL] {
-			remaining = append(remaining, s)
+	remaining := make([]pullrequest.PullRequest, 0, len(prs)-len(processedURLs))
+	for _, pr := range prs {
+		if !processedURLs[pr.URL()] {
+			remaining = append(remaining, pr)
 		}
 	}
 	if saveErr := uc.trackingRepo.Save(remaining); saveErr != nil {

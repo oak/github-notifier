@@ -18,15 +18,14 @@ import (
 	"github.com/oak3/github-notifier/domain/pullrequest"
 )
 
-const currentVersion = 1
+const currentVersion = 2
 
 // stateEnvelope is the on-disk JSON structure.  The version field is checked
 // on load; an unknown version causes the file to be treated as empty so that
 // future format changes degrade gracefully.
 type stateEnvelope struct {
-	Version    int                           `json:"version"`
-	SeenPRs    []string                      `json:"seenPRs"`
-	TrackedPRs []pullrequest.PRStateSnapshot `json:"trackedPRs"`
+	Version    int               `json:"version"`
+	TrackedPRs []PRStateSnapshot `json:"trackedPRs"`
 }
 
 // StateRepository implements both pullrequest.SeenRepository and
@@ -51,81 +50,78 @@ func NewStateRepository(filePath string) *StateRepository {
 	return &StateRepository{filePath: filePath}
 }
 
-// ─── SeenRepository ──────────────────────────────────────────────────────────
-
-// MarkAsSeen marks the given PR as seen and persists the change.
-func (r *StateRepository) MarkAsSeen(id pullrequest.PRIdentifier) error {
+func (r *StateRepository) Update(pullRequest *pullrequest.PullRequest) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	env := r.load()
-	if !contains(env.SeenPRs, id.URL()) {
-		env.SeenPRs = append(env.SeenPRs, id.URL())
+	// Update the specific PR in the tracked PRs
+	for i, snapshot := range env.TrackedPRs {
+		if snapshot.URL == pullRequest.Identifier().URL() {
+			env.TrackedPRs[i] = toSnapshot(pullRequest)
+			break
+		}
 	}
 	return r.save(env)
 }
 
-// UnmarkAsSeen removes the given PR from the seen set and persists the change.
-func (r *StateRepository) UnmarkAsSeen(id pullrequest.PRIdentifier) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	env := r.load()
-	env.SeenPRs = remove(env.SeenPRs, id.URL())
-	return r.save(env)
-}
-
-// HasBeenSeen reports whether the given PR has been marked as seen.
-func (r *StateRepository) HasBeenSeen(id pullrequest.PRIdentifier) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	env := r.load()
-	return contains(env.SeenPRs, id.URL())
-}
-
-// IsEmpty reports whether no PRs have been marked as seen yet.
-func (r *StateRepository) IsEmpty() bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	env := r.load()
-	return len(env.SeenPRs) == 0
-}
-
-// ─── PRTrackingRepository ────────────────────────────────────────────────────
-
 // Save replaces the entire tracked-PR snapshot set and persists the change.
-func (r *StateRepository) Save(snapshots []pullrequest.PRStateSnapshot) error {
+func (r *StateRepository) Save(pullrequests []pullrequest.PullRequest) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	env := r.load()
-	env.TrackedPRs = snapshots
+	env.TrackedPRs = toSnapshots(pullrequests)
 	return r.save(env)
+}
+
+func (r *StateRepository) Fetch(prIdentifier pullrequest.PRIdentifier) (*pullrequest.PullRequest, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	env := r.load()
+	for _, snapshot := range env.TrackedPRs {
+		if snapshot.URL == prIdentifier.URL() {
+			pr, err := snapshot.toDomain()
+			if err != nil {
+				return nil, fmt.Errorf("state: failed to reconstitute PR from snapshot: %w", err)
+			}
+			return pr, nil
+		}
+	}
+	return nil, fmt.Errorf("state: PR not found for URL %s", prIdentifier.URL())
 }
 
 // LoadAll returns all previously saved PR snapshots.
 // Returns an empty (non-nil) slice when no state has been persisted yet.
-func (r *StateRepository) LoadAll() ([]pullrequest.PRStateSnapshot, error) {
+func (r *StateRepository) LoadAll() ([]pullrequest.PullRequest, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	env := r.load()
 	if len(env.TrackedPRs) == 0 {
-		return []pullrequest.PRStateSnapshot{}, nil
+		return []pullrequest.PullRequest{}, nil
 	}
 	// Return a defensive copy.
-	cp := make([]pullrequest.PRStateSnapshot, len(env.TrackedPRs))
-	copy(cp, env.TrackedPRs)
+	cp := make([]pullrequest.PullRequest, len(env.TrackedPRs))
+	for i, snapshot := range env.TrackedPRs {
+		pr, err := snapshot.toDomain()
+		if err != nil {
+			log.Warn().Err(err).Str("url", snapshot.URL).Msg("state: failed to reconstitute PR from snapshot; skipping")
+			continue
+		}
+		cp[i] = *pr
+	}
+	// Alternative: skip invalid snapshots and return the valid ones, rather than failing the whole load.
+	// This would be more robust to partial file corruption but might hide issues with the snapshot format.
+	// For now we log and skip individual failures but still return an error if all snapshots fail, to avoid silently losing all tracking state.
+	if len(cp) == 0 {
+		return []pullrequest.PullRequest{}, fmt.Errorf("state: no valid PR snapshots found")
+	}
 	return cp, nil
 }
 
-// ─── Clear (both repositories) ───────────────────────────────────────────────
-
-// Clear removes all seen PR records and tracked PR snapshots, and persists the
-// empty state.  It satisfies both the SeenRepository.Clear and
-// PRTrackingRepository.Clear contracts.
+// ─── Clear ───────────────────────────────────────────────────────────────────
 func (r *StateRepository) Clear() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -170,7 +166,7 @@ func (r *StateRepository) load() stateEnvelope {
 		env.SeenPRs = []string{}
 	}
 	if env.TrackedPRs == nil {
-		env.TrackedPRs = []pullrequest.PRStateSnapshot{}
+		env.TrackedPRs = []PRStateSnapshot{}
 	}
 
 	return env

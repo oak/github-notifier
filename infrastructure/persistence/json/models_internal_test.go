@@ -1,4 +1,4 @@
-package pullrequest_test
+package json
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/oak3/github-notifier/domain/pullrequest"
+
 	"github.com/oak3/github-notifier/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,7 +26,7 @@ func TestToSnapshot_BasicFields(t *testing.T) {
 		testutil.WithDraft(true),
 	)
 
-	snap := pr.ToSnapshot()
+	snap := toSnapshot(pr)
 
 	assert.Equal(t, "https://github.com/owner/repo/pull/42", snap.URL)
 	assert.Equal(t, 42, snap.Number)
@@ -45,7 +46,7 @@ func TestToSnapshot_WithHeadSHAAndPipelineStatus(t *testing.T) {
 	pr.SetInitialHeadCommitSHA("abc123def456")
 	pr.SetInitialPipelineStatus(pullrequest.PipelineStatusSuccess)
 
-	snap := pr.ToSnapshot()
+	snap := toSnapshot(pr)
 
 	assert.Equal(t, "abc123def456", snap.HeadCommitSHA)
 	assert.Equal(t, pullrequest.PipelineStatusSuccess, snap.PipelineStatus)
@@ -56,7 +57,7 @@ func TestToSnapshot_WithLastActivityCheck(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 	pr.SetInitialLastActivityCheck(checkTime)
 
-	snap := pr.ToSnapshot()
+	snap := toSnapshot(pr)
 
 	assert.True(t, snap.LastActivityCheck.Equal(checkTime))
 }
@@ -69,7 +70,7 @@ func TestToSnapshot_WithReviews(t *testing.T) {
 		"alice": pullrequest.NewReview(testutil.NewTestAuthor("alice"), pullrequest.ReviewStateChangesRequested, submittedAt),
 	})
 
-	snap := pr.ToSnapshot()
+	snap := toSnapshot(pr)
 
 	require.Len(t, snap.Reviews, 2)
 	assert.Equal(t, pullrequest.ReviewStateApproved, snap.Reviews["joe"].State)
@@ -82,7 +83,7 @@ func TestToSnapshot_DoesNotIncludeActivities(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 	pr.AddActivity(testutil.NewTestActivity(pullrequest.ActivityTypeComment, time.Now()))
 
-	snap := pr.ToSnapshot()
+	snap := toSnapshot(pr)
 
 	// Snapshots have no activity field — just verify the snapshot is well-formed.
 	assert.Equal(t, 1, snap.Number)
@@ -95,7 +96,7 @@ func TestReconstitutePRFromSnapshot_RoundTrip(t *testing.T) {
 	lastCheck := time.Date(2026, 2, 28, 12, 0, 0, 0, time.UTC)
 	submittedAt := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
 
-	original := pullrequest.PRStateSnapshot{
+	original := PRStateSnapshot{
 		URL:               "https://github.com/owner/repo/pull/42",
 		Number:            42,
 		Repository:        "owner/repo",
@@ -106,15 +107,15 @@ func TestReconstitutePRFromSnapshot_RoundTrip(t *testing.T) {
 		HeadCommitSHA:     "abc123",
 		PipelineStatus:    pullrequest.PipelineStatusFailed,
 		LastActivityCheck: lastCheck,
-		Reviews: map[string]pullrequest.ReviewSnapshot{
+		Reviews: map[string]ReviewSnapshot{
 			"joe": {State: pullrequest.ReviewStateApproved, SubmittedAt: submittedAt},
 		},
 	}
 
-	pr, err := pullrequest.ReconstitutePRFromSnapshot(original)
+	pr, err := original.toDomain()
 	require.NoError(t, err)
 
-	restored := pr.ToSnapshot()
+	restored := toSnapshot(pr)
 
 	assert.Equal(t, original.URL, restored.URL)
 	assert.Equal(t, original.Number, restored.Number)
@@ -135,7 +136,7 @@ func TestReconstitutePRFromSnapshot_IsOpen(t *testing.T) {
 	// Only open PRs are ever persisted; reconstituted PRs must always be open.
 	snap := minimalSnapshot(1)
 
-	pr, err := pullrequest.ReconstitutePRFromSnapshot(snap)
+	pr, err := snap.toDomain()
 
 	require.NoError(t, err)
 	assert.True(t, pr.IsOpen())
@@ -145,11 +146,11 @@ func TestReconstitutePRFromSnapshot_NoEvents(t *testing.T) {
 	// Reconstitution restores known state — it must not raise any domain events.
 	// Verified by checking Close returns exactly one event (not extras from reconstitution).
 	snap := minimalSnapshot(1)
-	snap.Reviews = map[string]pullrequest.ReviewSnapshot{
+	snap.Reviews = map[string]ReviewSnapshot{
 		"joe": {State: pullrequest.ReviewStateApproved, SubmittedAt: time.Now()},
 	}
 
-	pr, err := pullrequest.ReconstitutePRFromSnapshot(snap)
+	pr, err := snap.toDomain()
 	require.NoError(t, err)
 
 	// Reconstitution uses SetInitial* methods — pure state setters that never raise events.
@@ -162,7 +163,7 @@ func TestReconstitutePRFromSnapshot_BehavesCorrectly_CloseRaisesEvent(t *testing
 	// After reconstitution the PR should behave like any other PR.
 	snap := minimalSnapshot(1)
 
-	pr, err := pullrequest.ReconstitutePRFromSnapshot(snap)
+	pr, err := snap.toDomain()
 	require.NoError(t, err)
 
 	events := pr.Close()
@@ -175,11 +176,11 @@ func TestReconstitutePRFromSnapshot_BehavesCorrectly_SameReviewStateNoEvent(t *t
 	// Restored reviews should suppress duplicate ReviewStateChanged events.
 	submittedAt := time.Now().Add(-1 * time.Hour)
 	snap := minimalSnapshot(1)
-	snap.Reviews = map[string]pullrequest.ReviewSnapshot{
+	snap.Reviews = map[string]ReviewSnapshot{
 		"joe": {State: pullrequest.ReviewStateApproved, SubmittedAt: submittedAt},
 	}
 
-	pr, err := pullrequest.ReconstitutePRFromSnapshot(snap)
+	pr, err := snap.toDomain()
 	require.NoError(t, err)
 
 	// Re-applying the same review state must produce no event.
@@ -191,7 +192,7 @@ func TestReconstitutePRFromSnapshot_NilReviews_Succeeds(t *testing.T) {
 	snap := minimalSnapshot(1)
 	snap.Reviews = nil
 
-	pr, err := pullrequest.ReconstitutePRFromSnapshot(snap)
+	pr, err := snap.toDomain()
 
 	require.NoError(t, err)
 	assert.Empty(t, pr.Reviews())
@@ -201,7 +202,7 @@ func TestReconstitutePRFromSnapshot_InvalidURL_ReturnsError(t *testing.T) {
 	snap := minimalSnapshot(1)
 	snap.URL = ""
 
-	_, err := pullrequest.ReconstitutePRFromSnapshot(snap)
+	_, err := snap.toDomain()
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "reconstitute PR")
@@ -210,7 +211,7 @@ func TestReconstitutePRFromSnapshot_InvalidURL_ReturnsError(t *testing.T) {
 func TestReconstitutePRFromSnapshot_InvalidNumber_ReturnsError(t *testing.T) {
 	snap := minimalSnapshot(0) // number 0 is invalid
 
-	_, err := pullrequest.ReconstitutePRFromSnapshot(snap)
+	_, err := snap.toDomain()
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "reconstitute PR")
@@ -220,7 +221,7 @@ func TestReconstitutePRFromSnapshot_EmptyTitle_ReturnsError(t *testing.T) {
 	snap := minimalSnapshot(1)
 	snap.Title = ""
 
-	_, err := pullrequest.ReconstitutePRFromSnapshot(snap)
+	_, err := snap.toDomain()
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "title")
@@ -230,7 +231,7 @@ func TestReconstitutePRFromSnapshot_ZeroCreatedAt_ReturnsError(t *testing.T) {
 	snap := minimalSnapshot(1)
 	snap.CreatedAt = time.Time{}
 
-	_, err := pullrequest.ReconstitutePRFromSnapshot(snap)
+	_, err := snap.toDomain()
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "createdAt")
@@ -240,7 +241,7 @@ func TestReconstitutePRFromSnapshot_InvalidRepository_ReturnsError(t *testing.T)
 	snap := minimalSnapshot(1)
 	snap.Repository = "not-valid" // missing slash
 
-	_, err := pullrequest.ReconstitutePRFromSnapshot(snap)
+	_, err := snap.toDomain()
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "reconstitute PR")
@@ -341,7 +342,7 @@ func TestPRStateSnapshot_JSONRoundTrip(t *testing.T) {
 	lastCheck := time.Date(2026, 2, 28, 12, 0, 0, 0, time.UTC)
 	submittedAt := time.Date(2026, 2, 1, 9, 0, 0, 0, time.UTC)
 
-	original := pullrequest.PRStateSnapshot{
+	original := PRStateSnapshot{
 		URL:               "https://github.com/owner/repo/pull/7",
 		Number:            7,
 		Repository:        "owner/repo",
@@ -352,7 +353,7 @@ func TestPRStateSnapshot_JSONRoundTrip(t *testing.T) {
 		HeadCommitSHA:     "deadbeef",
 		PipelineStatus:    pullrequest.PipelineStatusRunning,
 		LastActivityCheck: lastCheck,
-		Reviews: map[string]pullrequest.ReviewSnapshot{
+		Reviews: map[string]ReviewSnapshot{
 			"joe":   {State: pullrequest.ReviewStateApproved, SubmittedAt: submittedAt},
 			"alice": {State: pullrequest.ReviewStateDismissed, SubmittedAt: submittedAt},
 		},
@@ -365,7 +366,7 @@ func TestPRStateSnapshot_JSONRoundTrip(t *testing.T) {
 	assert.Contains(t, string(data), `"pipelineStatus":"running"`)
 	assert.Contains(t, string(data), `"state":"approved"`)
 
-	var restored pullrequest.PRStateSnapshot
+	var restored PRStateSnapshot
 	require.NoError(t, json.Unmarshal(data, &restored))
 
 	assert.Equal(t, original.URL, restored.URL)
@@ -383,14 +384,14 @@ func TestPRStateSnapshot_JSONRoundTrip(t *testing.T) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 // minimalSnapshot returns the smallest valid PRStateSnapshot for the given PR number.
-func minimalSnapshot(number int) pullrequest.PRStateSnapshot {
-	return pullrequest.PRStateSnapshot{
+func minimalSnapshot(number int) PRStateSnapshot {
+	return PRStateSnapshot{
 		URL:        fmt.Sprintf("https://github.com/owner/repo/pull/%d", number),
 		Number:     number,
 		Repository: "owner/repo",
 		Author:     "alice",
 		Title:      "Test PR",
 		CreatedAt:  time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-		Reviews:    map[string]pullrequest.ReviewSnapshot{},
+		Reviews:    map[string]ReviewSnapshot{},
 	}
 }

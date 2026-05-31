@@ -17,7 +17,7 @@ import (
 func TestUpdateDisplay_SortsByCreatedDate(t *testing.T) {
 	// Arrange
 	mockUIPort := mocks.NewUIPort(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
 
 	now := time.Now()
 
@@ -39,10 +39,10 @@ func TestUpdateDisplay_SortsByCreatedDate(t *testing.T) {
 				prs[2].Number() == 3
 		}),
 		userPRs,
-		mockSeenRepo,
+		mockTrackingRepo,
 	).Return()
 
-	uc := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockSeenRepo)
+	uc := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockTrackingRepo)
 
 	// Act
 	err := uc.Execute(context.Background(), requestedPRs, userPRs)
@@ -55,7 +55,7 @@ func TestUpdateDisplay_SortsByCreatedDate(t *testing.T) {
 func TestUpdateDisplay_EmptyPRs(t *testing.T) {
 	// Arrange
 	mockUIPort := mocks.NewUIPort(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
 
 	var emptyPRs []*pullrequest.PullRequest
 
@@ -63,10 +63,10 @@ func TestUpdateDisplay_EmptyPRs(t *testing.T) {
 	mockUIPort.On("UpdateDisplay",
 		mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool { return len(prs) == 0 }),
 		mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool { return len(prs) == 0 }),
-		mockSeenRepo,
+		mockTrackingRepo,
 	).Return()
 
-	uc := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockSeenRepo)
+	uc := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockTrackingRepo)
 
 	// Act
 	err := uc.Execute(context.Background(), emptyPRs, emptyPRs)
@@ -79,7 +79,7 @@ func TestUpdateDisplay_EmptyPRs(t *testing.T) {
 func TestUpdateDisplay_BothRequestedAndUserPRs(t *testing.T) {
 	// Arrange
 	mockUIPort := mocks.NewUIPort(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
 
 	now := time.Now()
 
@@ -103,10 +103,10 @@ func TestUpdateDisplay_BothRequestedAndUserPRs(t *testing.T) {
 			// User PRs sorted
 			return len(prs) == 2 && prs[0].Number() == 3 && prs[1].Number() == 4
 		}),
-		mockSeenRepo,
+		mockTrackingRepo,
 	).Return()
 
-	uc := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockSeenRepo)
+	uc := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockTrackingRepo)
 
 	// Act
 	err := uc.Execute(context.Background(), requestedPRs, userPRs)
@@ -119,14 +119,14 @@ func TestUpdateDisplay_BothRequestedAndUserPRs(t *testing.T) {
 func TestUpdateDisplay_SinglePR(t *testing.T) {
 	// Arrange
 	mockUIPort := mocks.NewUIPort(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
 
 	pr := testutil.NewTestPullRequest(1)
 	prs := []*pullrequest.PullRequest{pr}
 
-	mockUIPort.On("UpdateDisplay", prs, []*pullrequest.PullRequest{}, mockSeenRepo).Return()
+	mockUIPort.On("UpdateDisplay", prs, []*pullrequest.PullRequest{}, mockTrackingRepo).Return()
 
-	uc := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockSeenRepo)
+	uc := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockTrackingRepo)
 
 	// Act
 	err := uc.Execute(context.Background(), prs, []*pullrequest.PullRequest{})
@@ -139,16 +139,16 @@ func TestUpdateDisplay_SinglePR(t *testing.T) {
 func TestUpdateDisplay_PreservesOriginalSlice(t *testing.T) {
 	// Arrange
 	mockUIPort := mocks.NewUIPort(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
 
 	now := time.Now()
 	pr1 := testutil.NewTestPullRequest(1, testutil.WithCreatedAt(now.Add(-1*time.Hour)))
 	pr2 := testutil.NewTestPullRequest(2, testutil.WithCreatedAt(now.Add(-2*time.Hour)))
 	originalOrder := []*pullrequest.PullRequest{pr1, pr2}
 
-	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockSeenRepo).Return()
+	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockTrackingRepo).Return()
 
-	uc := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockSeenRepo)
+	uc := usecase.NewUpdatePullRequestDisplayUseCase(mockUIPort, mockTrackingRepo)
 
 	// Act
 	err := uc.Execute(context.Background(), originalOrder, []*pullrequest.PullRequest{})

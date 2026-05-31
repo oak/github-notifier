@@ -28,6 +28,10 @@ func NewTestAuthor(login string) pullrequest.Author {
 	return author
 }
 
+func NewTestReview(state pullrequest.ReviewState, submittedAt time.Time) *pullrequest.Review {
+	return pullrequest.NewReview(NewTestAuthor("reviewer"), state, submittedAt)
+}
+
 // NewTestPullRequest creates a test pull request with sensible defaults
 func NewTestPullRequest(number int, opts ...func(*testPRBuilder)) *pullrequest.PullRequest {
 	builder := &testPRBuilder{

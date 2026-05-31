@@ -234,7 +234,6 @@ func (app *App) startWithConfig(cfg *config.Config) {
 	checkNewPRsUseCase := usecase.NewCheckNewPullRequestsUseCase(
 		githubAdapter,
 		stateRepo,
-		stateRepo,
 		prFilter,
 		eventBus,
 	)
@@ -249,7 +248,6 @@ func (app *App) startWithConfig(cfg *config.Config) {
 		githubAdapter,
 		stateRepo,
 		activityScheduler,
-		stateRepo,
 		eventBus,
 		githubAdapter.AuthenticatedUser(),
 	)

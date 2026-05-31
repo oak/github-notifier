@@ -5,13 +5,9 @@ import (
 )
 
 // PullRequestRepository is the port for fetching pull requests from external sources
-//
-//nolint:revive // keeping full name for clarity in this context
 type PullRequestRepository interface {
-	// FetchRequestedReviews fetches PRs where the user is requested to review
 	FetchRequestedReviews() ([]*PullRequest, error)
 
-	// FetchUserCreated fetches PRs created by the user
 	FetchUserCreated() ([]*PullRequest, error)
 
 	// EnrichWithActivities populates PRs with their activities since the given time.
@@ -21,11 +17,9 @@ type PullRequestRepository interface {
 	EnrichWithActivities(prs []*PullRequest, since time.Time) ([]Event, error)
 
 	// FetchPRStatus fetches the current status of a specific PR (open, merged, closed).
-	// Used to determine the final status of PRs that have disappeared from the open PR list.
 	FetchPRStatus(owner, repo string, number int) (PRStatus, error)
 
 	// AuthenticatedUser returns the login of the authenticated user.
-	// Used to filter self-authored activities in notifications and tracking.
 	AuthenticatedUser() string
 }
 
@@ -39,32 +33,13 @@ type PullRequestRepository interface {
 // an upsert. Only open PRs are ever stored; closed/merged PRs are excluded
 // before Save is called.
 type PRTrackingRepository interface {
-	// Save replaces the entire stored set with the provided snapshots.
-	// Called after every successful check cycle with the current open PR set.
-	Save(snapshots []PRStateSnapshot) error
+	Fetch(prIdentifier PRIdentifier) (*PullRequest, error)
 
-	// LoadAll returns all previously saved snapshots.
-	// Returns an empty slice (not an error) when no state has been saved yet.
-	LoadAll() ([]PRStateSnapshot, error)
+	LoadAll() ([]PullRequest, error)
 
-	// Clear removes all stored snapshots (e.g. on a hard reset).
-	Clear() error
-}
+	Update(pullRequest PullRequest) error
 
-// SeenRepository is the port for persisting seen pull requests
-type SeenRepository interface {
-	// MarkAsSeen marks a PR as seen
-	MarkAsSeen(id PRIdentifier) error
+	Save(pullRequests []PullRequest) error
 
-	// UnmarkAsSeen marks a PR as unseen (e.g., when new activity occurs)
-	UnmarkAsSeen(id PRIdentifier) error
-
-	// HasBeenSeen checks if a PR has been seen
-	HasBeenSeen(id PRIdentifier) bool
-
-	// IsEmpty returns true if no PRs have been marked as seen yet
-	IsEmpty() bool
-
-	// Clear removes all seen PR records
 	Clear() error
 }

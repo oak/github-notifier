@@ -49,12 +49,12 @@ func (_m *SeenRepository) HasBeenSeen(id pullrequest.PRIdentifier) bool {
 	return r0
 }
 
-// IsEmpty provides a mock function with no fields
-func (_m *SeenRepository) IsEmpty() bool {
+// HasNoSeenPRs provides a mock function with no fields
+func (_m *SeenRepository) HasNoSeenPRs() bool {
 	ret := _m.Called()
 
 	if len(ret) == 0 {
-		panic("no return value specified for IsEmpty")
+		panic("no return value specified for HasNoSeenPRs")
 	}
 
 	var r0 bool

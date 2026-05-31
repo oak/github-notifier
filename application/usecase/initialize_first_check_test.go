@@ -17,7 +17,7 @@ import (
 func TestInitializeFirstCheck_FirstRunEver(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockUIPort := mocks.NewUIPort(t)
 	prFilter := pullrequest.NewDraftFilter(false) // exclude drafts
 
@@ -25,19 +25,19 @@ func TestInitializeFirstCheck_FirstRunEver(t *testing.T) {
 	userPRs := testutil.CreateTestPRs(1, 1)      // 1 regular, 1 draft
 
 	// Mock expectations
-	mockSeenRepo.On("IsEmpty").Return(true)
+	mockPRTrackingRepo.On("HasNoSeenPRs").Return(true)
 	mockPRRepo.On("FetchRequestedReviews").Return(requestedPRs, nil)
 	mockPRRepo.On("FetchUserCreated").Return(userPRs, nil)
 
 	// After filtering, should only mark non-drafts as seen (2 + 1 = 3 total calls)
 	// First batch: 2 non-draft requested PRs
-	mockSeenRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Times(2)
+	mockPRTrackingRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Times(2)
 	// Second batch: 1 non-draft user PR
-	mockSeenRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Times(1)
+	mockPRTrackingRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Times(1)
 
-	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockSeenRepo).Once()
+	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockPRTrackingRepo).Once()
 
-	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockSeenRepo, prFilter, mockUIPort)
+	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockPRTrackingRepo, prFilter, mockUIPort)
 
 	// Act
 	isFirstRun, seededPRs, err := uc.Execute(context.Background())
@@ -46,7 +46,7 @@ func TestInitializeFirstCheck_FirstRunEver(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, isFirstRun, "Should return true on first run")
 	assert.Len(t, seededPRs, 3, "Should return all 3 non-draft PRs")
-	mockSeenRepo.AssertExpectations(t)
+	mockPRTrackingRepo.AssertExpectations(t)
 	mockPRRepo.AssertExpectations(t)
 	mockUIPort.AssertExpectations(t)
 }
@@ -54,15 +54,15 @@ func TestInitializeFirstCheck_FirstRunEver(t *testing.T) {
 func TestInitializeFirstCheck_NotFirstRun(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockUIPort := mocks.NewUIPort(t)
 	prFilter := pullrequest.NewDraftFilter(false)
 
 	// Mock expectations
-	mockSeenRepo.On("IsEmpty").Return(false)
+	mockPRTrackingRepo.On("IsEmpty").Return(false)
 	// No other calls should be made
 
-	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockSeenRepo, prFilter, mockUIPort)
+	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockPRTrackingRepo, prFilter, mockUIPort)
 
 	// Act
 	isFirstRun, seededPRs, err := uc.Execute(context.Background())
@@ -71,7 +71,7 @@ func TestInitializeFirstCheck_NotFirstRun(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, isFirstRun, "Should return false when not first run")
 	assert.Nil(t, seededPRs, "Should return nil PRs when not first run")
-	mockSeenRepo.AssertExpectations(t)
+	mockPRTrackingRepo.AssertExpectations(t)
 	mockPRRepo.AssertNotCalled(t, "FetchRequestedReviews")
 	mockPRRepo.AssertNotCalled(t, "FetchUserCreated")
 	mockUIPort.AssertNotCalled(t, "UpdateDisplay")
@@ -80,17 +80,17 @@ func TestInitializeFirstCheck_NotFirstRun(t *testing.T) {
 func TestInitializeFirstCheck_FetchRequestedReviewsError(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockUIPort := mocks.NewUIPort(t)
 	prFilter := pullrequest.NewDraftFilter(false)
 
 	expectedErr := errors.New("github api error")
 
 	// Mock expectations
-	mockSeenRepo.On("IsEmpty").Return(true)
+	mockPRTrackingRepo.On("IsEmpty").Return(true)
 	mockPRRepo.On("FetchRequestedReviews").Return(nil, expectedErr)
 
-	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockSeenRepo, prFilter, mockUIPort)
+	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockPRTrackingRepo, prFilter, mockUIPort)
 
 	// Act
 	isFirstRun, seededPRs, err := uc.Execute(context.Background())
@@ -101,14 +101,14 @@ func TestInitializeFirstCheck_FetchRequestedReviewsError(t *testing.T) {
 	assert.False(t, isFirstRun, "Should return false on error")
 	assert.Nil(t, seededPRs)
 	mockPRRepo.AssertNotCalled(t, "FetchUserCreated")
-	mockSeenRepo.AssertNotCalled(t, "MarkAsSeen")
+	mockPRTrackingRepo.AssertNotCalled(t, "MarkAsSeen")
 	mockUIPort.AssertNotCalled(t, "UpdateDisplay")
 }
 
 func TestInitializeFirstCheck_FetchUserCreatedError(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockUIPort := mocks.NewUIPort(t)
 	prFilter := pullrequest.NewDraftFilter(false)
 
@@ -116,11 +116,11 @@ func TestInitializeFirstCheck_FetchUserCreatedError(t *testing.T) {
 	expectedErr := errors.New("github api error")
 
 	// Mock expectations
-	mockSeenRepo.On("IsEmpty").Return(true)
+	mockPRTrackingRepo.On("IsEmpty").Return(true)
 	mockPRRepo.On("FetchRequestedReviews").Return(requestedPRs, nil)
 	mockPRRepo.On("FetchUserCreated").Return(nil, expectedErr)
 
-	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockSeenRepo, prFilter, mockUIPort)
+	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockPRTrackingRepo, prFilter, mockUIPort)
 
 	// Act
 	isFirstRun, seededPRs, err := uc.Execute(context.Background())
@@ -130,14 +130,14 @@ func TestInitializeFirstCheck_FetchUserCreatedError(t *testing.T) {
 	assert.Equal(t, expectedErr, err)
 	assert.False(t, isFirstRun, "Should return false on error")
 	assert.Nil(t, seededPRs)
-	mockSeenRepo.AssertNotCalled(t, "MarkAsSeen")
+	mockPRTrackingRepo.AssertNotCalled(t, "MarkAsSeen")
 	mockUIPort.AssertNotCalled(t, "UpdateDisplay")
 }
 
 func TestInitializeFirstCheck_IncludeDrafts(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockUIPort := mocks.NewUIPort(t)
 	prFilter := pullrequest.NewDraftFilter(true) // include drafts
 
@@ -145,16 +145,16 @@ func TestInitializeFirstCheck_IncludeDrafts(t *testing.T) {
 	userPRs := testutil.CreateTestPRs(1, 1)      // 1 regular, 1 draft
 
 	// Mock expectations
-	mockSeenRepo.On("IsEmpty").Return(true)
+	mockPRTrackingRepo.On("IsEmpty").Return(true)
 	mockPRRepo.On("FetchRequestedReviews").Return(requestedPRs, nil)
 	mockPRRepo.On("FetchUserCreated").Return(userPRs, nil)
 
 	// When including drafts, all PRs should be marked as seen (3 + 2 = 5 calls)
-	mockSeenRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Times(5)
+	mockPRTrackingRepo.On("MarkAsSeen", mock.AnythingOfType("pullrequest.PRIdentifier")).Return(nil).Times(5)
 
-	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockSeenRepo).Once()
+	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockPRTrackingRepo).Once()
 
-	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockSeenRepo, prFilter, mockUIPort)
+	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockPRTrackingRepo, prFilter, mockUIPort)
 
 	// Act
 	isFirstRun, seededPRs, err := uc.Execute(context.Background())
@@ -163,25 +163,25 @@ func TestInitializeFirstCheck_IncludeDrafts(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, isFirstRun)
 	assert.Len(t, seededPRs, 5, "Should return all 5 PRs including drafts")
-	mockSeenRepo.AssertExpectations(t)
+	mockPRTrackingRepo.AssertExpectations(t)
 }
 
 func TestInitializeFirstCheck_NoPRs(t *testing.T) {
 	// Arrange
 	mockPRRepo := mocks.NewPullRequestRepository(t)
-	mockSeenRepo := mocks.NewSeenRepository(t)
+	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockUIPort := mocks.NewUIPort(t)
 	prFilter := pullrequest.NewDraftFilter(false)
 
 	emptyPRs := []*pullrequest.PullRequest{} // empty slice, not nil
 
 	// Mock expectations
-	mockSeenRepo.On("IsEmpty").Return(true)
+	mockPRTrackingRepo.On("IsEmpty").Return(true)
 	mockPRRepo.On("FetchRequestedReviews").Return(emptyPRs, nil)
 	mockPRRepo.On("FetchUserCreated").Return(emptyPRs, nil)
-	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockSeenRepo).Once()
+	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockPRTrackingRepo).Once()
 
-	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockSeenRepo, prFilter, mockUIPort)
+	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockPRTrackingRepo, prFilter, mockUIPort)
 
 	// Act
 	isFirstRun, seededPRs, err := uc.Execute(context.Background())
@@ -190,7 +190,7 @@ func TestInitializeFirstCheck_NoPRs(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, isFirstRun)
 	assert.Empty(t, seededPRs, "Should return empty slice when no PRs exist")
-	mockSeenRepo.AssertExpectations(t)
+	mockPRTrackingRepo.AssertExpectations(t)
 	mockPRRepo.AssertExpectations(t)
 	mockUIPort.AssertExpectations(t)
 }

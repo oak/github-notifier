@@ -11,13 +11,13 @@ import (
 // TrackingEventHandler handles domain events by updating tracking state
 // Implements the EventHandler port
 type TrackingEventHandler struct {
-	seenRepo pullrequest.SeenRepository
+	prTrackingRepo pullrequest.PRTrackingRepository
 }
 
 // NewTrackingEventHandler creates a new tracking event handler
-func NewTrackingEventHandler(seenRepo pullrequest.SeenRepository) *TrackingEventHandler {
+func NewTrackingEventHandler(prTrackingRepo pullrequest.PRTrackingRepository) *TrackingEventHandler {
 	return &TrackingEventHandler{
-		seenRepo: seenRepo,
+		prTrackingRepo: prTrackingRepo,
 	}
 }
 
@@ -75,8 +75,8 @@ func (h *TrackingEventHandler) handlePRMerged(event *pullrequest.Merged) error {
 	log.Info().Msgf("Tracking: PR merged - %s in %s",
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner())
-	// Remove from tracking so it doesn't trigger repeated notifications
-	_ = h.seenRepo.UnmarkAsSeen(event.PullRequestID) //nolint:errcheck // cleanup is best-effort
+	event.PullRequest.MarkAsUnseen()
+	_ = h.prTrackingRepo.Update(event.PullRequest)
 	return nil
 }
 
@@ -85,8 +85,8 @@ func (h *TrackingEventHandler) handlePRClosed(event *pullrequest.Closed) error {
 	log.Info().Msgf("Tracking: PR closed - %s in %s",
 		event.PullRequestID.URL(),
 		event.Repository.NameWithOwner())
-	// Remove from tracking so it doesn't trigger repeated notifications
-	_ = h.seenRepo.UnmarkAsSeen(event.PullRequestID) //nolint:errcheck // cleanup is best-effort
+	event.PullRequest.MarkAsUnseen()
+	_ = h.prTrackingRepo.Update(event.PullRequest)
 	return nil
 }
 

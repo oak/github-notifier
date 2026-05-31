@@ -13,6 +13,60 @@ type PRTrackingRepository struct {
 	mock.Mock
 }
 
+// HasNoSeenPRs provides a mock function with no fields
+func (_m *PRTrackingRepository) HasNoSeenPRs() bool {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for HasNoSeenPRs")
+	}
+
+	var r0 bool
+	if rf, ok := ret.Get(0).(func() bool); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	return r0
+}
+
+// HasBeenSeen provides a mock function with given fields: id
+func (_m *PRTrackingRepository) HasBeenSeen(id pullrequest.PRIdentifier) bool {
+	ret := _m.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for HasBeenSeen")
+	}
+
+	var r0 bool
+	if rf, ok := ret.Get(0).(func(pullrequest.PRIdentifier) bool); ok {
+		r0 = rf(id)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	return r0
+}
+
+// ClearAllSeenPRs provides a mock function with no fields
+func (_m *PRTrackingRepository) ClearAllSeenPRs() error {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ClearAllSeenPRs")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func() error); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // Clear provides a mock function with no fields
 func (_m *PRTrackingRepository) Clear() error {
 	ret := _m.Called()
@@ -32,23 +86,23 @@ func (_m *PRTrackingRepository) Clear() error {
 }
 
 // LoadAll provides a mock function with no fields
-func (_m *PRTrackingRepository) LoadAll() ([]pullrequest.PRStateSnapshot, error) {
+func (_m *PRTrackingRepository) LoadAll() ([]pullrequest.PullRequest, error) {
 	ret := _m.Called()
 
 	if len(ret) == 0 {
 		panic("no return value specified for LoadAll")
 	}
 
-	var r0 []pullrequest.PRStateSnapshot
+	var r0 []pullrequest.PullRequest
 	var r1 error
-	if rf, ok := ret.Get(0).(func() ([]pullrequest.PRStateSnapshot, error)); ok {
+	if rf, ok := ret.Get(0).(func() ([]pullrequest.PullRequest, error)); ok {
 		return rf()
 	}
-	if rf, ok := ret.Get(0).(func() []pullrequest.PRStateSnapshot); ok {
+	if rf, ok := ret.Get(0).(func() []pullrequest.PullRequest); ok {
 		r0 = rf()
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]pullrequest.PRStateSnapshot)
+			r0 = ret.Get(0).([]pullrequest.PullRequest)
 		}
 	}
 
@@ -62,7 +116,7 @@ func (_m *PRTrackingRepository) LoadAll() ([]pullrequest.PRStateSnapshot, error)
 }
 
 // Save provides a mock function with given fields: snapshots
-func (_m *PRTrackingRepository) Save(snapshots []pullrequest.PRStateSnapshot) error {
+func (_m *PRTrackingRepository) Save(snapshots []pullrequest.PullRequest) error {
 	ret := _m.Called(snapshots)
 
 	if len(ret) == 0 {
@@ -70,8 +124,44 @@ func (_m *PRTrackingRepository) Save(snapshots []pullrequest.PRStateSnapshot) er
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func([]pullrequest.PRStateSnapshot) error); ok {
+	if rf, ok := ret.Get(0).(func([]pullrequest.PullRequest) error); ok {
 		r0 = rf(snapshots)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MarkAsSeen provides a mock function with given fields: id
+func (_m *PRTrackingRepository) MarkAsSeen(id pullrequest.PRIdentifier) error {
+	ret := _m.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MarkAsSeen")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(pullrequest.PRIdentifier) error); ok {
+		r0 = rf(id)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// UnmarkAsSeen provides a mock function with given fields: id
+func (_m *PRTrackingRepository) UnmarkAsSeen(id pullrequest.PRIdentifier) error {
+	ret := _m.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UnmarkAsSeen")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(pullrequest.PRIdentifier) error); ok {
+		r0 = rf(id)
 	} else {
 		r0 = ret.Error(0)
 	}

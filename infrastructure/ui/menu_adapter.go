@@ -227,7 +227,7 @@ func (m *MenuAdapter) initializeMenuStructure() {
 
 // UpdateDisplay implements the UIPort interface for systray menu display
 // This adapter specifically renders PRs as a system tray menu with dropdowns
-func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullrequest.PullRequest, seenRepo pullrequest.SeenRepository) {
+func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullrequest.PullRequest, prTrackingRepo pullrequest.PRTrackingRepository) {
 	// Pre-create all menu item slots on the first call so the
 	// dbusmenu/appindicator model contains every node from the start.
 	m.initializeMenuStructure()
@@ -244,7 +244,7 @@ func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullre
 	// And PRs with new activity will show asterisks again
 	m.clickedPRsMu.Lock()
 	for _, pr := range requestedReviewPRs {
-		if seenRepo.HasBeenSeen(pr.Identifier()) {
+		if prTrackingRepo.HasBeenSeen(pr.Identifier()) {
 			if !m.clickedPRs[pr.URL()] {
 				m.clickedPRs[pr.URL()] = true
 			}
@@ -254,7 +254,7 @@ func (m *MenuAdapter) UpdateDisplay(requestedReviewPRs, userCreatedPRs []*pullre
 		}
 	}
 	for _, pr := range userCreatedPRs {
-		if seenRepo.HasBeenSeen(pr.Identifier()) {
+		if prTrackingRepo.HasBeenSeen(pr.Identifier()) {
 			if !m.clickedPRs[pr.URL()] {
 				m.clickedPRs[pr.URL()] = true
 			}

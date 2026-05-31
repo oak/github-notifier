@@ -19,6 +19,39 @@ type PullRequest struct {
 	headCommitSHA     string             // Latest commit SHA (head)
 	reviews           map[string]*Review // reviewer login -> latest review
 	pipelineStatus    PipelineStatus     // Latest CI/CD pipeline rollup status
+	seen              bool
+}
+
+func ReconstitutePR(
+	identifier PRIdentifier,
+	title string,
+	repository RepositoryInfo,
+	author Author,
+	status PRStatus,
+	createdAt time.Time,
+	isDraft bool,
+	activities []*Activity,
+	lastActivityCheck time.Time,
+	headCommitSHA string,
+	reviews map[string]*Review,
+	pipelineStatus PipelineStatus,
+	seen bool,
+) *PullRequest {
+	return &PullRequest{
+		identifier:        identifier,
+		title:             title,
+		repository:        repository,
+		author:            author,
+		status:            status,
+		createdAt:         createdAt,
+		isDraft:           isDraft,
+		activities:        activities,
+		lastActivityCheck: lastActivityCheck,
+		headCommitSHA:     headCommitSHA,
+		reviews:           reviews,
+		pipelineStatus:    pipelineStatus,
+		seen:              seen,
+	}
 }
 
 // NewPullRequest creates a new pull request with validation
@@ -142,21 +175,6 @@ func (pr *PullRequest) Merge() []Event {
 	return nil
 }
 
-// RepositoryName returns the repository name with owner
-func (pr *PullRequest) RepositoryName() string {
-	return pr.repository.NameWithOwner()
-}
-
-// AuthorLogin returns the author's login
-func (pr *PullRequest) AuthorLogin() string {
-	return pr.author.Login()
-}
-
-// Equals compares two pull requests by their identifier
-func (pr *PullRequest) Equals(other *PullRequest) bool {
-	return pr.identifier.Equals(other.identifier)
-}
-
 // AddActivity adds a new activity to the PR and returns an ActivityDetected event.
 // This maintains the aggregate's consistency boundary and follows the same pattern
 // as Close/Merge which raise StatusChanged events.
@@ -260,6 +278,61 @@ func (pr *PullRequest) SetInitialHeadCommitSHA(sha string) {
 	pr.headCommitSHA = sha
 }
 
+// Reviews returns the current reviews map (copy)
+func (pr *PullRequest) Reviews() map[string]*Review {
+	result := make(map[string]*Review, len(pr.reviews))
+	for k, v := range pr.reviews {
+		result[k] = v
+	}
+	return result
+}
+
+// PipelineStatus returns the current CI/CD pipeline rollup status
+func (pr *PullRequest) PipelineStatus() PipelineStatus {
+	return pr.pipelineStatus
+}
+
+// UpdatePipelineStatus updates the pipeline status and returns a PipelineStatusChanged event
+// if the status has changed. Returns nil when the status is unchanged.
+func (pr *PullRequest) UpdatePipelineStatus(newStatus PipelineStatus) []Event {
+	if pr.pipelineStatus == newStatus {
+		return nil
+	}
+
+	oldStatus := pr.pipelineStatus
+	pr.pipelineStatus = newStatus
+
+	event := NewPipelineStatusChanged(pr, oldStatus, newStatus)
+	return []Event{&event}
+}
+
+func (pr *PullRequest) Seen() bool {
+	return pr.seen
+}
+
+func (pr *PullRequest) MarkAsSeen() {
+	pr.seen = true
+}
+
+func (pr *PullRequest) MarkAsUnseen() {
+	pr.seen = false
+}
+
+// IsSeen returns true if the PR has been marked as seen
+func (pr *PullRequest) IsSeen() bool {
+	return pr.seen
+}
+
+// RepositoryName returns the repository name with owner
+func (pr *PullRequest) RepositoryName() string {
+	return pr.repository.NameWithOwner()
+}
+
+// AuthorLogin returns the author's login
+func (pr *PullRequest) AuthorLogin() string {
+	return pr.author.Login()
+}
+
 // SetInitialPipelineStatus sets the pipeline status without raising any events.
 // Used to restore known state from a previous check cycle, so that
 // UpdatePipelineStatus can correctly detect changes vs. no-ops.
@@ -342,35 +415,12 @@ func (pr *PullRequest) SetInitialReviews(reviews map[string]*Review) {
 	pr.reviews = reviews
 }
 
-// Reviews returns the current reviews map (copy)
-func (pr *PullRequest) Reviews() map[string]*Review {
-	result := make(map[string]*Review, len(pr.reviews))
-	for k, v := range pr.reviews {
-		result[k] = v
-	}
-	return result
-}
-
-// PipelineStatus returns the current CI/CD pipeline rollup status
-func (pr *PullRequest) PipelineStatus() PipelineStatus {
-	return pr.pipelineStatus
-}
-
-// UpdatePipelineStatus updates the pipeline status and returns a PipelineStatusChanged event
-// if the status has changed. Returns nil when the status is unchanged.
-func (pr *PullRequest) UpdatePipelineStatus(newStatus PipelineStatus) []Event {
-	if pr.pipelineStatus == newStatus {
-		return nil
-	}
-
-	oldStatus := pr.pipelineStatus
-	pr.pipelineStatus = newStatus
-
-	event := NewPipelineStatusChanged(pr, oldStatus, newStatus)
-	return []Event{&event}
-}
-
 // ReviewSummary returns a ReviewSummary for display purposes
 func (pr *PullRequest) ReviewSummary() *ReviewSummary {
 	return NewReviewSummary(pr.reviews)
+}
+
+// Equals compares two pull requests by their identifier
+func (pr *PullRequest) Equals(other *PullRequest) bool {
+	return pr.identifier.Equals(other.identifier)
 }
