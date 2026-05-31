@@ -44,8 +44,8 @@ func TestToSnapshot_BasicFields(t *testing.T) {
 
 func TestToSnapshot_WithHeadSHAAndPipelineStatus(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
-	pr.SetInitialHeadCommitSHA("abc123def456")
-	pr.SetInitialPipelineStatus(pullrequest.PipelineStatusSuccess)
+	pr.SetHeadCommitSHA("abc123def456")
+	pr.SetPipelineStatus(pullrequest.PipelineStatusSuccess)
 
 	snap := persistence.ToSnapshot(pr)
 
@@ -56,7 +56,7 @@ func TestToSnapshot_WithHeadSHAAndPipelineStatus(t *testing.T) {
 func TestToSnapshot_WithLastActivityCheck(t *testing.T) {
 	checkTime := time.Date(2026, 2, 28, 12, 0, 0, 0, time.UTC)
 	pr := testutil.NewTestPullRequest(1)
-	pr.SetInitialLastActivityCheck(checkTime)
+	pr.SetLastActivityCheck(checkTime)
 
 	snap := persistence.ToSnapshot(pr)
 
@@ -66,7 +66,7 @@ func TestToSnapshot_WithLastActivityCheck(t *testing.T) {
 func TestToSnapshot_WithReviews(t *testing.T) {
 	pr := testutil.NewTestPullRequest(1)
 	submittedAt := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
-	pr.SetInitialReviews(map[string]*pullrequest.Review{
+	pr.SetReviews(map[string]*pullrequest.Review{
 		"joe":   pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, submittedAt),
 		"alice": pullrequest.NewReview(testutil.NewTestAuthor("alice"), pullrequest.ReviewStateChangesRequested, submittedAt),
 	})

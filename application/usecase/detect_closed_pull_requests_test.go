@@ -260,9 +260,9 @@ func TestDetectClosedPRs_TrackPRs_PreservesEnrichmentData(t *testing.T) {
 	pr1 := testutil.NewTestPullRequest(1, testutil.WithURL("https://github.com/owner/repo/pull/1"))
 
 	prevPR := testutil.NewTestPullRequest(1, testutil.WithURL(pr1.URL()))
-	prevPR.SetInitialHeadCommitSHA("abc123")
-	prevPR.SetInitialPipelineStatus(pullrequest.PipelineStatusSuccess)
-	prevPR.SetInitialLastActivityCheck(time.Now().Add(-1 * time.Hour))
+	prevPR.SetHeadCommitSHA("abc123")
+	prevPR.SetPipelineStatus(pullrequest.PipelineStatusSuccess)
+	prevPR.SetLastActivityCheck(time.Now().Add(-1 * time.Hour))
 
 	var savedPRs []*pullrequest.PullRequest
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{prevPR}, nil).Once()
@@ -278,4 +278,37 @@ func TestDetectClosedPRs_TrackPRs_PreservesEnrichmentData(t *testing.T) {
 	assert.Equal(t, pullrequest.PipelineStatusSuccess, savedPRs[0].PipelineStatus())
 	assert.False(t, savedPRs[0].LastActivityCheck().IsZero())
 	mockTrackingRepo.AssertExpectations(t)
+}
+
+func TestDetectClosedPRs_TrackPRs_DoesNotMutateLivePRs(t *testing.T) {
+	// Regression: TrackPRs used to mutate the live PR objects by calling
+	// SetHeadCommitSHA/SetPipelineStatus/SetLastActivityCheck on them. Those
+	// same objects are used downstream by TrackActivityUseCase and the display.
+	mockPRRepo := mocks.NewPullRequestRepository(t)
+	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
+	mockEventPublisher := mocks.NewEventPublisher(t)
+
+	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockEventPublisher)
+
+	livePR := testutil.NewTestPullRequest(1, testutil.WithURL("https://github.com/owner/repo/pull/1"))
+	// livePR has no enrichment data (as would come from a fresh API fetch).
+
+	prevPR := testutil.NewTestPullRequest(1, testutil.WithURL(livePR.URL()))
+	prevPR.SetHeadCommitSHA("old-sha")
+	prevPR.SetPipelineStatus(pullrequest.PipelineStatusFailed)
+	prevPR.SetLastActivityCheck(time.Now().Add(-2 * time.Hour))
+
+	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{prevPR}, nil).Once()
+	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
+
+	originalSHA := livePR.HeadCommitSHA()
+	originalPipeline := livePR.PipelineStatus()
+	originalLastCheck := livePR.LastActivityCheck()
+
+	uc.TrackPRs([]*pullrequest.PullRequest{livePR})
+
+	// The live PR must be untouched — only the snapshot copy is modified.
+	assert.Equal(t, originalSHA, livePR.HeadCommitSHA(), "TrackPRs must not mutate live PR headCommitSHA")
+	assert.Equal(t, originalPipeline, livePR.PipelineStatus(), "TrackPRs must not mutate live PR pipelineStatus")
+	assert.Equal(t, originalLastCheck, livePR.LastActivityCheck(), "TrackPRs must not mutate live PR lastActivityCheck")
 }

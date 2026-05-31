@@ -35,10 +35,10 @@ func newRepoAt(path string) *jsonrepo.StateRepository {
 // makePR builds a PullRequest with all fields populated.
 func makePR(number int) *pullrequest.PullRequest {
 	pr := testutil.NewTestPullRequest(number)
-	pr.SetInitialHeadCommitSHA("abc123")
-	pr.SetInitialPipelineStatus(pullrequest.PipelineStatusSuccess)
-	pr.SetInitialLastActivityCheck(time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC))
-	pr.SetInitialReviews(map[string]*pullrequest.Review{
+	pr.SetHeadCommitSHA("abc123")
+	pr.SetPipelineStatus(pullrequest.PipelineStatusSuccess)
+	pr.SetLastActivityCheck(time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC))
+	pr.SetReviews(map[string]*pullrequest.Review{
 		"alice": testutil.NewTestReview(pullrequest.ReviewStateApproved, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
 	})
 	return pr
@@ -214,7 +214,7 @@ func TestStateRepository_PipelineStatus_AllValues_RoundTrip(t *testing.T) {
 			repo := newRepoAt(path)
 
 			pr := testutil.NewTestPullRequest(1)
-			pr.SetInitialPipelineStatus(status)
+			pr.SetPipelineStatus(status)
 
 			require.NoError(t, repo.Save([]*pullrequest.PullRequest{pr}))
 
@@ -243,7 +243,7 @@ func TestStateRepository_ReviewState_AllValues_RoundTrip(t *testing.T) {
 
 			pr := testutil.NewTestPullRequest(1)
 			submittedAt := time.Now().UTC().Truncate(time.Second)
-			pr.SetInitialReviews(map[string]*pullrequest.Review{
+			pr.SetReviews(map[string]*pullrequest.Review{
 				"bob": pullrequest.NewReview(testutil.NewTestAuthor("bob"), state, submittedAt),
 			})
 

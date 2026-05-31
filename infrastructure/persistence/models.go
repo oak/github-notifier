@@ -105,7 +105,16 @@ func (s PRStateSnapshot) ReconstitutePRFromSnapshot() (*pullrequest.PullRequest,
 		return nil, fmt.Errorf("reconstitute PR: createdAt cannot be zero")
 	}
 
-	pr := pullrequest.ReconstitutePR(
+	reviews := make(map[string]*pullrequest.Review, len(s.Reviews))
+	for login, rs := range s.Reviews {
+		reviewer, reviewerErr := pullrequest.NewAuthor(login)
+		if reviewerErr != nil {
+			return nil, fmt.Errorf("reconstitute PR: invalid reviewer %q: %w", login, reviewerErr)
+		}
+		reviews[login] = pullrequest.NewReview(reviewer, rs.State, rs.SubmittedAt)
+	}
+
+	return pullrequest.ReconstitutePR(
 		identifier,
 		s.Title,
 		repo,
@@ -116,20 +125,8 @@ func (s PRStateSnapshot) ReconstitutePRFromSnapshot() (*pullrequest.PullRequest,
 		make([]*pullrequest.Activity, 0),
 		s.LastActivityCheck,
 		s.HeadCommitSHA,
-		make(map[string]*pullrequest.Review),
+		reviews,
 		s.PipelineStatus,
 		s.Seen,
-	)
-
-	reviews := make(map[string]*pullrequest.Review, len(s.Reviews))
-	for login, rs := range s.Reviews {
-		reviewer, err := pullrequest.NewAuthor(login)
-		if err != nil {
-			return nil, fmt.Errorf("reconstitute PR: invalid reviewer %q: %w", login, err)
-		}
-		reviews[login] = pullrequest.NewReview(reviewer, rs.State, rs.SubmittedAt)
-	}
-	pr.SetInitialReviews(reviews)
-
-	return pr, nil
+	), nil
 }

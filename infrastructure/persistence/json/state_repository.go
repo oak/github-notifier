@@ -205,24 +205,3 @@ func (r *StateRepository) save(env stateEnvelope) error {
 
 	return nil
 }
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
-func contains(slice []string, s string) bool {
-	for _, v := range slice {
-		if v == s {
-			return true
-		}
-	}
-	return false
-}
-
-func remove(slice []string, s string) []string {
-	out := slice[:0:0] // reuse backing array if possible
-	for _, v := range slice {
-		if v != s {
-			out = append(out, v)
-		}
-	}
-	return out
-}

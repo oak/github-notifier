@@ -45,6 +45,9 @@ func NewDetectClosedPullRequestsUseCase(
 // ensures that TrackPullRequestActivityUseCase always sees the PREVIOUS
 // cycle's enrichment state when it loads the repository — which is what it
 // needs to detect cross-cycle changes correctly.
+//
+// Snapshot copies are built from value copies of the aggregates so that the
+// caller's live PR objects are never mutated.
 func (uc *DetectClosedPullRequestsUseCase) TrackPRs(prs []*pullrequest.PullRequest) {
 	existing, err := uc.trackingRepo.LoadAll()
 	if err != nil {
@@ -60,14 +63,18 @@ func (uc *DetectClosedPullRequestsUseCase) TrackPRs(prs []*pullrequest.PullReque
 
 	snapshots := make([]*pullrequest.PullRequest, 0, len(prs))
 	for _, pr := range prs {
+		// Snapshot is a value copy — we must not mutate the live PR objects
+		// because they are used downstream by TrackPullRequestActivityUseCase
+		// and the display update.
+		snap := *pr
 		// Preserve enrichment fields from the previous snapshot so that
 		// TrackPullRequestActivityUseCase can correctly detect changes.
 		if prev, ok := prevByURL[pr.URL()]; ok {
-			pr.SetInitialHeadCommitSHA(prev.HeadCommitSHA())
-			pr.SetInitialPipelineStatus(prev.PipelineStatus())
-			pr.SetInitialLastActivityCheck(prev.LastActivityCheck())
+			snap.SetHeadCommitSHA(prev.HeadCommitSHA())
+			snap.SetPipelineStatus(prev.PipelineStatus())
+			snap.SetLastActivityCheck(prev.LastActivityCheck())
 		}
-		snapshots = append(snapshots, pr)
+		snapshots = append(snapshots, &snap)
 	}
 
 	if err := uc.trackingRepo.Save(snapshots); err != nil {

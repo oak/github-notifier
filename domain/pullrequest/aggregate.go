@@ -37,6 +37,23 @@ func ReconstitutePR(
 	pipelineStatus PipelineStatus,
 	seen bool,
 ) *PullRequest {
+	// Defensive copies so callers cannot mutate aggregate internals
+	actCopy := make([]*Activity, len(activities))
+	copy(actCopy, activities)
+
+	revCopy := make(map[string]*Review, len(reviews))
+	for k, v := range reviews {
+		revCopy[k] = v
+	}
+
+	// lastActivityAt must never be zero; fall back to createdAt then scan activities.
+	lastActivityAt := createdAt
+	for _, a := range actCopy {
+		if a != nil && a.CreatedAt().After(lastActivityAt) {
+			lastActivityAt = a.CreatedAt()
+		}
+	}
+
 	return &PullRequest{
 		identifier:        identifier,
 		title:             title,
@@ -45,10 +62,11 @@ func ReconstitutePR(
 		status:            status,
 		createdAt:         createdAt,
 		isDraft:           isDraft,
-		activities:        activities,
+		activities:        actCopy,
+		lastActivityAt:    lastActivityAt,
 		lastActivityCheck: lastActivityCheck,
 		headCommitSHA:     headCommitSHA,
-		reviews:           reviews,
+		reviews:           revCopy,
 		pipelineStatus:    pipelineStatus,
 		seen:              seen,
 	}
@@ -255,10 +273,10 @@ func (pr *PullRequest) ClearActivities() {
 	pr.lastActivityAt = pr.createdAt
 }
 
-// SetInitialLastActivityCheck sets the last-activity-check timestamp without
-// raising any events. Used to restore known state from a previous cycle when
-// hydrating a fresh PR object retrieved from the GitHub API.
-func (pr *PullRequest) SetInitialLastActivityCheck(t time.Time) {
+// SetLastActivityCheck sets the last-activity-check timestamp without raising
+// any events. Used both to restore a prior cycle's baseline (hydration) and to
+// stamp the current check time after enrichment.
+func (pr *PullRequest) SetLastActivityCheck(t time.Time) {
 	pr.lastActivityCheck = t
 }
 
@@ -272,9 +290,9 @@ func (pr *PullRequest) HeadCommitSHA() string {
 	return pr.headCommitSHA
 }
 
-// SetInitialHeadCommitSHA sets the head commit SHA without raising any events.
-// Used to restore known state from a previous check cycle.
-func (pr *PullRequest) SetInitialHeadCommitSHA(sha string) {
+// SetHeadCommitSHA sets the head commit SHA without raising any events.
+// Used to restore or reset the known baseline across cycles.
+func (pr *PullRequest) SetHeadCommitSHA(sha string) {
 	pr.headCommitSHA = sha
 }
 
@@ -333,10 +351,10 @@ func (pr *PullRequest) AuthorLogin() string {
 	return pr.author.Login()
 }
 
-// SetInitialPipelineStatus sets the pipeline status without raising any events.
-// Used to restore known state from a previous check cycle, so that
-// UpdatePipelineStatus can correctly detect changes vs. no-ops.
-func (pr *PullRequest) SetInitialPipelineStatus(status PipelineStatus) {
+// SetPipelineStatus sets the pipeline status without raising any events.
+// Use this to restore or reset the baseline so that UpdatePipelineStatus can
+// correctly detect changes vs. no-ops across check cycles.
+func (pr *PullRequest) SetPipelineStatus(status PipelineStatus) {
 	pr.pipelineStatus = status
 }
 
@@ -409,10 +427,16 @@ func (pr *PullRequest) AddReview(review *Review) []Event {
 	return []Event{&event}
 }
 
-// SetInitialReviews sets reviews without raising events.
-// Used to restore known state from a previous fetch cycle.
-func (pr *PullRequest) SetInitialReviews(reviews map[string]*Review) {
-	pr.reviews = reviews
+// SetReviews replaces the reviews map without raising events. Defensive-copies
+// the supplied map so callers cannot mutate aggregate state after the call.
+// Use this to restore a prior baseline (hydration or rollback for change
+// detection); use AddReview when a new review is discovered during a cycle.
+func (pr *PullRequest) SetReviews(reviews map[string]*Review) {
+	cp := make(map[string]*Review, len(reviews))
+	for k, v := range reviews {
+		cp[k] = v
+	}
+	pr.reviews = cp
 }
 
 // ReviewSummary returns a ReviewSummary for display purposes

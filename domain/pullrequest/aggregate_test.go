@@ -492,7 +492,7 @@ func TestPullRequest_RecordHeadCommitUpdate_FirstTime_InitializesWithoutActivity
 func TestPullRequest_RecordHeadCommitUpdate_SameSHA_NoActivity(t *testing.T) {
 	// Arrange
 	pr := testutil.NewTestPullRequest(1)
-	pr.SetInitialHeadCommitSHA("abc123")
+	pr.SetHeadCommitSHA("abc123")
 
 	// Act
 	events := pr.RecordHeadCommitUpdate("abc123")
@@ -505,7 +505,7 @@ func TestPullRequest_RecordHeadCommitUpdate_SameSHA_NoActivity(t *testing.T) {
 func TestPullRequest_RecordHeadCommitUpdate_Changed_CreatesPushActivity(t *testing.T) {
 	// Arrange
 	pr := testutil.NewTestPullRequest(1, testutil.WithAuthor("alice"))
-	pr.SetInitialHeadCommitSHA("abc123")
+	pr.SetHeadCommitSHA("abc123")
 
 	// Act
 	pr.RecordHeadCommitUpdate("def456")
@@ -522,7 +522,7 @@ func TestPullRequest_RecordHeadCommitUpdate_SelfPush_CreatesActivity(t *testing.
 	// Arrange - PR author is the authenticated user
 	// The aggregate records all domain facts. Notification filtering is done downstream.
 	pr := testutil.NewTestPullRequest(1, testutil.WithAuthor("testuser"))
-	pr.SetInitialHeadCommitSHA("abc123")
+	pr.SetHeadCommitSHA("abc123")
 
 	// Act
 	pr.RecordHeadCommitUpdate("def456")
@@ -537,7 +537,7 @@ func TestPullRequest_RecordHeadCommitUpdate_SelfPush_CreatesActivity(t *testing.
 func TestPullRequest_RecordHeadCommitUpdate_AlwaysCreatesPushActivity(t *testing.T) {
 	// Arrange - the aggregate always records pushes as domain facts
 	pr := testutil.NewTestPullRequest(1, testutil.WithAuthor("alice"))
-	pr.SetInitialHeadCommitSHA("abc123")
+	pr.SetHeadCommitSHA("abc123")
 
 	// Act
 	pr.RecordHeadCommitUpdate("def456")
@@ -573,7 +573,7 @@ func TestPullRequest_AddReview_SameState_NoEvent(t *testing.T) {
 	initialReviews := map[string]*pullrequest.Review{
 		"joe": pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, time.Now()),
 	}
-	pr.SetInitialReviews(initialReviews)
+	pr.SetReviews(initialReviews)
 
 	// Act - add the same review state again
 	review := pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, time.Now())
@@ -589,7 +589,7 @@ func TestPullRequest_AddReview_StateChange_RaisesEvent(t *testing.T) {
 	initialReviews := map[string]*pullrequest.Review{
 		"joe": pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateChangesRequested, time.Now()),
 	}
-	pr.SetInitialReviews(initialReviews)
+	pr.SetReviews(initialReviews)
 
 	// Act - reviewer now approves
 	review := pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, time.Now())
@@ -637,7 +637,7 @@ func TestPullRequest_AddReview_MultipleReviewers(t *testing.T) {
 	assert.Len(t, events, 3)
 }
 
-func TestPullRequest_SetInitialReviews_NoEvents(t *testing.T) {
+func TestPullRequest_SetReviews_NoEvents(t *testing.T) {
 	// Arrange
 	pr := testutil.NewTestPullRequest(1)
 	reviews := map[string]*pullrequest.Review{
@@ -646,9 +646,9 @@ func TestPullRequest_SetInitialReviews_NoEvents(t *testing.T) {
 	}
 
 	// Act
-	pr.SetInitialReviews(reviews)
+	pr.SetReviews(reviews)
 
-	// Assert - SetInitialReviews is a pure state setter; it never raises domain events.
+	// Assert - SetReviews is a pure state setter; it never raises domain events.
 	assert.Len(t, pr.Reviews(), 2)
 }
 
@@ -659,7 +659,7 @@ func TestPullRequest_ReviewSummary(t *testing.T) {
 		"Joe":   pullrequest.NewReview(testutil.NewTestAuthor("Joe"), pullrequest.ReviewStateApproved, time.Now()),
 		"Alice": pullrequest.NewReview(testutil.NewTestAuthor("Alice"), pullrequest.ReviewStateChangesRequested, time.Now()),
 	}
-	pr.SetInitialReviews(reviews)
+	pr.SetReviews(reviews)
 
 	// Act
 	summary := pr.ReviewSummary()
@@ -870,4 +870,107 @@ false,
 )
 
 assert.False(t, pr.Seen())
+}
+
+func TestReconstitutePR_LastActivityAt_FallsBackToCreatedAt(t *testing.T) {
+	// Regression: ReconstitutePR used to leave lastActivityAt as zero value.
+	// It must fall back to createdAt when no activities are provided.
+	createdAt := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
+	identifier, err := pullrequest.NewPRIdentifier("https://github.com/owner/repo/pull/3", 3)
+	require.NoError(t, err)
+
+	pr := pullrequest.ReconstitutePR(
+		identifier,
+		"Test PR",
+		testutil.NewTestRepository("owner/repo"),
+		testutil.NewTestAuthor("alice"),
+		pullrequest.StatusOpen,
+		createdAt,
+		false,
+		nil,
+		time.Time{},
+		"",
+		nil,
+		pullrequest.PipelineStatusUnknown,
+		false,
+	)
+
+	assert.True(t, pr.LastActivityAt().Equal(createdAt),
+		"LastActivityAt should fall back to createdAt when no activities are present, got %v", pr.LastActivityAt())
+}
+
+func TestReconstitutePR_LastActivityAt_DerivedFromActivities(t *testing.T) {
+	// When activities are passed, lastActivityAt should be the max activity time.
+	createdAt := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
+	activityTime := time.Date(2024, 1, 16, 12, 0, 0, 0, time.UTC)
+	identifier, err := pullrequest.NewPRIdentifier("https://github.com/owner/repo/pull/4", 4)
+	require.NoError(t, err)
+
+	author := testutil.NewTestAuthor("alice")
+	activity := pullrequest.NewActivity(identifier, pullrequest.ActivityTypeComment, author, activityTime, "hello")
+
+	pr := pullrequest.ReconstitutePR(
+		identifier,
+		"Test PR",
+		testutil.NewTestRepository("owner/repo"),
+		testutil.NewTestAuthor("alice"),
+		pullrequest.StatusOpen,
+		createdAt,
+		false,
+		[]*pullrequest.Activity{activity},
+		time.Time{},
+		"",
+		nil,
+		pullrequest.PipelineStatusUnknown,
+		false,
+	)
+
+	assert.True(t, pr.LastActivityAt().Equal(activityTime),
+		"LastActivityAt should reflect the most recent activity, got %v", pr.LastActivityAt())
+}
+
+func TestReconstitutePR_DefensiveCopies(t *testing.T) {
+	// Caller-owned maps/slices must not alias aggregate internals.
+	createdAt := time.Now()
+	identifier, err := pullrequest.NewPRIdentifier("https://github.com/owner/repo/pull/5", 5)
+	require.NoError(t, err)
+
+	callerReviews := map[string]*pullrequest.Review{
+		"alice": pullrequest.NewReview(testutil.NewTestAuthor("alice"), pullrequest.ReviewStateApproved, time.Now()),
+	}
+
+	pr := pullrequest.ReconstitutePR(
+		identifier,
+		"Test PR",
+		testutil.NewTestRepository("owner/repo"),
+		testutil.NewTestAuthor("alice"),
+		pullrequest.StatusOpen,
+		createdAt,
+		false,
+		nil,
+		time.Time{},
+		"",
+		callerReviews,
+		pullrequest.PipelineStatusUnknown,
+		false,
+	)
+
+	// Mutate the caller's map after construction
+	delete(callerReviews, "alice")
+
+	// Aggregate must still have the review
+	assert.Len(t, pr.Reviews(), 1, "aggregate reviews must not alias the caller's map")
+}
+
+func TestSetReviews_DefensiveCopy(t *testing.T) {
+	// Caller-owned map must not alias aggregate internals after SetReviews.
+	pr := testutil.NewTestPullRequest(1)
+	callerReviews := map[string]*pullrequest.Review{
+		"bob": pullrequest.NewReview(testutil.NewTestAuthor("bob"), pullrequest.ReviewStateApproved, time.Now()),
+	}
+
+	pr.SetReviews(callerReviews)
+	delete(callerReviews, "bob")
+
+	assert.Len(t, pr.Reviews(), 1, "aggregate reviews must not alias the caller's map")
 }

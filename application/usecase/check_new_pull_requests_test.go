@@ -230,9 +230,9 @@ func TestCheckNewPRs_SeedsKnownReviewsFromSnapshotsOnFirstCycle(t *testing.T) {
 		testutil.WithAuthor(pr.AuthorLogin()),
 		testutil.WithCreatedAt(pr.CreatedAt()),
 	)
-	seedPR.SetInitialLastActivityCheck(now.Add(-2 * time.Hour))
-	seedPR.SetInitialPipelineStatus(pullrequest.PipelineStatusUnknown)
-	seedPR.SetInitialReviews(map[string]*pullrequest.Review{
+	seedPR.SetLastActivityCheck(now.Add(-2 * time.Hour))
+	seedPR.SetPipelineStatus(pullrequest.PipelineStatusUnknown)
+	seedPR.SetReviews(map[string]*pullrequest.Review{
 		"reviewer": pullrequest.NewReview(testutil.NewTestAuthor("reviewer"), pullrequest.ReviewStateCommented, now.Add(-2*time.Hour)),
 	})
 

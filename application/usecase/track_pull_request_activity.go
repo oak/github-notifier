@@ -67,11 +67,12 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 	}
 
 	// Determine which PRs to check based on two-tier scheduling
-	scheduleResult := uc.scheduler.DeterminePRsToCheck(prs)
+	allCurrentPRs := prs
+	scheduleResult := uc.scheduler.DeterminePRsToCheck(allCurrentPRs)
 	prsToCheck := scheduleResult.PRsToCheck
 
 	log.Info().Msgf("Activity scheduler: checking %d/%d PRs (%d recent, %d stale due for check, %d skipped)",
-		len(prsToCheck), len(prs), scheduleResult.RecentCount, scheduleResult.StaleCount, scheduleResult.SkippedCount)
+		len(prsToCheck), len(allCurrentPRs), scheduleResult.RecentCount, scheduleResult.StaleCount, scheduleResult.SkippedCount)
 
 	if len(prsToCheck) == 0 {
 		log.Info().Msgf("Activity tracking: No PRs due for checking")
@@ -80,12 +81,12 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 
 	// Load persisted enrichment state for all tracked PRs.
 	// DetectClosedPRsUseCase.TrackPRs writes this at the end of each cycle.
-	prs, loadErr := uc.trackingRepo.LoadAll()
+	loadedSnapshots, loadErr := uc.trackingRepo.LoadAll()
 	if loadErr != nil {
 		log.Error().Err(loadErr).Msg("Activity tracker: failed to load prs; proceeding without prior state")
 	}
-	snapByURL := make(map[string]pullrequest.PullRequest, len(prs))
-	for _, s := range prs {
+	snapByURL := make(map[string]pullrequest.PullRequest, len(loadedSnapshots))
+	for _, s := range loadedSnapshots {
 		snapByURL[s.URL()] = *s
 	}
 
@@ -94,20 +95,20 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 	// state forward from the persisted snapshots.)
 	//
 	// For pipeline status: the initial search query seeds the PR with the
-	// current GitHub state via SetInitialPipelineStatus. We OVERRIDE that with
+	// current GitHub state via SetPipelineStatus. We OVERRIDE that with
 	// the previous cycle's stored value so that UpdatePipelineStatus (called
 	// inside EnrichWithActivities) can correctly detect a change vs. a no-op.
 	// If we have no stored value yet, reset to Unknown so the first real status
 	// from the timeline query fires the initial transition event.
 	for _, pr := range prsToCheck {
 		if snap, ok := snapByURL[pr.URL()]; ok {
-			pr.SetInitialHeadCommitSHA(snap.HeadCommitSHA())
-			pr.SetInitialPipelineStatus(snap.PipelineStatus())
+			pr.SetHeadCommitSHA(snap.HeadCommitSHA())
+			pr.SetPipelineStatus(snap.PipelineStatus())
 			uc.scheduler.SeedLastChecked(pr.URL(), snap.LastActivityCheck())
 		} else {
 			// No stored state — reset pipeline to Unknown so the first status
 			// from the batched timeline query fires a transition event.
-			pr.SetInitialPipelineStatus(pullrequest.PipelineStatusUnknown)
+			pr.SetPipelineStatus(pullrequest.PipelineStatusUnknown)
 		}
 	}
 
@@ -128,28 +129,26 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 	// Persist updated enrichment state so the next cycle (and DetectClosedPRs)
 	// can see the freshly-enriched values.
 	//
-	// We update only the PRs we just checked; everything else keeps its
-	// snapshot unchanged.
+	// We save ALL current open PRs:
+	//   - PRs we just checked: use the freshly-enriched object with updated lastActivityCheck.
+	//   - Stale PRs (not checked this cycle): preserve their persisted snapshot so that
+	//     headCommitSHA, lastActivityCheck, pipelineStatus and seen state are not lost.
+	//   - Brand-new PRs with no prior snapshot: save the live PR as-is.
 	checkedByURL := make(map[string]*pullrequest.PullRequest, len(prsToCheck))
 	for _, pr := range prsToCheck {
 		checkedByURL[pr.URL()] = pr
 	}
-	updatedSnapshots := make([]*pullrequest.PullRequest, 0, len(prsToCheck))
-	for _, s := range prsToCheck {
-		if pr, ok := checkedByURL[s.URL()]; ok {
-			updated := pr
-			updated.SetInitialLastActivityCheck(checkedAt)
-			updatedSnapshots = append(updatedSnapshots, updated)
-			delete(checkedByURL, s.URL()) // mark as handled
+	updatedSnapshots := make([]*pullrequest.PullRequest, 0, len(allCurrentPRs))
+	for _, pr := range allCurrentPRs {
+		if checked, ok := checkedByURL[pr.URL()]; ok {
+			checked.SetLastActivityCheck(checkedAt)
+			updatedSnapshots = append(updatedSnapshots, checked)
+		} else if snap, ok := snapByURL[pr.URL()]; ok {
+			snapCopy := snap
+			updatedSnapshots = append(updatedSnapshots, &snapCopy)
 		} else {
-			updatedSnapshots = append(updatedSnapshots, s)
+			updatedSnapshots = append(updatedSnapshots, pr)
 		}
-	}
-	// Any PRs that were checked but had no prior snapshot (new this cycle):
-	for _, pr := range checkedByURL {
-		snap := pr
-		snap.SetInitialLastActivityCheck(checkedAt)
-		updatedSnapshots = append(updatedSnapshots, snap)
 	}
 	if saveErr := uc.trackingRepo.Save(updatedSnapshots); saveErr != nil {
 		log.Error().Err(saveErr).Msg("Activity tracker: failed to save updated snapshots")

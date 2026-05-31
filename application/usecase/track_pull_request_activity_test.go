@@ -236,8 +236,8 @@ func TestTrackActivity_LoadsAndSeedsStateFromRepository(t *testing.T) {
 	pr1 := testutil.NewTestPullRequest(1, testutil.WithCreatedAt(now.Add(-10*time.Minute)))
 
 	prevPR := testutil.NewTestPullRequest(1, testutil.WithURL(pr1.URL()), testutil.WithCreatedAt(pr1.CreatedAt()))
-	prevPR.SetInitialHeadCommitSHA("abc123")
-	prevPR.SetInitialPipelineStatus(pullrequest.PipelineStatusSuccess)
+	prevPR.SetHeadCommitSHA("abc123")
+	prevPR.SetPipelineStatus(pullrequest.PipelineStatusSuccess)
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{prevPR}, nil).Once()
 
@@ -403,4 +403,54 @@ func TestTrackActivity_RestartScenario_StaleCheckedOnceNotForever(t *testing.T) 
 	err = uc.Execute(context.Background(), []*pullrequest.PullRequest{stalePR}, lastCheckTime)
 	require.NoError(t, err)
 	mockPRRepo.AssertNumberOfCalls(t, "EnrichWithActivities", 1)
+}
+
+func TestTrackActivity_StalePRsPreservedInTrackingRepo(t *testing.T) {
+	mockPRRepo := mocks.NewPullRequestRepository(t)
+	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
+	mockEventPublisher := mocks.NewEventPublisher(t)
+	// Stale threshold = 1h, check interval = 999min so stale PR is never re-checked.
+	scheduler := pullrequest.NewActivityCheckScheduler(1, 999)
+
+	now := time.Now()
+	lastCheckTime := now.Add(-10 * time.Minute)
+
+	recentPR := testutil.NewTestPullRequest(1, testutil.WithCreatedAt(now.Add(-30*time.Minute)))
+	stalePR := testutil.NewTestPullRequest(2, testutil.WithCreatedAt(now.Add(-2*time.Hour)))
+	stalePR.SetHeadCommitSHA("stale-sha")
+	stalePR.SetPipelineStatus(pullrequest.PipelineStatusSuccess)
+
+	// Tell the scheduler the stale PR was checked very recently so it won't be
+	// included in prsToCheck this cycle (interval = 999min).
+	scheduler.SeedLastChecked(stalePR.URL(), now.Add(-1*time.Minute))
+
+	// Tracking repo already holds the stale PR with enrichment state.
+	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{stalePR}, nil)
+	mockPRRepo.On("EnrichWithActivities", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
+		// Only recentPR should be in prsToCheck — stalePR is skipped this cycle.
+		return len(prs) == 1 && prs[0].URL() == recentPR.URL()
+	}), lastCheckTime).Return([]pullrequest.Event{}, nil)
+
+	var saved []*pullrequest.PullRequest
+	mockTrackingRepo.On("Save", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
+		saved = prs
+		return true
+	})).Return(nil)
+
+	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, mockEventPublisher, "")
+
+	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{recentPR, stalePR}, lastCheckTime)
+	require.NoError(t, err)
+
+	require.Len(t, saved, 2, "both recent and stale PRs must be saved")
+	byURL := make(map[string]*pullrequest.PullRequest, len(saved))
+	for _, pr := range saved {
+		byURL[pr.URL()] = pr
+	}
+
+	require.Contains(t, byURL, recentPR.URL(), "recent PR must be in saved set")
+	require.Contains(t, byURL, stalePR.URL(), "stale PR must be preserved in saved set")
+
+	assert.Equal(t, "stale-sha", byURL[stalePR.URL()].HeadCommitSHA(), "stale PR enrichment state must be preserved")
+	assert.Equal(t, pullrequest.PipelineStatusSuccess, byURL[stalePR.URL()].PipelineStatus(), "stale PR pipeline status must be preserved")
 }

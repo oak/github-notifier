@@ -74,10 +74,10 @@ func TestPRTrackingRepository_Save_PreservesAllFields(t *testing.T) {
 		testutil.WithDraft(true),
 		testutil.WithCreatedAt(time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)),
 	)
-	pr.SetInitialHeadCommitSHA("deadbeef")
-	pr.SetInitialPipelineStatus(pullrequest.PipelineStatusSuccess)
-	pr.SetInitialLastActivityCheck(checkTime)
-	pr.SetInitialReviews(map[string]*pullrequest.Review{
+	pr.SetHeadCommitSHA("deadbeef")
+	pr.SetPipelineStatus(pullrequest.PipelineStatusSuccess)
+	pr.SetLastActivityCheck(checkTime)
+	pr.SetReviews(map[string]*pullrequest.Review{
 		"joe": pullrequest.NewReview(testutil.NewTestAuthor("joe"), pullrequest.ReviewStateApproved, submittedAt),
 	})
 
@@ -110,7 +110,7 @@ func TestPRTrackingRepository_LoadAll_ReturnsCopy(t *testing.T) {
 	require.NoError(t, repo.Save([]*pullrequest.PullRequest{testutil.NewTestPullRequest(1)}))
 
 	loaded, _ := repo.LoadAll()
-	loaded[0].SetInitialHeadCommitSHA("mutated")
+	loaded[0].SetHeadCommitSHA("mutated")
 
 	// Internal state must be unaffected
 	loaded2, _ := repo.LoadAll()

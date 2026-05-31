@@ -65,8 +65,8 @@ func toDomain(dto PullRequestDTO) (*pullrequest.PullRequest, error) {
 	// Map reviews if present
 	if dto.LatestReviews != nil {
 		reviews := toReviews(dto.LatestReviews.Nodes)
-		// Set initial reviews without raising events (this is initial state, not a change)
-		pr.SetInitialReviews(reviews)
+		// Set reviews without raising events (this is initial state, not a change)
+		pr.SetReviews(reviews)
 	}
 
 	// Map initial pipeline status if present
@@ -74,8 +74,8 @@ func toDomain(dto PullRequestDTO) (*pullrequest.PullRequest, error) {
 		last := dto.Commits.Nodes[len(dto.Commits.Nodes)-1]
 		if last.Commit.StatusCheckRollup != nil {
 			status := pipelineStatusFromRollup(last.Commit.StatusCheckRollup.State)
-			// Set initial pipeline status without raising events (this is initial state, not a change)
-			pr.SetInitialPipelineStatus(status)
+			// Set pipeline status without raising events (this is initial state, not a change)
+			pr.SetPipelineStatus(status)
 		}
 	}
 

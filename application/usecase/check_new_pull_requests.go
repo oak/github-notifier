@@ -205,7 +205,7 @@ func (uc *CheckNewPullRequestsUseCase) detectReviewStateChanges(prs []*pullreque
 		}
 
 		// Restore known reviews on the fresh PR object (without events)
-		pr.SetInitialReviews(knownReviews)
+		pr.SetReviews(knownReviews)
 
 		// Now apply each current review via AddReview (returns event on state change)
 		var reviewEvents []pullrequest.Event
