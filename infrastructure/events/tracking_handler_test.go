@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/oak3/github-notifier/domain/pullrequest"
@@ -165,6 +166,7 @@ func TestTrackingHandler_HandlePRMerged(t *testing.T) {
 	handler := events.NewTrackingEventHandler(mockPRTrackingRepo)
 
 	pr := testutil.NewTestPullRequest(1)
+	pr.MarkAsSeen()
 	event := pullrequest.NewMerged(pr)
 
 	// Merged event should mark PR unseen and persist via Update.
@@ -175,6 +177,7 @@ func TestTrackingHandler_HandlePRMerged(t *testing.T) {
 
 	// Assert
 	require.NoError(t, err)
+	assert.False(t, pr.Seen(), "handler must call MarkAsUnseen before persisting")
 	mockPRTrackingRepo.AssertExpectations(t)
 }
 
@@ -185,6 +188,7 @@ func TestTrackingHandler_HandlePRClosed(t *testing.T) {
 	handler := events.NewTrackingEventHandler(mockPRTrackingRepo)
 
 	pr := testutil.NewTestPullRequest(1)
+	pr.MarkAsSeen()
 	event := pullrequest.NewClosed(pr)
 
 	// Closed event should mark PR unseen and persist via Update.
@@ -195,6 +199,7 @@ func TestTrackingHandler_HandlePRClosed(t *testing.T) {
 
 	// Assert
 	require.NoError(t, err)
+	assert.False(t, pr.Seen(), "handler must call MarkAsUnseen before persisting")
 	mockPRTrackingRepo.AssertExpectations(t)
 }
 

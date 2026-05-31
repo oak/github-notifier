@@ -144,3 +144,61 @@ func TestPRTrackingRepository_Clear_OnEmptyRepo_NoError(t *testing.T) {
 func TestPRTrackingRepository_ImplementsInterface(t *testing.T) {
 	var _ pullrequest.PRTrackingRepository = memory.NewPRTrackingRepository()
 }
+
+// ── Seen state round-trips ────────────────────────────────────────────────────
+
+func TestPRTrackingRepository_Save_Seen_RoundTrip(t *testing.T) {
+repo := memory.NewPRTrackingRepository()
+pr := testutil.NewTestPullRequest(1)
+pr.MarkAsSeen()
+
+require.NoError(t, repo.Save([]*pullrequest.PullRequest{pr}))
+
+loaded, err := repo.LoadAll()
+require.NoError(t, err)
+require.Len(t, loaded, 1)
+assert.True(t, loaded[0].Seen())
+}
+
+func TestPRTrackingRepository_Save_UnseenByDefault(t *testing.T) {
+repo := memory.NewPRTrackingRepository()
+pr := testutil.NewTestPullRequest(1)
+
+require.NoError(t, repo.Save([]*pullrequest.PullRequest{pr}))
+
+loaded, err := repo.LoadAll()
+require.NoError(t, err)
+require.Len(t, loaded, 1)
+assert.False(t, loaded[0].Seen())
+}
+
+// ── Update ────────────────────────────────────────────────────────────────────
+
+func TestPRTrackingRepository_Update_ChangesSeen(t *testing.T) {
+repo := memory.NewPRTrackingRepository()
+pr := testutil.NewTestPullRequest(1)
+require.NoError(t, repo.Save([]*pullrequest.PullRequest{pr}))
+
+pr.MarkAsSeen()
+require.NoError(t, repo.Update(pr))
+
+loaded, err := repo.LoadAll()
+require.NoError(t, err)
+require.Len(t, loaded, 1)
+assert.True(t, loaded[0].Seen())
+}
+
+func TestPRTrackingRepository_Update_NoopWhenPRNotFound(t *testing.T) {
+repo := memory.NewPRTrackingRepository()
+pr1 := testutil.NewTestPullRequest(1)
+require.NoError(t, repo.Save([]*pullrequest.PullRequest{pr1}))
+
+pr2 := testutil.NewTestPullRequest(2)
+pr2.MarkAsSeen()
+require.NoError(t, repo.Update(pr2))
+
+loaded, err := repo.LoadAll()
+require.NoError(t, err)
+require.Len(t, loaded, 1, "Update of unknown PR must not add a new entry")
+assert.Equal(t, pr1.URL(), loaded[0].URL())
+}

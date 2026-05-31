@@ -257,6 +257,37 @@ func TestStateRepository_ReviewState_AllValues_RoundTrip(t *testing.T) {
 	}
 }
 
+// ─── Update ──────────────────────────────────────────────────────────────────
+
+func TestStateRepository_Tracking_Update_ChangesSeen(t *testing.T) {
+	repo := newRepo(t)
+	pr := testutil.NewTestPullRequest(1)
+	require.NoError(t, repo.Save([]*pullrequest.PullRequest{pr}))
+
+	pr.MarkAsSeen()
+	require.NoError(t, repo.Update(pr))
+
+	loaded, err := repo.LoadAll()
+	require.NoError(t, err)
+	require.Len(t, loaded, 1)
+	assert.True(t, loaded[0].Seen())
+}
+
+func TestStateRepository_Tracking_Update_NoopWhenPRNotFound(t *testing.T) {
+	repo := newRepo(t)
+	pr1 := testutil.NewTestPullRequest(1)
+	require.NoError(t, repo.Save([]*pullrequest.PullRequest{pr1}))
+
+	pr2 := testutil.NewTestPullRequest(2)
+	pr2.MarkAsSeen()
+	require.NoError(t, repo.Update(pr2))
+
+	loaded, err := repo.LoadAll()
+	require.NoError(t, err)
+	require.Len(t, loaded, 1, "Update of unknown PR must not add a new entry")
+	assert.Equal(t, pr1.URL(), loaded[0].URL())
+}
+
 // ─── StateFilePath via Config ─────────────────────────────────────────────────
 
 func TestStateFilePath_IsSiblingOfConfigFile(t *testing.T) {
