@@ -111,7 +111,11 @@ func TestTrackActivity_NewActivity_EmitsEventsAndMarksUnseen(t *testing.T) {
 		},
 	}, nil).Once()
 
-	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
+	var savedPRs []*pullrequest.PullRequest
+	mockTrackingRepo.On("Save", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
+		savedPRs = prs
+		return true
+	})).Return(nil).Once()
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil).Twice()
 
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, mockEventPublisher, "")
@@ -121,6 +125,11 @@ func TestTrackActivity_NewActivity_EmitsEventsAndMarksUnseen(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, pr1.Seen())
 	assert.False(t, pr2.Seen())
+	// Verify unseen state was persisted — MarkAsUnseen must be called before Save.
+	require.Len(t, savedPRs, 2)
+	for _, saved := range savedPRs {
+		assert.False(t, saved.Seen(), "unseen state must be captured in Save, not after")
+	}
 	mockEventPublisher.AssertExpectations(t)
 }
 
@@ -180,7 +189,11 @@ func TestTrackActivity_PublishEventError_ContinuesProcessing(t *testing.T) {
 		},
 	}, nil).Once()
 
-	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
+	var savedPRs []*pullrequest.PullRequest
+	mockTrackingRepo.On("Save", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
+		savedPRs = prs
+		return true
+	})).Return(nil).Once()
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(errors.New("event bus error")).Once()
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil).Once()
 
@@ -191,6 +204,11 @@ func TestTrackActivity_PublishEventError_ContinuesProcessing(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, pr1.Seen())
 	assert.False(t, pr2.Seen())
+	// Verify unseen state was persisted — MarkAsUnseen must be called before Save.
+	require.Len(t, savedPRs, 2)
+	for _, saved := range savedPRs {
+		assert.False(t, saved.Seen(), "unseen state must be captured in Save, not after")
+	}
 	mockEventPublisher.AssertExpectations(t)
 }
 
@@ -317,7 +335,11 @@ func TestTrackActivity_IgnoredAuthor_NotMarkedUnseen(t *testing.T) {
 		},
 	}, nil).Once()
 
-	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
+	var savedPRsIgnored []*pullrequest.PullRequest
+	mockTrackingRepo.On("Save", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
+		savedPRsIgnored = prs
+		return true
+	})).Return(nil).Once()
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil).Once()
 
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, mockEventPublisher, "alice")
@@ -329,6 +351,9 @@ func TestTrackActivity_IgnoredAuthor_NotMarkedUnseen(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, pr.Seen())
+	// Verify ignored activity did NOT flip seen to false in the saved snapshot.
+	require.Len(t, savedPRsIgnored, 1)
+	assert.True(t, savedPRsIgnored[0].Seen(), "ignored activity must not mark PR unseen in persistence")
 }
 
 func TestTrackActivity_IgnoreConfig_NonIgnoredAuthorStillMarkUnseen(t *testing.T) {
@@ -354,7 +379,11 @@ func TestTrackActivity_IgnoreConfig_NonIgnoredAuthorStillMarkUnseen(t *testing.T
 		},
 	}, nil).Once()
 
-	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
+	var savedPRsNonIgnored []*pullrequest.PullRequest
+	mockTrackingRepo.On("Save", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
+		savedPRsNonIgnored = prs
+		return true
+	})).Return(nil).Once()
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil).Once()
 
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, mockEventPublisher, "alice")
@@ -366,6 +395,9 @@ func TestTrackActivity_IgnoreConfig_NonIgnoredAuthorStillMarkUnseen(t *testing.T
 
 	require.NoError(t, err)
 	assert.False(t, pr.Seen())
+	// Verify unseen state is persisted — MarkAsUnseen must be called before Save.
+	require.Len(t, savedPRsNonIgnored, 1)
+	assert.False(t, savedPRsNonIgnored[0].Seen(), "unseen state must be captured in Save, not after")
 }
 
 func TestTrackActivity_RestartScenario_StaleCheckedOnceNotForever(t *testing.T) {

@@ -138,6 +138,26 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 		enrichEvents = append(enrichEvents, pr.AddActivities(data.Activities)...)
 	}
 
+	// Find PRs with new activity by others (filter out self-authored activities)
+	// to decide which PRs should be marked unseen (asterisks in UI).
+	// Must happen BEFORE building snapshots so the updated seen state is captured in Save.
+	var prsWithNewActivity []*pullrequest.PullRequest
+	for _, pr := range prsToCheck {
+		if uc.hasActivityByOthers(pr, lastCheckTime) {
+			prsWithNewActivity = append(prsWithNewActivity, pr)
+		}
+	}
+
+	if len(prsWithNewActivity) > 0 {
+		log.Info().Msgf("Found %d PRs with new activity", len(prsWithNewActivity))
+		// Mark PRs with new activity as unseen before Save so the state is persisted.
+		for _, pr := range prsWithNewActivity {
+			pr.MarkAsUnseen()
+		}
+	} else {
+		log.Info().Msgf("No new activity detected on checked PRs")
+	}
+
 	// Record the check timestamp in the scheduler. Captured once so the same
 	// instant is written into every persisted snapshot below.
 	checkedAt := time.Now()
@@ -177,27 +197,6 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 		if err := uc.eventPublisher.Publish(event); err != nil {
 			log.Error().Err(err).Msg("Error publishing activity event")
 		}
-	}
-
-	// Find PRs with new activity by others (filter out self-authored activities)
-	// to decide which PRs should be marked unseen (asterisks in UI).
-	var prsWithNewActivity []*pullrequest.PullRequest
-	for _, pr := range prsToCheck {
-		if uc.hasActivityByOthers(pr, lastCheckTime) {
-			prsWithNewActivity = append(prsWithNewActivity, pr)
-		}
-	}
-
-	if len(prsWithNewActivity) == 0 {
-		log.Info().Msgf("No new activity detected on checked PRs")
-		return nil
-	}
-
-	log.Info().Msgf("Found %d PRs with new activity", len(prsWithNewActivity))
-
-	// Mark PRs with new activity as unseen (to show asterisks)
-	for _, pr := range prsWithNewActivity {
-		pr.MarkAsUnseen()
 	}
 
 	return nil
