@@ -92,9 +92,18 @@ func (o *PullRequestOrchestrator) ExecuteRegularCheck(ctx context.Context, lastC
 		}
 	}
 
-	if err := o.detectClosedPRsUseCase.Execute(ctx, allCurrentPRs); err != nil {
+	closedMergedURLs, err := o.detectClosedPRsUseCase.Execute(ctx, allCurrentPRs)
+	if err != nil {
 		log.Error().Err(err).Msg("Error detecting closed PRs")
 		// Don't return error — continue with other steps
+	} else if len(closedMergedURLs) > 0 {
+		// Clean up cycle state to free memory (avoid unbounded growth)
+		// Remove closed/merged PRs from KnownPRs and KnownReviews
+		for _, url := range closedMergedURLs {
+			delete(o.checkCycleState.KnownPRs, url)
+			delete(o.checkCycleState.KnownReviews, url)
+		}
+		log.Debug().Msgf("Pruned %d closed/merged PRs from cycle state", len(closedMergedURLs))
 	}
 
 	// Update tracked PRs for next cycle's comparison

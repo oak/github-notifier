@@ -25,9 +25,10 @@ func TestDetectClosedPRs_NoTrackedPRs_NoOp(t *testing.T) {
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
 
-	err := uc.Execute(context.Background(), currentPRs)
+	urls, err := uc.Execute(context.Background(), currentPRs)
 
 	require.NoError(t, err)
+	assert.Empty(t, urls)
 	mockPRRepo.AssertNotCalled(t, "FetchPRStatus")
 	mockEventPublisher.AssertNotCalled(t, "Publish")
 }
@@ -45,9 +46,10 @@ func TestDetectClosedPRs_AllPRsStillOpen_NoEvents(t *testing.T) {
 	mockTrackingRepo.On("LoadAll").Return(prs, nil).Once()
 
 	uc.TrackPRs(prs)
-	err := uc.Execute(context.Background(), prs)
+	urls, err := uc.Execute(context.Background(), prs)
 
 	require.NoError(t, err)
+	assert.Empty(t, urls)
 	mockPRRepo.AssertNotCalled(t, "FetchPRStatus")
 	mockEventPublisher.AssertNotCalled(t, "Publish")
 }
@@ -70,9 +72,11 @@ func TestDetectClosedPRs_MergedPR_EmitsMergedEvent(t *testing.T) {
 	})).Return(nil).Once()
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
-	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{pr2})
+	urls, err := uc.Execute(context.Background(), []*pullrequest.PullRequest{pr2})
 
 	require.NoError(t, err)
+	require.Len(t, urls, 1)
+	assert.Equal(t, pr1.URL(), urls[0])
 	mockPRRepo.AssertExpectations(t)
 	mockEventPublisher.AssertExpectations(t)
 	mockTrackingRepo.AssertExpectations(t)
@@ -96,9 +100,11 @@ func TestDetectClosedPRs_ClosedPR_EmitsClosedEvent(t *testing.T) {
 	})).Return(nil).Once()
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
-	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{pr1})
+	urls, err := uc.Execute(context.Background(), []*pullrequest.PullRequest{pr1})
 
 	require.NoError(t, err)
+	require.Len(t, urls, 1)
+	assert.Equal(t, pr2.URL(), urls[0])
 	mockPRRepo.AssertExpectations(t)
 	mockEventPublisher.AssertExpectations(t)
 	mockTrackingRepo.AssertExpectations(t)
@@ -116,8 +122,9 @@ func TestDetectClosedPRs_APIError_KeepsPRTracked(t *testing.T) {
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{pr1}, nil).Once()
 	mockPRRepo.On("FetchPRStatus", "owner", "repo", 1).Return(pullrequest.StatusOpen, errors.New("API error")).Once()
 
-	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{})
+	urls, err := uc.Execute(context.Background(), []*pullrequest.PullRequest{})
 	require.NoError(t, err)
+	assert.Empty(t, urls)
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{pr1}, nil).Once()
 	mockPRRepo.On("FetchPRStatus", "owner", "repo", 1).Return(pullrequest.StatusMerged, nil).Once()
@@ -127,8 +134,10 @@ func TestDetectClosedPRs_APIError_KeepsPRTracked(t *testing.T) {
 	})).Return(nil).Once()
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
-	err = uc.Execute(context.Background(), []*pullrequest.PullRequest{})
+	urls, err = uc.Execute(context.Background(), []*pullrequest.PullRequest{})
 	require.NoError(t, err)
+	require.Len(t, urls, 1)
+	assert.Equal(t, pr1.URL(), urls[0])
 	mockPRRepo.AssertExpectations(t)
 	mockEventPublisher.AssertExpectations(t)
 	mockTrackingRepo.AssertExpectations(t)
@@ -145,9 +154,10 @@ func TestDetectClosedPRs_PRStillOpenButMissing_KeepsTracked(t *testing.T) {
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{pr1}, nil).Once()
 	mockPRRepo.On("FetchPRStatus", "owner", "repo", 1).Return(pullrequest.StatusOpen, nil).Once()
 
-	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{})
+	urls, err := uc.Execute(context.Background(), []*pullrequest.PullRequest{})
 
 	require.NoError(t, err)
+	assert.Empty(t, urls)
 	mockPRRepo.AssertExpectations(t)
 	mockTrackingRepo.AssertExpectations(t)
 	mockEventPublisher.AssertNotCalled(t, "Publish")
@@ -178,9 +188,16 @@ func TestDetectClosedPRs_MultiplePRs_MixedStatuses(t *testing.T) {
 	})).Return(nil).Once()
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
-	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{})
+	urls, err := uc.Execute(context.Background(), []*pullrequest.PullRequest{})
 
 	require.NoError(t, err)
+	require.Len(t, urls, 2)
+	urlSet := make(map[string]bool)
+	for _, url := range urls {
+		urlSet[url] = true
+	}
+	assert.True(t, urlSet[pr1.URL()], "Expected pr1 URL in closed/merged list")
+	assert.True(t, urlSet[pr2.URL()], "Expected pr2 URL in closed/merged list")
 	mockPRRepo.AssertExpectations(t)
 	mockEventPublisher.AssertExpectations(t)
 	mockTrackingRepo.AssertExpectations(t)
@@ -202,12 +219,15 @@ func TestDetectClosedPRs_CleanupRemovesPRFromTracking(t *testing.T) {
 	})).Return(nil).Once()
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
-	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{})
+	urls, err := uc.Execute(context.Background(), []*pullrequest.PullRequest{})
 	require.NoError(t, err)
+	require.Len(t, urls, 1)
+	assert.Equal(t, pr1.URL(), urls[0])
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
-	err = uc.Execute(context.Background(), []*pullrequest.PullRequest{})
+	urls, err = uc.Execute(context.Background(), []*pullrequest.PullRequest{})
 	require.NoError(t, err)
+	assert.Empty(t, urls)
 
 	mockPRRepo.AssertExpectations(t)
 	mockTrackingRepo.AssertExpectations(t)
@@ -243,9 +263,11 @@ func TestDetectClosedPRs_TrackPRs_UpdatesExistingEntry(t *testing.T) {
 	})).Return(nil).Once()
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
-	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{})
+	urls, err := uc.Execute(context.Background(), []*pullrequest.PullRequest{})
 
 	require.NoError(t, err)
+	require.Len(t, urls, 1)
+	assert.Equal(t, pr1Updated.URL(), urls[0])
 	mockPRRepo.AssertExpectations(t)
 	mockEventPublisher.AssertExpectations(t)
 	mockTrackingRepo.AssertExpectations(t)

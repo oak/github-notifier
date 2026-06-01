@@ -83,15 +83,16 @@ func (uc *DetectClosedPullRequestsUseCase) TrackPRs(prs []*pullrequest.PullReque
 }
 
 // Execute compares the current open PR list against the previously-saved
-// snapshot set to detect merged/closed PRs.
-func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentPRs []*pullrequest.PullRequest) error {
+// snapshot set to detect merged/closed PRs. Returns a list of closed/merged
+// PR URLs so the caller can clean up cycle state (KnownPRs, KnownReviews).
+func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentPRs []*pullrequest.PullRequest) ([]string, error) {
 	prs, err := uc.trackingRepo.LoadAll()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(prs) == 0 {
-		return nil // Nothing tracked yet — first cycle
+		return nil, nil // Nothing tracked yet — first cycle
 	}
 
 	// Build a set of currently open PR URLs
@@ -109,7 +110,7 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 	}
 
 	if len(missing) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	log.Info().Msgf("Detected %d PR(s) missing from open list, checking final status", len(missing))
@@ -118,6 +119,7 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 	// them from the repository immediately (avoids re-processing on the next
 	// Execute call in the same cycle).
 	processedURLs := make(map[string]bool, len(missing))
+	var closedMergedURLs []string
 
 	for _, pr := range missing {
 		repo := pr.Repository()
@@ -137,6 +139,7 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 				}
 			}
 			processedURLs[pr.URL()] = true
+			closedMergedURLs = append(closedMergedURLs, pr.URL())
 
 		case pullrequest.StatusClosed:
 			log.Info().Msgf("PR %s was closed", pr.URL())
@@ -146,6 +149,7 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 				}
 			}
 			processedURLs[pr.URL()] = true
+			closedMergedURLs = append(closedMergedURLs, pr.URL())
 
 		case pullrequest.StatusOpen:
 			// PR is still open but not in our fetch results — transient
@@ -155,7 +159,7 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 	}
 
 	if len(processedURLs) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// Remove confirmed closed/merged PRs from the repository immediately so
@@ -170,5 +174,5 @@ func (uc *DetectClosedPullRequestsUseCase) Execute(ctx context.Context, currentP
 		log.Error().Err(saveErr).Msg("DetectClosedPRs: failed to remove closed PRs from tracking repo")
 	}
 
-	return nil
+	return closedMergedURLs, nil
 }
