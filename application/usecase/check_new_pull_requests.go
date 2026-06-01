@@ -16,15 +16,13 @@ type CheckCycleState struct {
 	KnownPRs      map[string]bool
 	KnownReviews  map[string]map[string]*pullrequest.Review
 	ReviewsSeeded bool
-	LastCheckTime time.Time
 }
 
 // NewCheckCycleState returns a freshly initialised CheckCycleState.
 func NewCheckCycleState() CheckCycleState {
 	return CheckCycleState{
-		KnownPRs:      make(map[string]bool),
-		KnownReviews:  make(map[string]map[string]*pullrequest.Review),
-		LastCheckTime: time.Now(),
+		KnownPRs:     make(map[string]bool),
+		KnownReviews: make(map[string]map[string]*pullrequest.Review),
 	}
 }
 
@@ -61,7 +59,11 @@ type PRCheckResult struct {
 // Execute fetches PRs and detects new ones.
 // It accepts the current inter-cycle state and returns the updated state for the
 // next cycle together with the fetched PRs for use by other use cases.
-func (uc *CheckNewPullRequestsUseCase) Execute(ctx context.Context, state CheckCycleState) (*PRCheckResult, CheckCycleState, error) {
+func (uc *CheckNewPullRequestsUseCase) Execute(
+	ctx context.Context,
+	state CheckCycleState,
+	previousCycleAt time.Time,
+) (*PRCheckResult, CheckCycleState, error) {
 	uc.seedKnownReviewsFromSnapshots(&state)
 
 	// Fetch PRs from both sources
@@ -87,17 +89,14 @@ func (uc *CheckNewPullRequestsUseCase) Execute(ctx context.Context, state CheckC
 	uc.detectReviewStateChanges(userCreatedPRs, &state)
 
 	// Process requested review PRs
-	if err := uc.processNewPRs(requestedReviewPRs, "requested review", &state); err != nil {
+	if err := uc.processNewPRs(requestedReviewPRs, "requested review", previousCycleAt, &state); err != nil {
 		log.Error().Err(err).Msg("Error processing requested review PRs")
 	}
 
 	// Process user created PRs
-	if err := uc.processNewPRs(userCreatedPRs, "user created", &state); err != nil {
+	if err := uc.processNewPRs(userCreatedPRs, "user created", previousCycleAt, &state); err != nil {
 		log.Error().Err(err).Msg("Error processing user created PRs")
 	}
-
-	// Advance the timestamp for the next cycle
-	state.LastCheckTime = time.Now()
 
 	return &PRCheckResult{
 		RequestedReviewPRs: requestedReviewPRs,
@@ -146,7 +145,12 @@ func (uc *CheckNewPullRequestsUseCase) seedKnownReviewsFromSnapshots(state *Chec
 }
 
 // processNewPRs finds new PRs and emits appropriate events
-func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequest, category string, state *CheckCycleState) error {
+func (uc *CheckNewPullRequestsUseCase) processNewPRs(
+	prs []*pullrequest.PullRequest,
+	category string,
+	previousCycleAt time.Time,
+	state *CheckCycleState,
+) error {
 	var newPRs []*pullrequest.PullRequest
 	for _, pr := range prs {
 		if !state.KnownPRs[pr.URL()] {
@@ -163,7 +167,7 @@ func (uc *CheckNewPullRequestsUseCase) processNewPRs(prs []*pullrequest.PullRequ
 	log.Info().Msgf("Found %d new %s PRs", len(newPRs), category)
 
 	// Classify PRs: truly new vs. PRs with new activity
-	trulyNewPRs, prsWithActivity := pullrequest.ClassifyPRs(newPRs, state.LastCheckTime)
+	trulyNewPRs, prsWithActivity := pullrequest.ClassifyPRs(newPRs, previousCycleAt)
 
 	// Mark truly new PRs as newly detected (raises domain events)
 	for _, pr := range trulyNewPRs {

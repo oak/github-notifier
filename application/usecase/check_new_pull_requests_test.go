@@ -31,7 +31,7 @@ func TestCheckNewPRs_NewPRs_PublishesEventsAndMarksSeen(t *testing.T) {
 
 	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, nil, prFilter, mockEventPublisher)
 
-	result, _, err := uc.Execute(context.Background(), usecase.NewCheckCycleState())
+	result, _, err := uc.Execute(context.Background(), usecase.NewCheckCycleState(), time.Now())
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -52,6 +52,7 @@ func TestCheckNewPRs_PRsWithActivity_AreSeenButNoNewPREvents(t *testing.T) {
 	prFilter := pullrequest.NewDraftFilter(false)
 
 	state := usecase.NewCheckCycleState()
+	previousCycleAt := time.Now()
 	time.Sleep(10 * time.Millisecond)
 
 	now := time.Now()
@@ -69,7 +70,7 @@ func TestCheckNewPRs_PRsWithActivity_AreSeenButNoNewPREvents(t *testing.T) {
 
 	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, nil, prFilter, mockEventPublisher)
 
-	result, _, err := uc.Execute(context.Background(), state)
+	result, _, err := uc.Execute(context.Background(), state, previousCycleAt)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -85,6 +86,7 @@ func TestCheckNewPRs_MixedNewAndActivity_OnlyTrulyNewEmitEvents(t *testing.T) {
 	prFilter := pullrequest.NewDraftFilter(false)
 
 	state := usecase.NewCheckCycleState()
+	previousCycleAt := time.Now()
 	time.Sleep(10 * time.Millisecond)
 
 	now := time.Now()
@@ -105,7 +107,7 @@ func TestCheckNewPRs_MixedNewAndActivity_OnlyTrulyNewEmitEvents(t *testing.T) {
 
 	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, nil, prFilter, mockEventPublisher)
 
-	result, _, err := uc.Execute(context.Background(), state)
+	result, _, err := uc.Execute(context.Background(), state, previousCycleAt)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -126,7 +128,7 @@ func TestCheckNewPRs_FetchRequestedReviewsError(t *testing.T) {
 
 	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, nil, prFilter, mockEventPublisher)
 
-	result, _, err := uc.Execute(context.Background(), usecase.NewCheckCycleState())
+	result, _, err := uc.Execute(context.Background(), usecase.NewCheckCycleState(), time.Now())
 
 	assert.Error(t, err)
 	assert.Equal(t, expectedErr, err)
@@ -147,7 +149,7 @@ func TestCheckNewPRs_FetchUserCreatedError(t *testing.T) {
 
 	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, nil, prFilter, mockEventPublisher)
 
-	result, _, err := uc.Execute(context.Background(), usecase.NewCheckCycleState())
+	result, _, err := uc.Execute(context.Background(), usecase.NewCheckCycleState(), time.Now())
 
 	assert.Error(t, err)
 	assert.Equal(t, expectedErr, err)
@@ -167,7 +169,7 @@ func TestCheckNewPRs_FiltersDrafts(t *testing.T) {
 
 	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, nil, prFilter, mockEventPublisher)
 
-	result, _, err := uc.Execute(context.Background(), usecase.NewCheckCycleState())
+	result, _, err := uc.Execute(context.Background(), usecase.NewCheckCycleState(), time.Now())
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -195,7 +197,7 @@ func TestCheckNewPRs_PublishEventError_ContinuesProcessing(t *testing.T) {
 
 	uc := usecase.NewCheckNewPullRequestsUseCase(mockPRRepo, nil, prFilter, mockEventPublisher)
 
-	result, _, err := uc.Execute(context.Background(), usecase.NewCheckCycleState())
+	result, _, err := uc.Execute(context.Background(), usecase.NewCheckCycleState(), time.Now())
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -247,7 +249,7 @@ func TestCheckNewPRs_SeedsKnownReviewsFromSnapshotsOnFirstCycle(t *testing.T) {
 	// does not require NewPullRequestDetected expectations.
 	state.KnownPRs[pr.URL()] = true
 
-	_, state, err := uc.Execute(context.Background(), state)
+	_, state, err := uc.Execute(context.Background(), state, time.Now())
 
 	require.NoError(t, err)
 	assert.True(t, state.ReviewsSeeded)

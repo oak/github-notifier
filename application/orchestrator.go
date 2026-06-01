@@ -71,7 +71,7 @@ func (o *PullRequestOrchestrator) ExecuteInitialCheck(ctx context.Context) error
 // it is owned and threaded by the caller (e.g. the polling goroutine in main).
 func (o *PullRequestOrchestrator) ExecuteRegularCheck(ctx context.Context, lastCheckTime time.Time) error {
 	// Step 1: Fetch and check for new PRs (emits events)
-	result, updatedState, err := o.checkNewPRsUseCase.Execute(ctx, o.checkCycleState)
+	result, updatedState, err := o.checkNewPRsUseCase.Execute(ctx, o.checkCycleState, lastCheckTime)
 	if err != nil {
 		log.Error().Err(err).Msg("Error checking for new PRs")
 		return err
