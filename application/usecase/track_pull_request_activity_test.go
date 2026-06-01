@@ -26,7 +26,7 @@ func TestTrackActivity_EmptyPRList(t *testing.T) {
 	err := uc.Execute(context.Background(), []*pullrequest.PullRequest{}, time.Now())
 
 	require.NoError(t, err)
-	mockPRRepo.AssertNotCalled(t, "EnrichWithActivities")
+	mockPRRepo.AssertNotCalled(t, "FetchActivities")
 	mockTrackingRepo.AssertNotCalled(t, "LoadAll")
 }
 
@@ -47,7 +47,7 @@ func TestTrackActivity_NoPRsDueForCheck(t *testing.T) {
 	err := uc.Execute(context.Background(), prs, now.Add(-1*time.Hour))
 
 	require.NoError(t, err)
-	mockPRRepo.AssertNotCalled(t, "EnrichWithActivities")
+	mockPRRepo.AssertNotCalled(t, "FetchActivities")
 	mockTrackingRepo.AssertNotCalled(t, "LoadAll")
 }
 
@@ -65,7 +65,7 @@ func TestTrackActivity_NoNewActivity(t *testing.T) {
 	}
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
-	mockPRRepo.On("EnrichWithActivities", prs, lastCheckTime).Return([]pullrequest.Event{}, nil).Once()
+	mockPRRepo.On("FetchActivities", prs, lastCheckTime).Return(map[string]pullrequest.PRActivityData{}, nil).Once()
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, mockEventPublisher, "")
@@ -94,21 +94,22 @@ func TestTrackActivity_NewActivity_EmitsEventsAndMarksUnseen(t *testing.T) {
 	prs := []*pullrequest.PullRequest{pr1, pr2}
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
-
-	var enrichedEvents []pullrequest.Event
-	mockPRRepo.On("EnrichWithActivities", prs, lastCheckTime).
-		Run(func(args mock.Arguments) {
-			prsArg := args.Get(0).([]*pullrequest.PullRequest)
-			for _, pr := range prsArg {
-				activity := testutil.NewTestActivity(
-					pullrequest.ActivityTypeComment,
-					now.Add(-30*time.Minute),
-					testutil.WithActivityPR(pr.URL(), pr.Number()),
-				)
-				enrichedEvents = append(enrichedEvents, pr.AddActivities([]*pullrequest.Activity{activity})...)
-			}
-		}).
-		Return(func([]*pullrequest.PullRequest, time.Time) []pullrequest.Event { return enrichedEvents }, nil)
+	mockPRRepo.On("FetchActivities", prs, lastCheckTime).Return(map[string]pullrequest.PRActivityData{
+		pr1.URL(): {
+			Activities: []*pullrequest.Activity{testutil.NewTestActivity(
+				pullrequest.ActivityTypeComment,
+				now.Add(-30*time.Minute),
+				testutil.WithActivityPR(pr1.URL(), pr1.Number()),
+			)},
+		},
+		pr2.URL(): {
+			Activities: []*pullrequest.Activity{testutil.NewTestActivity(
+				pullrequest.ActivityTypeComment,
+				now.Add(-30*time.Minute),
+				testutil.WithActivityPR(pr2.URL(), pr2.Number()),
+			)},
+		},
+	}, nil).Once()
 
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil).Twice()
@@ -135,7 +136,7 @@ func TestTrackActivity_EnrichError(t *testing.T) {
 
 	expectedErr := errors.New("github api error")
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
-	mockPRRepo.On("EnrichWithActivities", prs, lastCheckTime).Return([]pullrequest.Event{}, expectedErr).Once()
+	mockPRRepo.On("FetchActivities", prs, lastCheckTime).Return(map[string]pullrequest.PRActivityData{}, expectedErr).Once()
 
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, mockEventPublisher, "")
 
@@ -162,21 +163,22 @@ func TestTrackActivity_PublishEventError_ContinuesProcessing(t *testing.T) {
 	prs := []*pullrequest.PullRequest{pr1, pr2}
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
-
-	var enrichedEvents []pullrequest.Event
-	mockPRRepo.On("EnrichWithActivities", prs, lastCheckTime).
-		Run(func(args mock.Arguments) {
-			prsArg := args.Get(0).([]*pullrequest.PullRequest)
-			for _, pr := range prsArg {
-				activity := testutil.NewTestActivity(
-					pullrequest.ActivityTypeComment,
-					now.Add(-30*time.Minute),
-					testutil.WithActivityPR(pr.URL(), pr.Number()),
-				)
-				enrichedEvents = append(enrichedEvents, pr.AddActivities([]*pullrequest.Activity{activity})...)
-			}
-		}).
-		Return(func([]*pullrequest.PullRequest, time.Time) []pullrequest.Event { return enrichedEvents }, nil)
+	mockPRRepo.On("FetchActivities", prs, lastCheckTime).Return(map[string]pullrequest.PRActivityData{
+		pr1.URL(): {
+			Activities: []*pullrequest.Activity{testutil.NewTestActivity(
+				pullrequest.ActivityTypeComment,
+				now.Add(-30*time.Minute),
+				testutil.WithActivityPR(pr1.URL(), pr1.Number()),
+			)},
+		},
+		pr2.URL(): {
+			Activities: []*pullrequest.Activity{testutil.NewTestActivity(
+				pullrequest.ActivityTypeComment,
+				now.Add(-30*time.Minute),
+				testutil.WithActivityPR(pr2.URL(), pr2.Number()),
+			)},
+		},
+	}, nil).Once()
 
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(errors.New("event bus error")).Once()
@@ -205,7 +207,7 @@ func TestTrackActivity_TwoTierScheduling(t *testing.T) {
 	prs := []*pullrequest.PullRequest{recentPR, stalePR}
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
-	mockPRRepo.On("EnrichWithActivities", prs, lastCheckTime).Return([]pullrequest.Event{}, nil).Once()
+	mockPRRepo.On("FetchActivities", prs, lastCheckTime).Return(map[string]pullrequest.PRActivityData{}, nil).Once()
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
 	uc := usecase.NewTrackPullRequestActivityUseCase(mockPRRepo, mockTrackingRepo, scheduler, mockEventPublisher, "")
@@ -214,9 +216,9 @@ func TestTrackActivity_TwoTierScheduling(t *testing.T) {
 	require.NoError(t, err)
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
-	mockPRRepo.On("EnrichWithActivities", mock.MatchedBy(func(prsToCheck []*pullrequest.PullRequest) bool {
+	mockPRRepo.On("FetchActivities", mock.MatchedBy(func(prsToCheck []*pullrequest.PullRequest) bool {
 		return len(prsToCheck) == 1 && prsToCheck[0].Number() == 1
-	}), lastCheckTime).Return([]pullrequest.Event{}, nil).Once()
+	}), lastCheckTime).Return(map[string]pullrequest.PRActivityData{}, nil).Once()
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
 	err = uc.Execute(context.Background(), prs, lastCheckTime)
@@ -243,11 +245,11 @@ func TestTrackActivity_LoadsAndSeedsStateFromRepository(t *testing.T) {
 
 	var seededSHA string
 	var seededStatus pullrequest.PipelineStatus
-	mockPRRepo.On("EnrichWithActivities", mock.MatchedBy(func(prsToCheck []*pullrequest.PullRequest) bool {
+	mockPRRepo.On("FetchActivities", mock.MatchedBy(func(prsToCheck []*pullrequest.PullRequest) bool {
 		seededSHA = prsToCheck[0].HeadCommitSHA()
 		seededStatus = prsToCheck[0].PipelineStatus()
 		return true
-	}), lastCheckTime).Return([]pullrequest.Event{}, nil).Once()
+	}), lastCheckTime).Return(map[string]pullrequest.PRActivityData{}, nil).Once()
 
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
@@ -271,7 +273,7 @@ func TestTrackActivity_PersistsLastActivityCheckAfterExecution(t *testing.T) {
 	pr1 := testutil.NewTestPullRequest(1, testutil.WithCreatedAt(now.Add(-10*time.Minute)))
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
-	mockPRRepo.On("EnrichWithActivities", mock.Anything, lastCheckTime).Return([]pullrequest.Event{}, nil).Once()
+	mockPRRepo.On("FetchActivities", mock.Anything, lastCheckTime).Return(map[string]pullrequest.PRActivityData{}, nil).Once()
 
 	var savedPRs []*pullrequest.PullRequest
 	mockTrackingRepo.On("Save", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
@@ -304,20 +306,16 @@ func TestTrackActivity_IgnoredAuthor_NotMarkedUnseen(t *testing.T) {
 	pr.MarkAsSeen()
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
-
-	var events []pullrequest.Event
-	mockPRRepo.On("EnrichWithActivities", mock.Anything, lastCheckTime).
-		Run(func(args mock.Arguments) {
-			prsArg := args.Get(0).([]*pullrequest.PullRequest)
-			activity := testutil.NewTestActivity(
+	mockPRRepo.On("FetchActivities", mock.Anything, lastCheckTime).Return(map[string]pullrequest.PRActivityData{
+		pr.URL(): {
+			Activities: []*pullrequest.Activity{testutil.NewTestActivity(
 				pullrequest.ActivityTypeComment,
 				now.Add(-30*time.Minute),
-				testutil.WithActivityPR(prsArg[0].URL(), prsArg[0].Number()),
+				testutil.WithActivityPR(pr.URL(), pr.Number()),
 				testutil.WithActivityAuthor("dependabot"),
-			)
-			events = append(events, prsArg[0].AddActivities([]*pullrequest.Activity{activity})...)
-		}).
-		Return(func([]*pullrequest.PullRequest, time.Time) []pullrequest.Event { return events }, nil)
+			)},
+		},
+	}, nil).Once()
 
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil).Once()
@@ -345,20 +343,16 @@ func TestTrackActivity_IgnoreConfig_NonIgnoredAuthorStillMarkUnseen(t *testing.T
 	pr.MarkAsSeen()
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
-
-	var events []pullrequest.Event
-	mockPRRepo.On("EnrichWithActivities", mock.Anything, lastCheckTime).
-		Run(func(args mock.Arguments) {
-			prsArg := args.Get(0).([]*pullrequest.PullRequest)
-			activity := testutil.NewTestActivity(
+	mockPRRepo.On("FetchActivities", mock.Anything, lastCheckTime).Return(map[string]pullrequest.PRActivityData{
+		pr.URL(): {
+			Activities: []*pullrequest.Activity{testutil.NewTestActivity(
 				pullrequest.ActivityTypeComment,
 				now.Add(-30*time.Minute),
-				testutil.WithActivityPR(prsArg[0].URL(), prsArg[0].Number()),
+				testutil.WithActivityPR(pr.URL(), pr.Number()),
 				testutil.WithActivityAuthor("bob"),
-			)
-			events = append(events, prsArg[0].AddActivities([]*pullrequest.Activity{activity})...)
-		}).
-		Return(func([]*pullrequest.PullRequest, time.Time) []pullrequest.Event { return events }, nil)
+			)},
+		},
+	}, nil).Once()
 
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.ActivityDetected")).Return(nil).Once()
@@ -385,7 +379,7 @@ func TestTrackActivity_RestartScenario_StaleCheckedOnceNotForever(t *testing.T) 
 	stalePR := testutil.NewTestPullRequest(1, testutil.WithCreatedAt(now.Add(-72*time.Hour)))
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
-	mockPRRepo.On("EnrichWithActivities", mock.Anything, lastCheckTime).Return([]pullrequest.Event{}, nil).Once()
+	mockPRRepo.On("FetchActivities", mock.Anything, lastCheckTime).Return(map[string]pullrequest.PRActivityData{}, nil).Once()
 
 	var savedAfterCycle1 []*pullrequest.PullRequest
 	mockTrackingRepo.On("Save", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
@@ -402,7 +396,7 @@ func TestTrackActivity_RestartScenario_StaleCheckedOnceNotForever(t *testing.T) 
 
 	err = uc.Execute(context.Background(), []*pullrequest.PullRequest{stalePR}, lastCheckTime)
 	require.NoError(t, err)
-	mockPRRepo.AssertNumberOfCalls(t, "EnrichWithActivities", 1)
+	mockPRRepo.AssertNumberOfCalls(t, "FetchActivities", 1)
 }
 
 func TestTrackActivity_StalePRsPreservedInTrackingRepo(t *testing.T) {
@@ -426,10 +420,10 @@ func TestTrackActivity_StalePRsPreservedInTrackingRepo(t *testing.T) {
 
 	// Tracking repo already holds the stale PR with enrichment state.
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{stalePR}, nil)
-	mockPRRepo.On("EnrichWithActivities", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
+	mockPRRepo.On("FetchActivities", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {
 		// Only recentPR should be in prsToCheck — stalePR is skipped this cycle.
 		return len(prs) == 1 && prs[0].URL() == recentPR.URL()
-	}), lastCheckTime).Return([]pullrequest.Event{}, nil)
+	}), lastCheckTime).Return(map[string]pullrequest.PRActivityData{}, nil)
 
 	var saved []*pullrequest.PullRequest
 	mockTrackingRepo.On("Save", mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool {

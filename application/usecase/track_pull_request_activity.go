@@ -97,7 +97,7 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 	// For pipeline status: the initial search query seeds the PR with the
 	// current GitHub state via SetPipelineStatus. We OVERRIDE that with
 	// the previous cycle's stored value so that UpdatePipelineStatus (called
-	// inside EnrichWithActivities) can correctly detect a change vs. a no-op.
+	// during the apply phase below) can correctly detect a change vs. a no-op.
 	// If we have no stored value yet, reset to Unknown so the first real status
 	// from the timeline query fires the initial transition event.
 	for _, pr := range prsToCheck {
@@ -112,13 +112,30 @@ func (uc *TrackPullRequestActivityUseCase) Execute(
 		}
 	}
 
-	// Enrich PRs with activities since last check.
-	// This also updates the head-commit SHA and creates push activities if the
-	// head changed. Returns all domain events raised during enrichment.
-	enrichEvents, err := uc.prRepo.EnrichWithActivities(prsToCheck, lastCheckTime)
+	// Fetch enrichment facts since the last check.
+	// Aggregate mutation and domain event creation happen below.
+	activityDataByURL, err := uc.prRepo.FetchActivities(prsToCheck, lastCheckTime)
 	if err != nil {
-		log.Error().Err(err).Msg("Error enriching PRs with activities")
+		log.Error().Err(err).Msg("Error fetching PR activities")
 		return err
+	}
+
+	var enrichEvents []pullrequest.Event
+	for _, pr := range prsToCheck {
+		data, found := activityDataByURL[pr.URL()]
+		if !found {
+			continue
+		}
+
+		if data.HeadCommitSHA != nil {
+			enrichEvents = append(enrichEvents, pr.RecordHeadCommitUpdate(*data.HeadCommitSHA)...)
+		}
+
+		if data.PipelineStatus != nil {
+			enrichEvents = append(enrichEvents, pr.UpdatePipelineStatus(*data.PipelineStatus)...)
+		}
+
+		enrichEvents = append(enrichEvents, pr.AddActivities(data.Activities)...)
 	}
 
 	// Record the check timestamp in the scheduler. Captured once so the same

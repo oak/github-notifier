@@ -10,17 +10,26 @@ type PullRequestRepository interface {
 
 	FetchUserCreated() ([]*PullRequest, error)
 
-	// EnrichWithActivities populates PRs with their activities since the given time.
-	// Returns all domain events raised by the aggregate during enrichment
-	// (ActivityDetected, PipelineStatusChanged, etc.) so callers can publish them
-	// without needing to drain an internal event queue.
-	EnrichWithActivities(prs []*PullRequest, since time.Time) ([]Event, error)
+	// FetchActivities fetches raw activity/enrichment facts for the given PRs
+	// since the provided time. Adapters return data only; aggregate mutation and
+	// domain event creation/publishing happen in the application/domain layers.
+	FetchActivities(prs []*PullRequest, since time.Time) (map[string]PRActivityData, error)
 
 	// FetchPRStatus fetches the current status of a specific PR (open, merged, closed).
 	FetchPRStatus(owner, repo string, number int) (PRStatus, error)
 
 	// AuthenticatedUser returns the login of the authenticated user.
 	AuthenticatedUser() string
+}
+
+// PRActivityData contains fetch-only enrichment facts for a PR.
+// It is keyed by PR URL in PullRequestRepository.FetchActivities results.
+// Optional fields are represented as pointers so callers can distinguish
+// between "not present in response" and a concrete value.
+type PRActivityData struct {
+	Activities     []*Activity
+	HeadCommitSHA  *string
+	PipelineStatus *PipelineStatus
 }
 
 // PRTrackingRepository is the port for persisting the locally-tracked state of

@@ -32,24 +32,24 @@ func (_m *PullRequestRepository) AuthenticatedUser() string {
 	return r0
 }
 
-// EnrichWithActivities provides a mock function with given fields: prs, since
-func (_m *PullRequestRepository) EnrichWithActivities(prs []*pullrequest.PullRequest, since time.Time) ([]pullrequest.Event, error) {
+// FetchActivities provides a mock function with given fields: prs, since
+func (_m *PullRequestRepository) FetchActivities(prs []*pullrequest.PullRequest, since time.Time) (map[string]pullrequest.PRActivityData, error) {
 	ret := _m.Called(prs, since)
 
 	if len(ret) == 0 {
-		panic("no return value specified for EnrichWithActivities")
+		panic("no return value specified for FetchActivities")
 	}
 
-	var r0 []pullrequest.Event
+	var r0 map[string]pullrequest.PRActivityData
 	var r1 error
-	if rf, ok := ret.Get(0).(func([]*pullrequest.PullRequest, time.Time) ([]pullrequest.Event, error)); ok {
+	if rf, ok := ret.Get(0).(func([]*pullrequest.PullRequest, time.Time) (map[string]pullrequest.PRActivityData, error)); ok {
 		return rf(prs, since)
 	}
-	if rf, ok := ret.Get(0).(func([]*pullrequest.PullRequest, time.Time) []pullrequest.Event); ok {
+	if rf, ok := ret.Get(0).(func([]*pullrequest.PullRequest, time.Time) map[string]pullrequest.PRActivityData); ok {
 		r0 = rf(prs, since)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]pullrequest.Event)
+			r0 = ret.Get(0).(map[string]pullrequest.PRActivityData)
 		}
 	}
 

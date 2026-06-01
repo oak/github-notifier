@@ -111,7 +111,7 @@ func TestOrchestrator_ExecuteRegularCheck_WithoutActivityTracking(t *testing.T) 
 	err := orchestrator.ExecuteRegularCheck(context.Background(), time.Now())
 
 	require.NoError(t, err)
-	mockPRRepo.AssertNotCalled(t, "EnrichWithActivities")
+	mockPRRepo.AssertNotCalled(t, "FetchActivities")
 }
 
 func TestOrchestrator_ExecuteRegularCheck_WithActivityTracking(t *testing.T) {
@@ -127,7 +127,7 @@ func TestOrchestrator_ExecuteRegularCheck_WithActivityTracking(t *testing.T) {
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.NewPullRequestDetected")).Return(nil).Twice()
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil)
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil)
-	mockPRRepo.On("EnrichWithActivities", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("time.Time")).Return([]pullrequest.Event{}, nil).Once()
+	mockPRRepo.On("FetchActivities", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("time.Time")).Return(map[string]pullrequest.PRActivityData{}, nil).Once()
 	mockUIPort.On("UpdateDisplay", mock.Anything, mock.Anything, mockTrackingRepo).Once()
 
 	orchestrator := buildOrchestrator(t, mockPRRepo, mockTrackingRepo, mockUIPort, mockEventPublisher, true)
@@ -183,7 +183,7 @@ func TestOrchestrator_ExecuteRegularCheck_CheckNewPRsError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Equal(t, expectedErr, err)
-	mockPRRepo.AssertNotCalled(t, "EnrichWithActivities")
+	mockPRRepo.AssertNotCalled(t, "FetchActivities")
 	mockUIPort.AssertNotCalled(t, "UpdateDisplay")
 }
 
@@ -200,7 +200,7 @@ func TestOrchestrator_ExecuteRegularCheck_ActivityTrackingError_ContinuesWithDis
 	mockEventPublisher.On("Publish", mock.AnythingOfType("*pullrequest.NewPullRequestDetected")).Return(nil).Twice()
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil)
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil)
-	mockPRRepo.On("EnrichWithActivities", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("time.Time")).Return([]pullrequest.Event{}, errors.New("activity error")).Once()
+	mockPRRepo.On("FetchActivities", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("time.Time")).Return(map[string]pullrequest.PRActivityData{}, errors.New("activity error")).Once()
 	mockUIPort.On("UpdateDisplay", mock.Anything, mock.Anything, mockTrackingRepo).Once()
 
 	orchestrator := buildOrchestrator(t, mockPRRepo, mockTrackingRepo, mockUIPort, mockEventPublisher, true)

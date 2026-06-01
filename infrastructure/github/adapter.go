@@ -305,17 +305,16 @@ func (a *Adapter) fetchPaginatedPRs(query string) ([]*pullrequest.PullRequest, e
 	return allPRs, nil
 }
 
-// EnrichWithActivities populates PRs with their activities since the given time.
-// Uses batched GraphQL queries to minimize API calls.
-// Returns all domain events raised by aggregate commands during enrichment.
-func (a *Adapter) EnrichWithActivities(prs []*pullrequest.PullRequest, since time.Time) ([]pullrequest.Event, error) {
+// FetchActivities fetches activity/enrichment facts for PRs since the given
+// time using batched GraphQL queries.
+func (a *Adapter) FetchActivities(prs []*pullrequest.PullRequest, since time.Time) (map[string]pullrequest.PRActivityData, error) {
 	if len(prs) == 0 {
 		return nil, nil
 	}
 
 	totalActivities := 0
 	batchSize := 10 // Query 10 PRs per API call to avoid hitting complexity limits
-	var allEvents []pullrequest.Event
+	result := make(map[string]pullrequest.PRActivityData, len(prs))
 
 	// Process PRs in batches
 	for i := 0; i < len(prs); i += batchSize {
@@ -327,36 +326,28 @@ func (a *Adapter) EnrichWithActivities(prs []*pullrequest.PullRequest, since tim
 
 		log.Info().Msgf("Fetching activities for batch of %d PRs (batch %d/%d)", len(batch), (i/batchSize)+1, (len(prs)+batchSize-1)/batchSize)
 
-		// Fetch activities for this batch; also collects events from head-commit
-		// and pipeline-status updates applied to aggregate during fetching.
-		activitiesMap, batchEvents, err := a.fetchBatchedTimelines(batch, since)
+		activitiesMap, err := a.fetchBatchedTimelines(batch, since)
 		if err != nil {
 			log.Error().Msgf("Error fetching batch timeline: %v", err)
 			continue
 		}
-		allEvents = append(allEvents, batchEvents...)
 
-		// Add activities to each PR through the aggregate.
-		// Collect the ActivityDetected events returned by AddActivities.
-		for _, pr := range batch {
-			if activities, found := activitiesMap[pr.URL()]; found {
-				allEvents = append(allEvents, pr.AddActivities(activities)...)
-				totalActivities += len(activities)
-			}
+		for url, data := range activitiesMap {
+			result[url] = data
+			totalActivities += len(data.Activities)
 		}
 	}
 
 	apiCalls := (len(prs) + batchSize - 1) / batchSize
 	log.Info().Msgf("Enriched %d PRs with %d total activities using %d API calls (was %d before batching)", len(prs), totalActivities, apiCalls, len(prs))
-	return allEvents, nil
+	return result, nil
 }
 
 // fetchBatchedTimelines fetches timeline items for multiple PRs in a single GraphQL query.
-// Returns a map of PR URL -> activities, the domain events raised while applying
-// head-commit and pipeline-status updates, and any fetch error.
-func (a *Adapter) fetchBatchedTimelines(prs []*pullrequest.PullRequest, since time.Time) (map[string][]*pullrequest.Activity, []pullrequest.Event, error) {
+// Returns a map of PR URL -> raw enrichment facts and any fetch error.
+func (a *Adapter) fetchBatchedTimelines(prs []*pullrequest.PullRequest, since time.Time) (map[string]pullrequest.PRActivityData, error) {
 	if len(prs) == 0 {
-		return make(map[string][]*pullrequest.Activity), nil, nil
+		return make(map[string]pullrequest.PRActivityData), nil
 	}
 
 	// Build the batched query using GraphQL aliases
@@ -443,20 +434,21 @@ func (a *Adapter) fetchBatchedTimelines(prs []*pullrequest.PullRequest, since ti
 	// Execute the batched query
 	response, err := a.client.ExecuteBatchedTimelineQuery(query)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to fetch batched timelines: %w", err)
+		return nil, fmt.Errorf("failed to fetch batched timelines: %w", err)
 	}
 
 	// Parse the response and map activities to PR URLs
-	result := make(map[string][]*pullrequest.Activity)
-	var batchEvents []pullrequest.Event
+	result := make(map[string]pullrequest.PRActivityData)
 
 	for _, info := range prInfos {
 		// Extract the timeline items for this PR using the alias
 		if repoData, ok := response.Data[info.alias].(map[string]interface{}); ok {
 			if prData, ok := repoData["pullRequest"].(map[string]interface{}); ok {
-				// Delegate head commit change detection to the domain aggregate
+				data := pullrequest.PRActivityData{}
+
 				if headRefOid, ok := prData["headRefOid"].(string); ok {
-					batchEvents = append(batchEvents, info.pr.RecordHeadCommitUpdate(headRefOid)...)
+					head := headRefOid
+					data.HeadCommitSHA = &head
 				}
 
 				// Parse pipeline status from statusCheckRollup on the latest commit
@@ -467,7 +459,7 @@ func (a *Adapter) fetchBatchedTimelines(prs []*pullrequest.PullRequest, since ti
 								if rollup, ok := commit["statusCheckRollup"].(map[string]interface{}); ok {
 									if state, ok := rollup["state"].(string); ok {
 										pipelineStatus := pipelineStatusFromRollup(state)
-										batchEvents = append(batchEvents, info.pr.UpdatePipelineStatus(pipelineStatus)...)
+										data.PipelineStatus = &pipelineStatus
 									}
 								}
 							}
@@ -490,14 +482,16 @@ func (a *Adapter) fetchBatchedTimelines(prs []*pullrequest.PullRequest, since ti
 
 						// Map to domain activities
 						activities := toActivityList(info.pr, dtos, since)
-						result[info.pr.URL()] = activities
+						data.Activities = activities
 					}
 				}
+
+				result[info.pr.URL()] = data
 			}
 		}
 	}
 
-	return result, batchEvents, nil
+	return result, nil
 }
 
 // parseTimelineItem converts a raw map to TimelineItemDTO
