@@ -80,5 +80,12 @@ func (uc *InitializeFirstCheckUseCase) Execute(ctx context.Context) (bool, []*pu
 	allPRs := append(requestedReviewPRs, userCreatedPRs...)
 	log.Info().Msgf("First run complete: marked %d PRs as seen", len(allPRs))
 
+	// Seed the tracking repo so the first regular check has a baseline for
+	// closed/merged PR detection. On first run there is no previous enrichment
+	// data, so we save the PRs as-is.
+	if err := uc.prTrackingRepo.Save(allPRs); err != nil {
+		log.Error().Err(err).Msg("InitializeFirstCheck: failed to seed tracking repo")
+	}
+
 	return true, allPRs, nil
 }

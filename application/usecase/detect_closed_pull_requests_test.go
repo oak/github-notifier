@@ -24,6 +24,7 @@ func TestDetectClosedPRs_NoTrackedPRs_NoOp(t *testing.T) {
 	currentPRs := testutil.CreateTestPRs(2, 0)
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
+	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
 	urls, err := uc.Execute(context.Background(), currentPRs)
 
@@ -41,11 +42,9 @@ func TestDetectClosedPRs_AllPRsStillOpen_NoEvents(t *testing.T) {
 	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockEventPublisher)
 	prs := testutil.CreateTestPRs(3, 0)
 
-	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
-	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 	mockTrackingRepo.On("LoadAll").Return(prs, nil).Once()
+	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
-	uc.TrackPRs(prs)
 	urls, err := uc.Execute(context.Background(), prs)
 
 	require.NoError(t, err)
@@ -121,6 +120,7 @@ func TestDetectClosedPRs_APIError_KeepsPRTracked(t *testing.T) {
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{pr1}, nil).Once()
 	mockPRRepo.On("FetchPRStatus", "owner", "repo", 1).Return(pullrequest.StatusOpen, errors.New("API error")).Once()
+	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
 	urls, err := uc.Execute(context.Background(), []*pullrequest.PullRequest{})
 	require.NoError(t, err)
@@ -153,6 +153,8 @@ func TestDetectClosedPRs_PRStillOpenButMissing_KeepsTracked(t *testing.T) {
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{pr1}, nil).Once()
 	mockPRRepo.On("FetchPRStatus", "owner", "repo", 1).Return(pullrequest.StatusOpen, nil).Once()
+
+	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
 	urls, err := uc.Execute(context.Background(), []*pullrequest.PullRequest{})
 
@@ -225,6 +227,7 @@ func TestDetectClosedPRs_CleanupRemovesPRFromTracking(t *testing.T) {
 	assert.Equal(t, pr1.URL(), urls[0])
 
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
+	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 	urls, err = uc.Execute(context.Background(), []*pullrequest.PullRequest{})
 	require.NoError(t, err)
 	assert.Empty(t, urls)
@@ -233,25 +236,18 @@ func TestDetectClosedPRs_CleanupRemovesPRFromTracking(t *testing.T) {
 	mockTrackingRepo.AssertExpectations(t)
 }
 
-func TestDetectClosedPRs_TrackPRs_UpdatesExistingEntry(t *testing.T) {
+func TestDetectClosedPRs_DetectsUsingLatestSavedPRData(t *testing.T) {
+	// Verifies that the snapshot saved by Execute is used in the next cycle's
+	// detection — specifically that the event reflects the latest PR state.
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
 
 	uc := usecase.NewDetectClosedPullRequestsUseCase(mockPRRepo, mockTrackingRepo, mockEventPublisher)
 
-	pr1 := testutil.NewTestPullRequest(1, testutil.WithURL("https://github.com/owner/repo/pull/1"), testutil.WithTitle("Original"))
 	pr1Updated := testutil.NewTestPullRequest(1, testutil.WithURL("https://github.com/owner/repo/pull/1"), testutil.WithTitle("Updated"))
 
-	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
-	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
-
-	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{pr1}, nil).Once()
-	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
-
-	uc.TrackPRs([]*pullrequest.PullRequest{pr1})
-	uc.TrackPRs([]*pullrequest.PullRequest{pr1Updated})
-
+	// Detection cycle: pr1Updated has disappeared — event must carry the updated title.
 	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{pr1Updated}, nil).Once()
 	mockPRRepo.On("FetchPRStatus", "owner", "repo", 1).Return(pullrequest.StatusMerged, nil).Once()
 	mockEventPublisher.On("Publish", mock.MatchedBy(func(e pullrequest.Event) bool {
@@ -273,7 +269,9 @@ func TestDetectClosedPRs_TrackPRs_UpdatesExistingEntry(t *testing.T) {
 	mockTrackingRepo.AssertExpectations(t)
 }
 
-func TestDetectClosedPRs_TrackPRs_PreservesEnrichmentData(t *testing.T) {
+func TestDetectClosedPRs_ExecutePreservesEnrichmentData(t *testing.T) {
+	// Verifies that Execute preserves enrichment fields from the previous
+	// snapshot when saving the current cycle's snapshot.
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
@@ -293,8 +291,9 @@ func TestDetectClosedPRs_TrackPRs_PreservesEnrichmentData(t *testing.T) {
 		return true
 	})).Return(nil).Once()
 
-	uc.TrackPRs([]*pullrequest.PullRequest{pr1})
+	_, err := uc.Execute(context.Background(), []*pullrequest.PullRequest{pr1})
 
+	require.NoError(t, err)
 	require.Len(t, savedPRs, 1)
 	assert.Equal(t, "abc123", savedPRs[0].HeadCommitSHA())
 	assert.Equal(t, pullrequest.PipelineStatusSuccess, savedPRs[0].PipelineStatus())
@@ -302,10 +301,9 @@ func TestDetectClosedPRs_TrackPRs_PreservesEnrichmentData(t *testing.T) {
 	mockTrackingRepo.AssertExpectations(t)
 }
 
-func TestDetectClosedPRs_TrackPRs_DoesNotMutateLivePRs(t *testing.T) {
-	// Regression: TrackPRs used to mutate the live PR objects by calling
-	// SetHeadCommitSHA/SetPipelineStatus/SetLastActivityCheck on them. Those
-	// same objects are used downstream by TrackActivityUseCase and the display.
+func TestDetectClosedPRs_ExecuteDoesNotMutateLivePRs(t *testing.T) {
+	// Regression: saveSnapshot must not mutate the live PR objects — they are
+	// used downstream by TrackActivityUseCase and the display after Execute.
 	mockPRRepo := mocks.NewPullRequestRepository(t)
 	mockTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockEventPublisher := mocks.NewEventPublisher(t)
@@ -327,10 +325,11 @@ func TestDetectClosedPRs_TrackPRs_DoesNotMutateLivePRs(t *testing.T) {
 	originalPipeline := livePR.PipelineStatus()
 	originalLastCheck := livePR.LastActivityCheck()
 
-	uc.TrackPRs([]*pullrequest.PullRequest{livePR})
+	_, err := uc.Execute(context.Background(), []*pullrequest.PullRequest{livePR})
+	require.NoError(t, err)
 
 	// The live PR must be untouched — only the snapshot copy is modified.
-	assert.Equal(t, originalSHA, livePR.HeadCommitSHA(), "TrackPRs must not mutate live PR headCommitSHA")
-	assert.Equal(t, originalPipeline, livePR.PipelineStatus(), "TrackPRs must not mutate live PR pipelineStatus")
-	assert.Equal(t, originalLastCheck, livePR.LastActivityCheck(), "TrackPRs must not mutate live PR lastActivityCheck")
+	assert.Equal(t, originalSHA, livePR.HeadCommitSHA(), "Execute must not mutate live PR headCommitSHA")
+	assert.Equal(t, originalPipeline, livePR.PipelineStatus(), "Execute must not mutate live PR pipelineStatus")
+	assert.Equal(t, originalLastCheck, livePR.LastActivityCheck(), "Execute must not mutate live PR lastActivityCheck")
 }

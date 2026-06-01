@@ -786,90 +786,90 @@ func TestPullRequest_UpdatePipelineStatus_EventCarriesFullPR(t *testing.T) {
 // ── Seen state ────────────────────────────────────────────────────────────────
 
 func TestPullRequest_Seen_DefaultFalse(t *testing.T) {
-pr := testutil.NewTestPullRequest(1)
+	pr := testutil.NewTestPullRequest(1)
 
-assert.False(t, pr.Seen())
-assert.False(t, pr.IsSeen())
+	assert.False(t, pr.Seen())
+	assert.False(t, pr.IsSeen())
 }
 
 func TestPullRequest_MarkAsSeen(t *testing.T) {
-pr := testutil.NewTestPullRequest(1)
+	pr := testutil.NewTestPullRequest(1)
 
-pr.MarkAsSeen()
+	pr.MarkAsSeen()
 
-assert.True(t, pr.Seen())
-assert.True(t, pr.IsSeen())
+	assert.True(t, pr.Seen())
+	assert.True(t, pr.IsSeen())
 }
 
 func TestPullRequest_MarkAsUnseen(t *testing.T) {
-pr := testutil.NewTestPullRequest(1)
-pr.MarkAsSeen()
+	pr := testutil.NewTestPullRequest(1)
+	pr.MarkAsSeen()
 
-pr.MarkAsUnseen()
+	pr.MarkAsUnseen()
 
-assert.False(t, pr.Seen())
-assert.False(t, pr.IsSeen())
+	assert.False(t, pr.Seen())
+	assert.False(t, pr.IsSeen())
 }
 
 func TestPullRequest_SeenStateTransitions(t *testing.T) {
-pr := testutil.NewTestPullRequest(1)
+	pr := testutil.NewTestPullRequest(1)
 
-assert.False(t, pr.Seen())
+	assert.False(t, pr.Seen())
 
-pr.MarkAsSeen()
-assert.True(t, pr.Seen())
+	pr.MarkAsSeen()
+	assert.True(t, pr.Seen())
 
-pr.MarkAsUnseen()
-assert.False(t, pr.Seen())
+	pr.MarkAsUnseen()
+	assert.False(t, pr.Seen())
 
-pr.MarkAsSeen()
-assert.True(t, pr.Seen())
+	pr.MarkAsSeen()
+	assert.True(t, pr.Seen())
 }
 
 func TestReconstitutePR_SeenTrue(t *testing.T) {
-identifier, err := pullrequest.NewPRIdentifier("https://github.com/owner/repo/pull/1", 1)
-require.NoError(t, err)
+	identifier, err := pullrequest.NewPRIdentifier("https://github.com/owner/repo/pull/1", 1)
+	require.NoError(t, err)
 
-pr := pullrequest.ReconstitutePR(
-identifier,
-"Test PR",
-testutil.NewTestRepository("owner/repo"),
-testutil.NewTestAuthor("alice"),
-pullrequest.StatusOpen,
-time.Now(),
-false,
-nil,
-time.Time{},
-"",
-nil,
-pullrequest.PipelineStatusUnknown,
-true,
-)
+	pr := pullrequest.ReconstitutePR(
+		identifier,
+		"Test PR",
+		testutil.NewTestRepository("owner/repo"),
+		testutil.NewTestAuthor("alice"),
+		pullrequest.StatusOpen,
+		time.Now(),
+		false,
+		nil,
+		time.Time{},
+		"",
+		nil,
+		pullrequest.PipelineStatusUnknown,
+		true,
+	)
 
-assert.True(t, pr.Seen())
+	assert.True(t, pr.Seen())
 }
 
 func TestReconstitutePR_SeenFalse(t *testing.T) {
-identifier, err := pullrequest.NewPRIdentifier("https://github.com/owner/repo/pull/2", 2)
-require.NoError(t, err)
+	identifier, err := pullrequest.NewPRIdentifier("https://github.com/owner/repo/pull/2", 2)
+	require.NoError(t, err)
 
-pr := pullrequest.ReconstitutePR(
-identifier,
-"Test PR",
-testutil.NewTestRepository("owner/repo"),
-testutil.NewTestAuthor("alice"),
-pullrequest.StatusOpen,
-time.Now(),
-false,
-nil,
-time.Time{},
-"",
-nil,
-pullrequest.PipelineStatusUnknown,
-false,
-)
+	pr := pullrequest.ReconstitutePR(
+		identifier,
+		"Test PR",
+		testutil.NewTestRepository("owner/repo"),
+		testutil.NewTestAuthor("alice"),
+		pullrequest.StatusOpen,
+		time.Now(),
+		false,
+		nil,
+		time.Time{},
+		"",
+		nil,
+		pullrequest.PipelineStatusUnknown,
+		false,
+	)
 
-assert.False(t, pr.Seen())
+	assert.False(t, pr.Seen())
 }
 
 func TestReconstitutePR_LastActivityAt_FallsBackToCreatedAt(t *testing.T) {

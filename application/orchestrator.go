@@ -48,16 +48,13 @@ func (o *PullRequestOrchestrator) ExecuteInitialCheck(ctx context.Context) error
 	log.Info().Msg("Performing initial PR check")
 
 	// Try first-run initialization
-	wasFirstRun, firstRunPRs, err := o.initializeUseCase.Execute(ctx)
+	wasFirstRun, _, err := o.initializeUseCase.Execute(ctx)
 	if err != nil {
 		return err
 	}
 
 	if wasFirstRun {
 		log.Info().Msg("First run complete - all existing PRs marked as seen")
-		// Seed the tracking repo with initial PR state (including pipeline status)
-		// so the first regular check can correctly detect changes from baseline.
-		o.detectClosedPRsUseCase.TrackPRs(firstRunPRs)
 		return nil
 	}
 
@@ -105,10 +102,6 @@ func (o *PullRequestOrchestrator) ExecuteRegularCheck(ctx context.Context, lastC
 		}
 		log.Debug().Msgf("Pruned %d closed/merged PRs from cycle state", len(closedMergedURLs))
 	}
-
-	// Update tracked PRs for next cycle's comparison
-	o.detectClosedPRsUseCase.TrackPRs(allCurrentPRs)
-
 	// Step 3: Track activity if enabled
 	if o.enableActivityTracking {
 		if err := o.trackActivityUseCase.Execute(ctx, allCurrentPRs, lastCheckTime); err != nil {

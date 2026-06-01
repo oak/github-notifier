@@ -55,7 +55,6 @@ func TestOrchestrator_ExecuteInitialCheck_FirstRun(t *testing.T) {
 	mockPRRepo.On("FetchRequestedReviews").Return(prs, nil).Once()
 	mockPRRepo.On("FetchUserCreated").Return([]*pullrequest.PullRequest{}, nil).Once()
 	mockUIPort.On("UpdateDisplay", mock.Anything, mock.Anything, mockTrackingRepo).Once()
-	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{}, nil).Once()
 	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
 	orchestrator := buildOrchestrator(t, mockPRRepo, mockTrackingRepo, mockUIPort, mockEventPublisher, false)
@@ -148,11 +147,11 @@ func TestOrchestrator_ExecuteRegularCheck_AllPRsClosed_UpdatesDisplayWithEmptyLi
 
 	mockPRRepo.On("FetchRequestedReviews").Return([]*pullrequest.PullRequest{}, nil).Once()
 	mockPRRepo.On("FetchUserCreated").Return([]*pullrequest.PullRequest{}, nil).Once()
-	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{tracked}, nil).Times(3)
+	mockTrackingRepo.On("LoadAll").Return([]*pullrequest.PullRequest{tracked}, nil).Twice()
 	mockPRRepo.On("FetchPRStatus", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("int")).
 		Return(pullrequest.StatusMerged, nil).Once()
 	mockEventPublisher.On("Publish", mock.Anything).Return(nil).Once()
-	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Twice()
+	mockTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 	mockUIPort.On("UpdateDisplay",
 		mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool { return len(prs) == 0 }),
 		mock.MatchedBy(func(prs []*pullrequest.PullRequest) bool { return len(prs) == 0 }),

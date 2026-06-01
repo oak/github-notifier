@@ -30,12 +30,11 @@ func TestInitializeFirstCheck_FirstRunEver(t *testing.T) {
 	mockPRRepo.On("FetchUserCreated").Return(userPRs, nil)
 
 	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockPRTrackingRepo).Once()
+	mockPRTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
 	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockPRTrackingRepo, prFilter, mockUIPort)
-
 	// Act
 	isFirstRun, seededPRs, err := uc.Execute(context.Background())
-
 	// Assert
 	require.NoError(t, err)
 	assert.True(t, isFirstRun, "Should return true on first run")
@@ -138,6 +137,7 @@ func TestInitializeFirstCheck_IncludeDrafts(t *testing.T) {
 	mockPRTrackingRepo := mocks.NewPRTrackingRepository(t)
 	mockUIPort := mocks.NewUIPort(t)
 	prFilter := pullrequest.NewDraftFilter(true) // include drafts
+	mockPRTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 
 	requestedPRs := testutil.CreateTestPRs(2, 1) // 2 regular, 1 draft
 	userPRs := testutil.CreateTestPRs(1, 1)      // 1 regular, 1 draft
@@ -177,6 +177,7 @@ func TestInitializeFirstCheck_NoPRs(t *testing.T) {
 	mockPRTrackingRepo.On("IsEmpty").Return(true)
 	mockPRRepo.On("FetchRequestedReviews").Return(emptyPRs, nil)
 	mockPRRepo.On("FetchUserCreated").Return(emptyPRs, nil)
+	mockPRTrackingRepo.On("Save", mock.Anything).Return(nil).Once()
 	mockUIPort.On("UpdateDisplay", mock.AnythingOfType("[]*pullrequest.PullRequest"), mock.AnythingOfType("[]*pullrequest.PullRequest"), mockPRTrackingRepo).Once()
 
 	uc := usecase.NewInitializeFirstCheckUseCase(mockPRRepo, mockPRTrackingRepo, prFilter, mockUIPort)
