@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/oak3/github-notifier/domain/pullrequest"
 	"github.com/rs/zerolog/log"
 )
 
@@ -16,15 +17,13 @@ const (
 	debounceDuration = 500 * time.Millisecond
 )
 
-// WatchForValidConfig watches the config file at path for changes.
-// When a valid config (with a non-empty GitHub token) is detected, it sends
-// the config on the returned channel and stops watching.
-// The caller should cancel the context to stop watching early.
-func WatchForValidConfig(ctx context.Context, path string) <-chan *Config {
-	ch := make(chan *Config, 1)
+// watchDebouncedFileChanges emits a signal whenever path is written/created/
+// renamed, after a small debounce window.
+func watchDebouncedFileChanges(ctx context.Context, path string) <-chan struct{} {
+	signals := make(chan struct{}, 1)
 
 	go func() {
-		defer close(ch)
+		defer close(signals)
 
 		watcher, err := fsnotify.NewWatcher()
 		if err != nil {
@@ -33,9 +32,7 @@ func WatchForValidConfig(ctx context.Context, path string) <-chan *Config {
 		}
 		defer watcher.Close()
 
-		// Watch the directory containing the config file, not the file itself.
-		// Many editors (vim, emacs) write to a temp file and rename, which
-		// removes the original inode and breaks direct file watches.
+		// Watch the directory containing the file, not the file itself.
 		dir := filepath.Dir(path)
 		if err := watcher.Add(dir); err != nil {
 			log.Error().Err(err).Str("dir", dir).Msg("Failed to watch config directory")
@@ -44,6 +41,7 @@ func WatchForValidConfig(ctx context.Context, path string) <-chan *Config {
 
 		base := filepath.Base(path)
 		var debounceTimer *time.Timer
+		var debounceC <-chan time.Time
 
 		for {
 			select {
@@ -58,7 +56,6 @@ func WatchForValidConfig(ctx context.Context, path string) <-chan *Config {
 					return
 				}
 
-				// Only react to writes/creates/renames of our config file
 				if filepath.Base(event.Name) != base {
 					continue
 				}
@@ -73,28 +70,85 @@ func WatchForValidConfig(ctx context.Context, path string) <-chan *Config {
 					Str("file", event.Name).
 					Msg("Config file changed, debouncing reload")
 
-				// Reset debounce timer
-				if debounceTimer != nil {
-					debounceTimer.Stop()
+				if debounceTimer == nil {
+					debounceTimer = time.NewTimer(debounceDuration)
+					debounceC = debounceTimer.C
+					continue
 				}
-				debounceTimer = time.AfterFunc(debounceDuration, func() {
-					cfg := LoadConfigWithPath(path)
-					if cfg.IsValid() {
-						log.Info().Msg("Valid configuration detected — starting application")
-						select {
-						case ch <- cfg:
-						case <-ctx.Done():
-						}
-					} else {
-						log.Info().Msg("Config file saved but GitHub token still not set")
-					}
-				})
 
-			case err, ok := <-watcher.Errors:
-				if !ok {
+				if !debounceTimer.Stop() {
+					select {
+					case <-debounceTimer.C:
+					default:
+					}
+				}
+				debounceTimer.Reset(debounceDuration)
+
+			case <-debounceC:
+				debounceC = nil
+				if debounceTimer != nil {
+					debounceC = debounceTimer.C
+				}
+				select {
+				case signals <- struct{}{}:
+				case <-ctx.Done():
 					return
 				}
-				log.Warn().Err(err).Msg("File watcher error")
+			}
+		}
+	}()
+
+	return signals
+}
+
+// WatchForValidConfig watches the config file at path for changes.
+// When a valid config (with a non-empty GitHub token) is detected, it sends
+// the config on the returned channel and stops watching.
+// The caller should cancel the context to stop watching early.
+func WatchForValidConfig(ctx context.Context, path string) <-chan *Config {
+	ch := make(chan *Config, 1)
+
+	go func() {
+		defer close(ch)
+
+		for range watchDebouncedFileChanges(ctx, path) {
+			cfg := LoadConfigWithPath(path)
+			if !cfg.IsValid() {
+				log.Info().Msg("Config file saved but GitHub token still not set")
+				continue
+			}
+
+			log.Info().Msg("Valid configuration detected — starting application")
+			select {
+			case ch <- cfg:
+			case <-ctx.Done():
+			}
+			return
+		}
+	}()
+
+	return ch
+}
+
+// WatchForValidIgnoreConfig watches ignoreFilePath and sends a freshly parsed
+// *pullrequest.IgnoreConfig whenever the file changes and parses successfully.
+// The channel is closed when ctx is cancelled.
+func WatchForValidIgnoreConfig(ctx context.Context, ignoreFilePath string) <-chan *pullrequest.IgnoreConfig {
+	ch := make(chan *pullrequest.IgnoreConfig, 1)
+
+	go func() {
+		defer close(ch)
+
+		for range watchDebouncedFileChanges(ctx, ignoreFilePath) {
+			cfg, err := LoadIgnoreConfig(ignoreFilePath)
+			if err != nil || cfg == nil {
+				continue
+			}
+
+			select {
+			case ch <- cfg:
+			case <-ctx.Done():
+				return
 			}
 		}
 	}()

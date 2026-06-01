@@ -132,3 +132,87 @@ func TestWatchForValidConfig_HandlesNewFileCreation(t *testing.T) {
 		t.Fatal("Timed out waiting for valid config")
 	}
 }
+
+func TestWatchForValidIgnoreConfig_DetectsValidConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "ignore.yaml")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch := WatchForValidIgnoreConfig(ctx, path)
+
+	// Give the watcher time to initialize.
+	time.Sleep(100 * time.Millisecond)
+
+	validContent := `ignore:
+  global:
+    repos:
+      - owner/repo
+  owner/repo:
+    events:
+      - comment
+`
+	require.NoError(t, os.WriteFile(path, []byte(validContent), 0600))
+
+	select {
+	case cfg := <-ch:
+		require.NotNil(t, cfg)
+		assert.Contains(t, cfg.Ignore.Global.Repos, "owner/repo")
+		assert.Contains(t, cfg.Ignore.Repos, "owner/repo")
+		assert.Equal(t, []string{"comment"}, cfg.Ignore.Repos["owner/repo"].Events)
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for valid ignore config")
+	}
+}
+
+func TestWatchForValidIgnoreConfig_IgnoresInvalidConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "ignore.yaml")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch := WatchForValidIgnoreConfig(ctx, path)
+
+	// Give the watcher time to initialize.
+	time.Sleep(100 * time.Millisecond)
+
+	invalidContent := "ignore: [\n"
+	require.NoError(t, os.WriteFile(path, []byte(invalidContent), 0600))
+
+	// Wait longer than debounce to ensure invalid write is processed.
+	time.Sleep(1 * time.Second)
+
+	validContent := `ignore:
+  global:
+    repos:
+      - acme/service
+`
+	require.NoError(t, os.WriteFile(path, []byte(validContent), 0600))
+
+	select {
+	case cfg := <-ch:
+		require.NotNil(t, cfg)
+		assert.Contains(t, cfg.Ignore.Global.Repos, "acme/service")
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for valid ignore config")
+	}
+}
+
+func TestWatchForValidIgnoreConfig_RespectsContextCancellation(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "ignore.yaml")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := WatchForValidIgnoreConfig(ctx, path)
+
+	// Give the watcher time to initialize.
+	time.Sleep(100 * time.Millisecond)
+
+	cancel()
+
+	cfg, ok := <-ch
+	assert.Nil(t, cfg)
+	assert.False(t, ok, "channel should be closed after context cancellation")
+}
