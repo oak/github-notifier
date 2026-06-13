@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/oak3/github-notifier/domain/pullrequest"
-	jsonrepo "github.com/oak3/github-notifier/infrastructure/persistence/json"
-	"github.com/oak3/github-notifier/internal/testutil"
+	"github.com/oak/github-notifier/domain/pullrequest"
+	jsonrepo "github.com/oak/github-notifier/infrastructure/persistence/json"
+	"github.com/oak/github-notifier/internal/testutil"
 )
 
 // newRepo creates a StateRepository backed by a temp file.

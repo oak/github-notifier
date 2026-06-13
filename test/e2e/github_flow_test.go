@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/oak3/github-notifier/infrastructure/ui"
+	"github.com/oak/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/infrastructure/ui"
 )
 
 func TestE2E_NewPRDetection_SendsNotification(t *testing.T) {

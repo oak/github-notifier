@@ -6,8 +6,8 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/oak3/github-notifier/application/usecase"
-	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/application/usecase"
+	"github.com/oak/github-notifier/domain/pullrequest"
 )
 
 // PullRequestOrchestrator coordinates multiple use cases to check for PR updates

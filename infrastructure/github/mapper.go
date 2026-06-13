@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/domain/pullrequest"
 )
 
 // reviewStateFromString converts a GitHub API review state string to a domain ReviewState.

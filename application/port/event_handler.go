@@ -3,7 +3,7 @@ package port
 import (
 	"context"
 
-	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/domain/pullrequest"
 )
 
 // EventHandler is the port for handling domain events

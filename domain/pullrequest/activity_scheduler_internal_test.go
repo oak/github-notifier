@@ -33,7 +33,7 @@ func newInternalTestPR(t *testing.T, number int, url string, createdAt time.Time
 
 func prWithAge(t *testing.T, number int, now time.Time, age time.Duration) *PullRequest {
 	t.Helper()
-	url := fmt.Sprintf("https://github.com/oak3/github-notifier/pull/%d", number)
+	url := fmt.Sprintf("https://github.com/oak/github-notifier/pull/%d", number)
 	return newInternalTestPR(t, number, url, now.Add(-age))
 }
 
@@ -177,7 +177,7 @@ func TestActivityCheckScheduler_DeterminePRsToCheckAt_SeedLastChecked(t *testing
 
 func TestRecordChecked_AddsEntries(t *testing.T) {
 	now := time.Now()
-	pr := newInternalTestPR(t, 1, "https://github.com/oak3/github-notifier/pull/1", now.Add(-72*time.Hour))
+	pr := newInternalTestPR(t, 1, "https://github.com/oak/github-notifier/pull/1", now.Add(-72*time.Hour))
 
 	result := recordChecked(nil, []*PullRequest{pr}, now)
 
@@ -187,8 +187,8 @@ func TestRecordChecked_AddsEntries(t *testing.T) {
 
 func TestRecordChecked_DoesNotMutateInput(t *testing.T) {
 	now := time.Now()
-	pr1 := newInternalTestPR(t, 1, "https://github.com/oak3/github-notifier/pull/1", now.Add(-72*time.Hour))
-	pr2 := newInternalTestPR(t, 2, "https://github.com/oak3/github-notifier/pull/2", now.Add(-96*time.Hour))
+	pr1 := newInternalTestPR(t, 1, "https://github.com/oak/github-notifier/pull/1", now.Add(-72*time.Hour))
+	pr2 := newInternalTestPR(t, 2, "https://github.com/oak/github-notifier/pull/2", now.Add(-96*time.Hour))
 
 	original := map[string]time.Time{pr1.URL(): now.Add(-1 * time.Hour)}
 
@@ -202,7 +202,7 @@ func TestRecordChecked_DoesNotMutateInput(t *testing.T) {
 
 func TestRecordChecked_OverwritesExistingEntry(t *testing.T) {
 	now := time.Now()
-	pr := newInternalTestPR(t, 1, "https://github.com/oak3/github-notifier/pull/1", now.Add(-72*time.Hour))
+	pr := newInternalTestPR(t, 1, "https://github.com/oak/github-notifier/pull/1", now.Add(-72*time.Hour))
 	old := now.Add(-1 * time.Hour)
 
 	original := map[string]time.Time{pr.URL(): old}

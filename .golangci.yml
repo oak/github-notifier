@@ -29,7 +29,7 @@ linters-settings:
     check-blank: true
 
   goimports:
-    local-prefixes: github.com/oak3/github-notifier
+    local-prefixes: github.com/oak/github-notifier
 
   revive:
     rules:

@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oak3/github-notifier/application"
-	"github.com/oak3/github-notifier/application/usecase"
-	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/oak3/github-notifier/infrastructure/events"
-	"github.com/oak3/github-notifier/infrastructure/github"
-	jsonrepo "github.com/oak3/github-notifier/infrastructure/persistence/json"
-	"github.com/oak3/github-notifier/infrastructure/persistence/memory"
+	"github.com/oak/github-notifier/application"
+	"github.com/oak/github-notifier/application/usecase"
+	"github.com/oak/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/infrastructure/events"
+	"github.com/oak/github-notifier/infrastructure/github"
+	jsonrepo "github.com/oak/github-notifier/infrastructure/persistence/json"
+	"github.com/oak/github-notifier/infrastructure/persistence/memory"
 )
 
 // TestSuite holds the E2E test infrastructure

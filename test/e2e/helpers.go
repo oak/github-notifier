@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oak3/github-notifier/application/port"
-	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/application/port"
+	"github.com/oak/github-notifier/domain/pullrequest"
 )
 
 // MockGitHubServer simulates GitHub GraphQL API for E2E tests

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/domain/pullrequest"
 	"github.com/rs/zerolog/log"
 )
 

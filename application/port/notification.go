@@ -1,6 +1,6 @@
 package port
 
-import "github.com/oak3/github-notifier/domain/pullrequest"
+import "github.com/oak/github-notifier/domain/pullrequest"
 
 // PRNotificationData represents the data for a single PR notification
 type PRNotificationData struct {

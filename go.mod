@@ -1,4 +1,4 @@
-module github.com/oak3/github-notifier
+module github.com/oak/github-notifier
 
 go 1.24.0
 

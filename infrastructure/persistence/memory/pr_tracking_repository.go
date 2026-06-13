@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/oak3/github-notifier/infrastructure/persistence"
+	"github.com/oak/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/infrastructure/persistence"
 )
 
 // PRTrackingRepository is an in-memory implementation of the

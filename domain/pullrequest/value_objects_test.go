@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/domain/pullrequest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

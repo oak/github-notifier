@@ -3,7 +3,7 @@
 package mocks
 
 import (
-	port "github.com/oak3/github-notifier/application/port"
+	port "github.com/oak/github-notifier/application/port"
 	mock "github.com/stretchr/testify/mock"
 )
 

@@ -60,7 +60,7 @@ lint:
 fmt:
 	@echo "Formatting code..."
 	@go fmt ./...
-	@goimports -w -local github.com/oak3/github-notifier .
+	@goimports -w -local github.com/oak/github-notifier .
 
 ## build: Build the application
 build:

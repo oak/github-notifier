@@ -5,8 +5,8 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/oak3/github-notifier/application/port"
-	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/application/port"
+	"github.com/oak/github-notifier/domain/pullrequest"
 )
 
 // InitializeFirstCheckUseCase handles the first-run initialization

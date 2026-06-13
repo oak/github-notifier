@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/domain/pullrequest"
 )
 
 func TestActivityIgnoreFilter_ConfigVariations(t *testing.T) {

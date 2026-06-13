@@ -1,7 +1,7 @@
 package port
 
 import (
-	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/domain/pullrequest"
 )
 
 // UIPort represents the boundary between the application and any UI implementation

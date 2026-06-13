@@ -3,8 +3,8 @@ package pullrequest_test
 import (
 	"testing"
 
-	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/oak3/github-notifier/internal/testutil"
+	"github.com/oak/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/internal/testutil"
 	"github.com/stretchr/testify/assert"
 )
 

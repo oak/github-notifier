@@ -5,7 +5,7 @@ package mocks
 import (
 	time "time"
 
-	pullrequest "github.com/oak3/github-notifier/domain/pullrequest"
+	pullrequest "github.com/oak/github-notifier/domain/pullrequest"
 	mock "github.com/stretchr/testify/mock"
 )
 

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/domain/pullrequest"
 )
 
 // FormatReviewSummaryForMenu returns a formatted string for display in the

@@ -4,8 +4,8 @@ import (
 	"context"
 	"sort"
 
-	"github.com/oak3/github-notifier/application/port"
-	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/application/port"
+	"github.com/oak/github-notifier/domain/pullrequest"
 )
 
 // UpdatePullRequestDisplayUseCase handles updating the UI with current PR state

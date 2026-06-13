@@ -12,8 +12,8 @@ import (
 	"github.com/getlantern/systray"
 	"github.com/rs/zerolog/log"
 
-	"github.com/oak3/github-notifier/assets"
-	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/assets"
+	"github.com/oak/github-notifier/domain/pullrequest"
 )
 
 // MenuAdapter adapts the systray menu to the MenuPort interface

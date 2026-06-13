@@ -8,11 +8,11 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/oak3/github-notifier/application/port"
-	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/oak3/github-notifier/infrastructure/events"
-	"github.com/oak3/github-notifier/internal/mocks"
-	"github.com/oak3/github-notifier/internal/testutil"
+	"github.com/oak/github-notifier/application/port"
+	"github.com/oak/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/infrastructure/events"
+	"github.com/oak/github-notifier/internal/mocks"
+	"github.com/oak/github-notifier/internal/testutil"
 )
 
 func TestNotificationHandler_HandleNewPRDetected_Success(t *testing.T) {

@@ -7,9 +7,9 @@ import (
 	"github.com/gen2brain/beeep"
 	"github.com/rs/zerolog/log"
 
-	"github.com/oak3/github-notifier/application/port"
-	"github.com/oak3/github-notifier/assets"
-	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/application/port"
+	"github.com/oak/github-notifier/assets"
+	"github.com/oak/github-notifier/domain/pullrequest"
 )
 
 // Adapter implements the NotificationPort interface

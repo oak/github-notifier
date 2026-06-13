@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/oak3/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/domain/pullrequest"
 )
 
 // PROption allows functional options pattern for test PR creation

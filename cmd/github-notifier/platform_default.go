@@ -3,9 +3,9 @@
 package main
 
 import (
-	"github.com/oak3/github-notifier/application/port"
-	"github.com/oak3/github-notifier/infrastructure/notification/desktop"
-	"github.com/oak3/github-notifier/infrastructure/ui"
+	"github.com/oak/github-notifier/application/port"
+	"github.com/oak/github-notifier/infrastructure/notification/desktop"
+	"github.com/oak/github-notifier/infrastructure/ui"
 )
 
 func createDarwinNotifier(app *App, themeProvider *ui.SystemThemeProvider) port.NotificationPort {

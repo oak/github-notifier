@@ -1,6 +1,6 @@
 package config
 
-import "github.com/oak3/github-notifier/domain/pullrequest"
+import "github.com/oak/github-notifier/domain/pullrequest"
 
 // ignoreConfigDTO is the yaml-annotated representation of ignore.yaml.
 // It is private to this package; callers receive the mapped domain type.

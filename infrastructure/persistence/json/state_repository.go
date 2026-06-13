@@ -15,8 +15,8 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/oak3/github-notifier/domain/pullrequest"
-	"github.com/oak3/github-notifier/infrastructure/persistence"
+	"github.com/oak/github-notifier/domain/pullrequest"
+	"github.com/oak/github-notifier/infrastructure/persistence"
 )
 
 const currentVersion = 2
