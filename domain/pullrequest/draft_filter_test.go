@@ -3,9 +3,10 @@ package pullrequest_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/oak/github-notifier/domain/pullrequest"
 	"github.com/oak/github-notifier/internal/testutil"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestNewDraftFilter_IncludeDraftsTrue(t *testing.T) {

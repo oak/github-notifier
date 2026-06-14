@@ -4,9 +4,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/oak/github-notifier/domain/pullrequest"
 	"github.com/oak/github-notifier/internal/testutil"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestReviewState_String(t *testing.T) {

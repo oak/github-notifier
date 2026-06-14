@@ -6,14 +6,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/oak/github-notifier/application"
 	"github.com/oak/github-notifier/application/usecase"
 	"github.com/oak/github-notifier/domain/pullrequest"
 	"github.com/oak/github-notifier/internal/mocks"
 	"github.com/oak/github-notifier/internal/testutil"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 func buildOrchestrator(

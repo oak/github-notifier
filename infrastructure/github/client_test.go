@@ -6,9 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/oak/github-notifier/infrastructure/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/oak/github-notifier/infrastructure/github"
 )
 
 func TestClient_FetchAuthenticatedUserLogin_Success(t *testing.T) {
