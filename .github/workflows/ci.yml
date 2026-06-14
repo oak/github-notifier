@@ -87,6 +87,13 @@ jobs:
           echo "=== Coverage by Package ==="
           go tool cover -func=coverage.out | grep -E '(domain|application|infrastructure)' | grep -v '.go:' || true
 
+      - name: Upload coverage
+        if: runner.os == 'Linux'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.out
+
       - name: Run E2E tests
         if: runner.os != 'Windows'
         run: go test -v -tags=e2e ./test/e2e/...
